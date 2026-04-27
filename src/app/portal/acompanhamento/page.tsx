@@ -1,9 +1,8 @@
 "use client";
 
 import { apiJson } from "@/lib/api-client";
-import { janelaAPartirDe } from "@/lib/alvara-task-generation";
 import { FREQUENCIA_LABELS } from "@/lib/alvara-frequency";
-import { cn, formatCNPJ, formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import type { Alvara, AlvaraGroup, AlvaraTask, Company, CompanyAlvara } from "@/types";
 import { format } from "date-fns";
 import {
@@ -119,15 +118,16 @@ export default function AcompanhamentoPage() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [yearFilter, setYearFilter] = useState<string>(() => String(new Date().getFullYear()));
+  const [selectedYears, setSelectedYears] = useState<number[]>(() => [new Date().getFullYear()]);
   const [companyQuery, setCompanyQuery] = useState("");
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [companyMenuOpen, setCompanyMenuOpen] = useState(false);
+  const [yearMenuOpen, setYearMenuOpen] = useState(false);
   const [laneMap, setLaneMap] = useState<Record<string, UiLane>>({});
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const companyMenuRef = useRef<HTMLDivElement>(null);
+  const yearMenuRef = useRef<HTMLDivElement>(null);
 
-  const { inicio, fim } = useMemo(() => janelaAPartirDe(new Date(), 30), []);
   const hoje = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
 
   useEffect(() => {
@@ -137,6 +137,7 @@ export default function AcompanhamentoPage() {
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (!companyMenuRef.current?.contains(e.target as Node)) setCompanyMenuOpen(false);
+      if (!yearMenuRef.current?.contains(e.target as Node)) setYearMenuOpen(false);
     }
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
@@ -149,21 +150,22 @@ export default function AcompanhamentoPage() {
 
   const buildQuery = useCallback(() => {
     const sp = new URLSearchParams();
-    if (yearFilter === "todos") {
-      const y = new Date().getFullYear();
-      sp.set("from", `${y - 1}-01-01`);
-      sp.set("to", `${y + 2}-12-31`);
-    } else {
-      sp.set("from", `${yearFilter}-01-01`);
-      sp.set("to", `${yearFilter}-12-31`);
+    if (selectedYears.length > 0) {
+      const ys = [...selectedYears].sort((a, b) => a - b);
+      const fromY = ys[0];
+      const toY = ys[ys.length - 1];
+      sp.set("from", `${fromY}-01-01`);
+      sp.set("to", `${toY}-12-31`);
     }
     return sp.toString();
-  }, [yearFilter]);
+  }, [selectedYears]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await apiJson<{ tasks: TaskRow[] }>("/api/alvara-tasks?" + buildQuery());
+      const qs = buildQuery();
+      const url = "/api/alvara-tasks" + (qs ? "?" + qs : "");
+      const d = await apiJson<{ tasks: TaskRow[] }>(url);
       setTasks(d.tasks.filter((t) => t.status !== "cancelada"));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao carregar tarefas");
@@ -177,7 +179,9 @@ export default function AcompanhamentoPage() {
   }, [load]);
 
   const yearOptions = useMemo(() => {
-    const set = new Set<number>([new Date().getFullYear()]);
+    const cy = new Date().getFullYear();
+    const set = new Set<number>();
+    for (let y = cy + 3; y >= cy - 15; y--) set.add(y);
     tasks.forEach((t) => {
       const y = yearFromIso(t.due_date);
       if (y != null) set.add(y);
@@ -237,7 +241,7 @@ export default function AcompanhamentoPage() {
         janela: { inicio: string; fim: string; offsetDias: number };
         inseridos: number;
         ignoradosDuplicata: number;
-      }>("/api/alvara-tasks", { method: "POST", body: JSON.stringify({ offsetDias: 30 }) });
+      }>("/api/alvara-tasks", { method: "POST", body: JSON.stringify({ offsetDias: 365 }) });
       toast.success(
         r.inseridos > 0
           ? `Incluídas ${r.inseridos} tarefa(s). Janela: ${r.janela.inicio} a ${r.janela.fim}.`
@@ -336,7 +340,7 @@ export default function AcompanhamentoPage() {
   }
 
   function clearFilters() {
-    setYearFilter("todos");
+    setSelectedYears([]);
     setSelectedCompanies([]);
     setCompanyQuery("");
     toast.message("Filtros limpos");
@@ -383,6 +387,13 @@ export default function AcompanhamentoPage() {
     toast.message(target === "andamento" ? "Movido para Em andamento" : "Movido para Pendente");
   }
 
+  const selectedYearsLabel =
+    selectedYears.length === 0
+      ? "Todos os anos"
+      : selectedYears.length === 1
+        ? String(selectedYears[0])
+        : `${selectedYears.length} anos selecionados`;
+
   const selectedCompaniesLabel =
     selectedCompanies.length === 0
       ? "Todas empresas"
@@ -399,25 +410,17 @@ export default function AcompanhamentoPage() {
           Gestão de alvarás
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-600">
-          Controle por validade e empresa. Filtre por ano (data de vencimento da tarefa) e empresas.
-          Arraste os cartões entre colunas; &quot;Em andamento&quot; é organização local (navegador). Tarefas
-          na janela padrão do gerador:{" "}
-          <span className="font-medium text-slate-800">
-            {inicio} — {fim}
-          </span>{" "}
-          (30 dias).
+          Controle por validade e empresa. Filtre por um ou mais anos (data de vencimento da tarefa) e por
+          empresas. Arraste os cartões entre colunas; &quot;Em andamento&quot; é organização local
+          (navegador).
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={gerarTarefas} disabled={generating} className="btn-primary inline-flex items-center gap-2">
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {generating ? "A gerar…" : "Gerar / atualizar tarefas (30 dias)"}
+          {generating ? "A gerar…" : "Gerar / atualizar tarefas (até 1 ano)"}
         </button>
-        <Link href="/portal/configuracoes/periodicidade" className="btn-secondary inline-flex items-center gap-2">
-          <CalendarDays className="h-4 w-4" />
-          Periodicidade dos tipos
-        </Link>
         <button type="button" onClick={() => void load()} className="btn-secondary" disabled={loading}>
           {loading ? "A atualizar…" : "Atualizar quadro"}
         </button>
@@ -425,22 +428,46 @@ export default function AcompanhamentoPage() {
 
       {/* Barra de filtros — estilo cartão do modelo */}
       <div className="card-portal flex flex-wrap items-end gap-6 p-5">
-        <div className="flex min-w-[200px] flex-1 flex-col gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Ano (vencimento da tarefa)
+        <div ref={yearMenuRef} className="relative min-w-[200px] flex-1">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Anos (vencimento da tarefa)
           </label>
-          <select
-            className="select-field max-w-xs"
-            value={yearFilter}
-            onChange={(e) => setYearFilter(e.target.value)}
+          <button
+            type="button"
+            className="input-field flex h-10 w-full items-center justify-between text-left"
+            onClick={() => setYearMenuOpen((o) => !o)}
+            aria-expanded={yearMenuOpen}
           >
-            <option value="todos">Todos os anos</option>
-            {yearOptions.map((y) => (
-              <option key={y} value={String(y)}>
-                {y}
-              </option>
-            ))}
-          </select>
+            <span className="truncate">{selectedYearsLabel}</span>
+            <ChevronDown className={cn("h-4 w-4 shrink-0 transition", yearMenuOpen && "rotate-180")} />
+          </button>
+          {yearMenuOpen ? (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+              <p className="px-2 py-1.5 text-[0.7rem] text-slate-500">
+                Nenhum marcado = todas as tarefas. Vários anos = intervalo do menor ao maior.
+              </p>
+              {yearOptions.map((y) => {
+                const checked = selectedYears.includes(y);
+                return (
+                  <label
+                    key={y}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        setSelectedYears((prev) =>
+                          e.target.checked ? [...prev, y].sort((a, b) => b - a) : prev.filter((x) => x !== y)
+                        );
+                      }}
+                    />
+                    <span>{y}</span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
 
         <div ref={companyMenuRef} className="relative min-w-[240px] flex-1">
@@ -583,8 +610,8 @@ export default function AcompanhamentoPage() {
 
       {!loading && tasks.length === 0 ? (
         <p className="text-center text-sm text-slate-500">
-          Nenhuma tarefa no período. Use &quot;Gerar / atualizar tarefas&quot; para criar entradas com base na
-          periodicidade e nos vínculos.
+          Nenhuma tarefa no período. Use &quot;Gerar / atualizar tarefas&quot; para criar entradas com base nos
+          vínculos e nas regras dos tipos de alvará.
         </p>
       ) : null}
 

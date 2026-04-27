@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     body = {};
   }
 
-  const offsetDias = Math.min(120, Math.max(7, Number(body.offsetDias) || 30));
+  const offsetDias = Math.min(366, Math.max(7, Number(body.offsetDias) || 30));
   const { inicio, fim } = janelaAPartirDe(new Date(), offsetDias);
 
   const { data: vinculos, error: e1 } = await supabase

@@ -70,7 +70,6 @@ const items: Item[] = [
     icon: <Settings className="h-5 w-5 shrink-0" />,
     children: [
       { href: "/portal/configuracoes/sincronizacao", label: "Sincronização" },
-      { href: "/portal/configuracoes/periodicidade", label: "Periodicidade" },
       { href: "/portal/configuracoes/usuarios", label: "Usuários" },
     ],
   },
