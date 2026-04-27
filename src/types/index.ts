@@ -131,6 +131,19 @@ export interface Alvara {
   updated_at: string;
 }
 
+/** Tarefas geradas na janela de acompanhamento (ciclo, ex. 30 dias) */
+export interface AlvaraTask {
+  id: string;
+  company_alvara_id: string;
+  due_date: string;
+  status: "pendente" | "concluida" | "cancelada";
+  title: string | null;
+  completed_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CompanyAlvara {
   id: string;
   company_id: string;

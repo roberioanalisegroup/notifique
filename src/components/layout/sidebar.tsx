@@ -4,6 +4,7 @@ import { UserMenu } from "@/components/layout/user-menu";
 import { cn } from "@/lib/utils";
 import {
   Building2,
+  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -36,6 +37,12 @@ const items: Item[] = [
     icon: <LayoutDashboard className="h-5 w-5 shrink-0" />,
   },
   {
+    id: "acompanhamento",
+    href: "/portal/acompanhamento",
+    label: "Acompanhamento",
+    icon: <CalendarCheck className="h-5 w-5 shrink-0" />,
+  },
+  {
     id: "empresas",
     href: "/portal/empresas",
     label: "Empresas",
@@ -63,6 +70,7 @@ const items: Item[] = [
     icon: <Settings className="h-5 w-5 shrink-0" />,
     children: [
       { href: "/portal/configuracoes/sincronizacao", label: "Sincronização" },
+      { href: "/portal/configuracoes/periodicidade", label: "Periodicidade" },
       { href: "/portal/configuracoes/usuarios", label: "Usuários" },
     ],
   },

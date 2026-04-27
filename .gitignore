@@ -1,0 +1,29 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# env (não versionar segredos)
+.env*.local
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# typescript
+*.tsbuildinfo
+
+# vercel
+.vercel
+
+# ficheiros locais de teste (credenciais)
+create-user.json
+login-test.json

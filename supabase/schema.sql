@@ -121,6 +121,25 @@ create table public.company_alvaras (
   unique (company_id, alvara_id)
 );
 
+create table public.alvara_tasks (
+  id                    uuid primary key default gen_random_uuid(),
+  company_alvara_id     uuid not null references public.company_alvaras(id) on delete cascade,
+  due_date              date not null,
+  status                text not null default 'pendente'
+    check (status in ('pendente', 'concluida', 'cancelada')),
+  title                 text,
+  completed_at          timestamptz,
+  notes                 text,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now(),
+  unique (company_alvara_id, due_date)
+);
+
+create index idx_alvara_tasks_due
+  on public.alvara_tasks (due_date) where status = 'pendente';
+create index idx_alvara_tasks_ca
+  on public.alvara_tasks (company_alvara_id);
+
 create index idx_companies_situacao     on public.companies(situacao_cadastral);
 create index idx_companies_municipio    on public.companies(municipio);
 create index idx_companies_sync_status  on public.companies(sync_status);
@@ -136,6 +155,7 @@ create trigger trg_companies_upd    before update on public.companies    for eac
 create trigger trg_alv_groups_upd   before update on public.alvara_groups for each row execute function public.set_updated_at();
 create trigger trg_alvaras_upd      before update on public.alvaras       for each row execute function public.set_updated_at();
 create trigger trg_co_alvaras_upd   before update on public.company_alvaras for each row execute function public.set_updated_at();
+create trigger trg_alvara_tasks_upd before update on public.alvara_tasks  for each row execute function public.set_updated_at();
 create trigger trg_sync_config_upd  before update on public.sync_config   for each row execute function public.set_updated_at();
 create trigger trg_profiles_upd     before update on public.profiles     for each row execute function public.set_updated_at();
 
@@ -185,6 +205,7 @@ alter table public.company_alvaras  enable row level security;
 alter table public.sync_config      enable row level security;
 alter table public.sync_logs        enable row level security;
 alter table public.profiles         enable row level security;
+alter table public.alvara_tasks     enable row level security;
 
 -- Sem policy: utilizadores acedem via rotas /api/users (service role). Evita leitura direta (RLS deny).
 
@@ -192,6 +213,7 @@ create policy "auth_full" on public.companies        for all using (auth.role() 
 create policy "auth_full" on public.alvara_groups    for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.alvaras          for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.company_alvaras  for all using (auth.role() = 'authenticated');
+create policy "auth_full" on public.alvara_tasks     for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.sync_config      for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.sync_logs        for all using (auth.role() = 'authenticated');
 
