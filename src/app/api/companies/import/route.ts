@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
       for (const cnpj of cnpjList) {
         const { data: existing } = await supabase
           .from("companies")
-          .select("id, cnpj")
-          .eq("cnpj", cnpj)
+          .select("id, numero_documento")
+          .eq("numero_documento", cnpj)
           .maybeSingle();
 
         if (existing) {
@@ -87,7 +87,12 @@ export async function POST(request: NextRequest) {
         } else {
           const { data: ins, error: insErr } = await supabase
             .from("companies")
-            .insert({ cnpj, sync_status: "pending" })
+            .insert({
+              cadastro_tipo: "cnpj",
+              numero_documento: cnpj,
+              cnpj,
+              sync_status: "pending",
+            })
             .select("id, cnpj")
             .single();
 

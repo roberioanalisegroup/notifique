@@ -2,7 +2,10 @@
 
 create table public.companies (
   id                  uuid primary key default gen_random_uuid(),
-  cnpj                text not null unique,
+  cadastro_tipo       text not null default 'cnpj'
+    check (cadastro_tipo in ('cnpj', 'mei', 'caepf', 'cpf', 'outros')),
+  numero_documento    text not null,
+  cnpj                text,
   razao_social        text,
   nome_fantasia       text,
   situacao_cadastral  text,
@@ -29,8 +32,11 @@ create table public.companies (
   sync_status         text default 'pending',
   sync_error          text,
   created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now()
+  updated_at          timestamptz not null default now(),
+  unique (numero_documento)
 );
+
+create index idx_companies_cnpj_nn on public.companies (cnpj) where cnpj is not null;
 
 create table public.sync_config (
   id           uuid primary key default gen_random_uuid(),
@@ -115,7 +121,6 @@ create table public.company_alvaras (
   unique (company_id, alvara_id)
 );
 
-create index idx_companies_cnpj         on public.companies(cnpj);
 create index idx_companies_situacao     on public.companies(situacao_cadastral);
 create index idx_companies_municipio    on public.companies(municipio);
 create index idx_companies_sync_status  on public.companies(sync_status);
@@ -196,6 +201,8 @@ drop view if exists public.companies_alvara_summary;
 create view public.companies_alvara_summary as
 select
   c.id,
+  c.cadastro_tipo,
+  c.numero_documento,
   c.cnpj,
   c.razao_social,
   c.nome_fantasia,

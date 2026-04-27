@@ -1,13 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchCNPJData, mapBrasilAPIToCompany } from "@/lib/cnpj-service";
 import { cleanCNPJ } from "@/lib/utils";
-import type { Company, SyncConfig } from "@/types";
+import type { Company, CompanyCadastroTipo, SyncConfig } from "@/types";
 
 export const SYNC_CONFIG_ID = "00000000-0000-0000-0000-000000000001";
 
 export async function upsertCompanyByCNPJ(
   supabase: SupabaseClient,
-  cnpj: string
+  cnpj: string,
+  options?: { cadastroTipo?: CompanyCadastroTipo }
 ): Promise<{
   company: Company | null;
   error: string | null;
@@ -18,19 +19,24 @@ export async function upsertCompanyByCNPJ(
     return { company: null, error: "CNPJ inválido", notFound: false };
   }
 
+  const cadastroTipo: CompanyCadastroTipo =
+    options?.cadastroTipo === "mei" ? "mei" : "cnpj";
+
   const { data: apiData, error: apiError } = await fetchCNPJData(clean);
   if (apiError && !apiData) {
     const notFound = apiError === "CNPJ não encontrado";
     const sync_status = notFound ? "not_found" : "error";
     await supabase.from("companies").upsert(
       {
+        cadastro_tipo: cadastroTipo,
+        numero_documento: clean,
         cnpj: clean,
         sync_status,
         sync_error: apiError,
         last_sync_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "cnpj" }
+      { onConflict: "numero_documento" }
     );
     return { company: null, error: apiError, notFound };
   }
@@ -43,8 +49,14 @@ export async function upsertCompanyByCNPJ(
   const { data, error } = await supabase
     .from("companies")
     .upsert(
-      { ...mapped, cnpj: clean, updated_at: new Date().toISOString() },
-      { onConflict: "cnpj" }
+      {
+        ...mapped,
+        cadastro_tipo: cadastroTipo,
+        numero_documento: clean,
+        cnpj: clean,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "numero_documento" }
     )
     .select()
     .single();

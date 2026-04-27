@@ -1,7 +1,13 @@
 "use client";
 
 import { apiFetch, apiJson } from "@/lib/api-client";
-import { cn, formatCNPJ, formatCurrency, formatDate } from "@/lib/utils";
+import {
+  cadastroTipoLabel,
+  cn,
+  formatCompanyDocumento,
+  formatCurrency,
+  formatDate,
+} from "@/lib/utils";
 import type { Alvara, AlvaraGroup, Company, CompanyAlvara } from "@/types";
 import { differenceInCalendarDays } from "date-fns";
 import Link from "next/link";
@@ -165,11 +171,23 @@ export default function EmpresaPerfilPage() {
 
   async function refreshSync() {
     if (!company) return;
+    const cnpj14 =
+      company.cnpj ??
+      (company.numero_documento?.length === 14 ? company.numero_documento : null);
+    const okSync =
+      ((company.cadastro_tipo ?? "cnpj") === "cnpj" ||
+        (company.cadastro_tipo ?? "cnpj") === "mei") &&
+      cnpj14 != null &&
+      cnpj14.length === 14;
+    if (!okSync) {
+      toast.error("Consulta à Receita só está disponível para cadastros CNPJ ou MEI com 14 dígitos.");
+      return;
+    }
     setSyncing(true);
     try {
       await apiJson("/api/companies/sync-single", {
         method: "POST",
-        body: JSON.stringify({ cnpj: company.cnpj }),
+        body: JSON.stringify({ cnpj: cnpj14 }),
       });
       toast.success("Dados atualizados");
       void load();
@@ -370,6 +388,11 @@ export default function EmpresaPerfilPage() {
     );
   }
 
+  const tipoCad = company.cadastro_tipo ?? "cnpj";
+  const podeSincronizarReceita =
+    (tipoCad === "cnpj" || tipoCad === "mei") &&
+    (company.cnpj?.length === 14 || company.numero_documento?.length === 14);
+
   const sit = (company.situacao_cadastral ?? "").toUpperCase();
   const sitClass =
     sit === "ATIVA"
@@ -395,10 +418,27 @@ export default function EmpresaPerfilPage() {
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
             {company.razao_social ?? "Empresa"}
           </h1>
-          <p className="mt-0.5 font-mono text-sm text-slate-500">{formatCNPJ(company.cnpj)}</p>
+          <p className="mt-0.5 font-mono text-sm text-slate-500">
+            {formatCompanyDocumento(
+              tipoCad,
+              company.numero_documento ?? company.cnpj ?? "",
+              company.cnpj
+            )}
+          </p>
+          <p className="text-xs text-slate-500">{cadastroTipoLabel(tipoCad)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={refreshSync} disabled={syncing} className="btn-secondary">
+          <button
+            type="button"
+            onClick={refreshSync}
+            disabled={syncing || !podeSincronizarReceita}
+            className="btn-secondary disabled:opacity-50"
+            title={
+              !podeSincronizarReceita
+                ? "Disponível apenas para CNPJ ou MEI com 14 dígitos"
+                : undefined
+            }
+          >
             {syncing ? "Atualizando…" : "Atualizar dados (Receita)"}
           </button>
           <button
@@ -439,8 +479,15 @@ export default function EmpresaPerfilPage() {
       {tab === "dados" && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <InfoCard title="Identificação" className="sm:col-span-2 lg:col-span-1">
-            <InfoRow label="CNPJ">
-              <span className="font-mono">{formatCNPJ(company.cnpj)}</span>
+            <InfoRow label="Tipo de cadastro">{cadastroTipoLabel(tipoCad)}</InfoRow>
+            <InfoRow label="Documento">
+              <span className="font-mono">
+                {formatCompanyDocumento(
+                  tipoCad,
+                  company.numero_documento ?? company.cnpj ?? "",
+                  company.cnpj
+                )}
+              </span>
             </InfoRow>
             <InfoRow label="Razão social">{company.razao_social ?? "—"}</InfoRow>
             <InfoRow label="Nome fantasia">{company.nome_fantasia ?? "—"}</InfoRow>

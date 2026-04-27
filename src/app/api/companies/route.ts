@@ -1,6 +1,7 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
-import { cleanCNPJ } from "@/lib/utils";
-import type { Company } from "@/types";
+import { upsertCompanyByCNPJ } from "@/lib/sync-helpers";
+import { normalizeDocumentoForTipo, onlyDigits } from "@/lib/utils";
+import type { Company, CompanyCadastroTipo } from "@/types";
 import { NextRequest, NextResponse } from "next/server";
 
 function parseParam(sp: string | null, def: number, min: number, max: number) {
@@ -38,18 +39,19 @@ export async function GET(request: NextRequest) {
     .select("*", { count: "exact" });
 
   if (search) {
-    const cnpjDigits = cleanCNPJ(search);
-    if (cnpjDigits.length === 14) {
-      q = q.eq("cnpj", cnpjDigits);
+    const digits = onlyDigits(search);
+    if (digits.length === 14 || digits.length === 11) {
+      q = q.eq("numero_documento", digits);
     } else {
       const esc = escapeIlikePattern(search);
       const parts = [
         `razao_social.ilike.%${esc}%`,
         `nome_fantasia.ilike.%${esc}%`,
       ];
-      const partialCnpj = search.replace(/\D/g, "");
-      if (partialCnpj.length > 0) {
-        parts.push(`cnpj.ilike.%${partialCnpj}%`);
+      const partial = onlyDigits(search);
+      if (partial.length > 0) {
+        parts.push(`numero_documento.ilike.%${partial}%`);
+        parts.push(`cnpj.ilike.%${partial}%`);
       }
       q = q.or(parts.join(","));
     }
@@ -83,35 +85,88 @@ export async function POST(request: NextRequest) {
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
 
-  let body: { cnpj: string; razao_social?: string | null };
+  let body: {
+    cadastro_tipo?: CompanyCadastroTipo;
+    documento?: string;
+    numero_documento?: string;
+    cnpj?: string;
+    sincronizar_receita?: boolean;
+    razao_social?: string | null;
+    nome_fantasia?: string | null;
+    situacao_cadastral?: string | null;
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    municipio?: string | null;
+    uf?: string | null;
+    cep?: string | null;
+    telefone?: string | null;
+    email?: string | null;
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  const clean = cleanCNPJ(body.cnpj);
-  if (clean.length !== 14) {
-    return NextResponse.json({ error: "CNPJ inválido" }, { status: 400 });
+  const tipo: CompanyCadastroTipo = body.cadastro_tipo ?? "cnpj";
+  const raw =
+    body.numero_documento ?? body.documento ?? body.cnpj ?? "";
+  const norm = normalizeDocumentoForTipo(tipo, raw);
+  if (!norm.ok) {
+    return NextResponse.json({ error: norm.message }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from("companies")
-    .upsert(
-      {
-        cnpj: clean,
-        razao_social: body.razao_social ?? null,
-        sync_status: "pending",
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "cnpj" }
-    )
-    .select()
-    .single();
+  const cnpjCol = norm.value.length === 14 ? norm.value : null;
+  const sincronizar =
+    body.sincronizar_receita === true &&
+    (tipo === "cnpj" || tipo === "mei") &&
+    cnpjCol != null;
+
+  const baseRow = {
+    cadastro_tipo: tipo,
+    numero_documento: norm.value,
+    cnpj: cnpjCol,
+    razao_social: body.razao_social?.trim() || null,
+    nome_fantasia: body.nome_fantasia?.trim() || null,
+    situacao_cadastral: body.situacao_cadastral?.trim() || null,
+    logradouro: body.logradouro?.trim() || null,
+    numero: body.numero?.trim() || null,
+    complemento: body.complemento?.trim() || null,
+    bairro: body.bairro?.trim() || null,
+    municipio: body.municipio?.trim() || null,
+    uf: body.uf?.trim() ? body.uf.trim().toUpperCase().slice(0, 2) : null,
+    cep: body.cep?.trim() ? onlyDigits(body.cep).slice(0, 8) || null : null,
+    telefone: body.telefone?.trim() || null,
+    email: body.email?.trim() || null,
+    sync_status: sincronizar ? "pending" : "manual",
+    sync_error: null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase.from("companies").insert(baseRow).select().single();
 
   if (error) {
+    if (error.code === "23505") {
+      return NextResponse.json(
+        { error: "Já existe cadastro com este identificador" },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ company: data as Company });
+  let company = data as Company;
+  let syncWarning: string | null = null;
+
+  if (sincronizar && cnpjCol) {
+    const { company: synced, error: syncErr } = await upsertCompanyByCNPJ(supabase, cnpjCol, {
+      cadastroTipo: tipo === "mei" ? "mei" : "cnpj",
+    });
+    if (synced) company = synced;
+    else if (syncErr) syncWarning = syncErr;
+  }
+
+  return NextResponse.json({ company, syncWarning });
 }

@@ -92,7 +92,18 @@ export async function POST(request: NextRequest) {
   for (let i = 0; i < companies.length; i++) {
     const c = companies[i];
     if (i > 0) await sleep(CNPJ_BATCH_DELAY_MS);
-    const { error } = await upsertCompanyByCNPJ(supabase, c.cnpj);
+    const key = c.numero_documento ?? c.cnpj ?? "";
+    if (
+      !key ||
+      key.length !== 14 ||
+      (c.cadastro_tipo !== "cnpj" && c.cadastro_tipo !== "mei")
+    ) {
+      skipped += 1;
+      continue;
+    }
+    const { error } = await upsertCompanyByCNPJ(supabase, key, {
+      cadastroTipo: c.cadastro_tipo === "mei" ? "mei" : "cnpj",
+    });
     if (error) {
       if (error === "Rate limit atingido") {
         skipped += 1;

@@ -1,6 +1,13 @@
+/** Tipo de identificação do cadastro (define se pode usar BrasilAPI CNPJ). */
+export type CompanyCadastroTipo = "cnpj" | "mei" | "caepf" | "cpf" | "outros";
+
 export interface Company {
   id: string;
-  cnpj: string;
+  cadastro_tipo: CompanyCadastroTipo;
+  /** Apenas dígitos; chave única. */
+  numero_documento: string;
+  /** 14 dígitos quando PJ/MEI/CAEPF; null se só CPF ou outros sem CNPJ. */
+  cnpj: string | null;
   razao_social: string | null;
   nome_fantasia: string | null;
   situacao_cadastral: string | null;
@@ -141,7 +148,9 @@ export interface CompanyAlvara {
 
 export interface CompanyAlvaraSummary {
   id: string;
-  cnpj: string;
+  cadastro_tipo: CompanyCadastroTipo;
+  numero_documento: string;
+  cnpj: string | null;
   razao_social: string | null;
   nome_fantasia: string | null;
   situacao_cadastral: string | null;

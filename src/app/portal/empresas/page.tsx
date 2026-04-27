@@ -3,23 +3,13 @@
 import { NovaEmpresaModal } from "@/components/empresas/nova-empresa-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiJson, apiFetch } from "@/lib/api-client";
-import { formatCNPJ, formatDate } from "@/lib/utils";
-import type { CompanyFilterOptions } from "@/types";
+import { cadastroTipoLabel, formatCompanyDocumento, formatDate } from "@/lib/utils";
+import type { CompanyAlvaraSummary, CompanyFilterOptions } from "@/types";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-type Row = {
-  id: string;
-  cnpj: string;
-  razao_social: string | null;
-  municipio: string | null;
-  uf: string | null;
-  situacao_cadastral: string | null;
-  last_sync_at: string | null;
-  sync_status: string | null;
-  total_alvaras?: number;
-};
+type Row = CompanyAlvaraSummary;
 
 function EmpresasTableLoading() {
   return (
@@ -28,7 +18,7 @@ function EmpresasTableLoading() {
         <table className="table-portal min-w-[800px]">
           <thead>
             <tr>
-              {["CNPJ", "Razão social", "Município/UF", "Situação", "Última sync", "Alvarás", "Ações"].map(
+              {["Documento", "Tipo", "Razão social", "Município/UF", "Situação", "Última sync", "Alvarás", "Ações"].map(
                 (h) => (
                   <th key={h}>{h}</th>
                 )
@@ -40,6 +30,9 @@ function EmpresasTableLoading() {
               <tr key={i}>
                 <td>
                   <Skeleton className="h-4 w-28" />
+                </td>
+                <td>
+                  <Skeleton className="h-4 w-20" />
                 </td>
                 <td>
                   <Skeleton className="h-4 w-full max-w-[200px]" />
@@ -361,7 +354,8 @@ export default function EmpresasPage() {
               <table className="table-portal min-w-[800px]">
                 <thead>
                   <tr>
-                    <th>CNPJ</th>
+                    <th>Documento</th>
+                    <th>Tipo</th>
                     <th>Razão social</th>
                     <th>Município/UF</th>
                     <th>Situação</th>
@@ -373,7 +367,14 @@ export default function EmpresasPage() {
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id}>
-                      <td className="font-mono text-xs text-slate-800">{formatCNPJ(r.cnpj)}</td>
+                      <td className="font-mono text-xs text-slate-800">
+                        {formatCompanyDocumento(
+                          r.cadastro_tipo ?? "cnpj",
+                          r.numero_documento ?? r.cnpj ?? "",
+                          r.cnpj
+                        )}
+                      </td>
+                      <td className="text-xs text-slate-600">{cadastroTipoLabel(r.cadastro_tipo ?? "cnpj")}</td>
                       <td className="font-medium text-slate-900">{r.razao_social ?? "—"}</td>
                       <td>
                         {r.municipio ?? "—"}/{r.uf ?? "—"}
@@ -397,7 +398,7 @@ export default function EmpresasPage() {
                   ))}
                   {rows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-10 text-center text-slate-500">
+                      <td colSpan={8} className="py-10 text-center text-slate-500">
                         Nenhuma empresa
                       </td>
                     </tr>
