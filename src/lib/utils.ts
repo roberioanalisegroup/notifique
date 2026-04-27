@@ -89,7 +89,7 @@ export function formatCompanyDocumento(
 
 export function cadastroTipoLabel(tipo: CompanyCadastroTipo): string {
   const m: Record<CompanyCadastroTipo, string> = {
-    cnpj: "CNPJ (pessoa jurídica)",
+    cnpj: "CNPJ",
     mei: "MEI (CNPJ do MEI)",
     caepf: "CAEPF",
     cpf: "CPF (pessoa física / produtor)",
