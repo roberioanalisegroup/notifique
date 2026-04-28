@@ -179,6 +179,16 @@ export interface CompanyAlvaraSummary {
   alvaras_notificados: number;
 }
 
+/** Histórico de alterações na tarefa (portal) */
+export interface AlvaraTaskHistory {
+  id: string;
+  task_id: string;
+  event_type: "created" | "status" | "notes" | "attachment" | "due_date" | "system";
+  summary: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface CompanyFormData {
   cnpj: string;
   razao_social?: string | null;

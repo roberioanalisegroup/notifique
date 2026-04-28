@@ -85,10 +85,7 @@ export function buildLegalFromImportRow(
   frequencia: AlvaraFrequencia,
   row: AlvaraImportRow
 ): AlvaraLegalDates {
-  const d = parseOptInt(row.legal_dia ?? row["legal dia"]);
-  const m = parseOptInt(row.legal_mes ?? row["legal mes"]);
   const ds = parseOptInt(row.legal_dia_semana ?? row["legal_dia_semana"] ?? row["dia_semana"]);
-  const du = parseOptInt(row.legal_dias_uteis ?? row["legal_dias_uteis"] ?? row["dias_uteis"]);
 
   switch (frequencia) {
     case "diaria":
@@ -106,26 +103,14 @@ export function buildLegalFromImportRow(
         legal_dias_uteis: null,
       };
     case "decendial":
-      return {
-        legal_dia: d ?? 1,
-        legal_mes: null,
-        legal_dia_semana: null,
-        legal_dias_uteis: du ?? 5,
-      };
     case "mensal":
-      return {
-        legal_dia: d ?? 1,
-        legal_mes: null,
-        legal_dia_semana: null,
-        legal_dias_uteis: null,
-      };
     case "bimestral":
     case "trimestral":
     case "semestral":
     case "anual":
       return {
-        legal_dia: d ?? 1,
-        legal_mes: m ?? 1,
+        legal_dia: null,
+        legal_mes: null,
         legal_dia_semana: null,
         legal_dias_uteis: null,
       };

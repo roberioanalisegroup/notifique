@@ -3,11 +3,9 @@
 import { apiFetch, apiJson } from "@/lib/api-client";
 import {
   ALVARA_FREQUENCIAS,
-  DIAS_UTEIS_OPCOES,
   DIAS_SEMANA_OPCOES,
   FREQUENCIA_LABELS,
   formatLegalSummary,
-  MESES_OPCOES,
   WEEKEND_ADJUST_LABELS,
   WEEKEND_ADJUSTS,
   validateLegalForFrequencia,
@@ -25,8 +23,6 @@ import { toast } from "sonner";
 type Row = Alvara & { alvara_groups: AlvaraGroup | null; vinculados: number };
 
 const FILTER_SEM_GRUPO = "__sem_grupo__";
-
-const DIAS_MES = Array.from({ length: 31 }, (_, i) => i + 1);
 
 type ModalState = {
   id?: string;
@@ -75,6 +71,21 @@ function rowToModal(r: Row): ModalState {
 
 function toLegalPayload(m: ModalState): AlvaraLegalDates {
   const f = m.frequencia;
+  if (
+    f === "mensal" ||
+    f === "bimestral" ||
+    f === "trimestral" ||
+    f === "semestral" ||
+    f === "anual" ||
+    f === "decendial"
+  ) {
+    return {
+      legal_dia: null,
+      legal_mes: null,
+      legal_dia_semana: null,
+      legal_dias_uteis: null,
+    };
+  }
   if (f === "diaria") {
     return {
       legal_dia: null,
@@ -91,25 +102,9 @@ function toLegalPayload(m: ModalState): AlvaraLegalDates {
       legal_dias_uteis: null,
     };
   }
-  if (f === "decendial") {
-    return {
-      legal_dia: m.legal_dia,
-      legal_mes: null,
-      legal_dia_semana: null,
-      legal_dias_uteis: m.legal_dias_uteis,
-    };
-  }
-  if (f === "mensal") {
-    return {
-      legal_dia: m.legal_dia,
-      legal_mes: null,
-      legal_dia_semana: null,
-      legal_dias_uteis: null,
-    };
-  }
   return {
-    legal_dia: m.legal_dia,
-    legal_mes: m.legal_mes,
+    legal_dia: null,
+    legal_mes: null,
     legal_dia_semana: null,
     legal_dias_uteis: null,
   };
@@ -123,6 +118,26 @@ function LegalFieldsEditor({
   setModal: (m: ModalState | null) => void;
 }) {
   const f = modal.frequencia;
+
+  if (
+    f === "mensal" ||
+    f === "bimestral" ||
+    f === "trimestral" ||
+    f === "semestral" ||
+    f === "anual" ||
+    f === "decendial"
+  ) {
+    return (
+      <div className="grid gap-2 sm:grid-cols-[minmax(7rem,9.5rem)_1fr] sm:items-start">
+        <span className="pt-2.5 text-sm font-semibold text-slate-800">Periodicidade</span>
+        <p className="rounded-lg border border-emerald-100 bg-emerald-50/80 px-3 py-2 text-sm text-slate-700">
+          O vencimento segue só o intervalo de <strong>{FREQUENCIA_LABELS[f]}</strong>, somado à{" "}
+          <strong>última data de emissão</strong> do vínculo (ou ao vencimento anterior no ciclo). Não é
+          necessário definir dia ou mês fixos no tipo de alvará.
+        </p>
+      </div>
+    );
+  }
 
   if (f === "diaria") {
     return (
@@ -161,99 +176,12 @@ function LegalFieldsEditor({
     );
   }
 
-  if (f === "decendial") {
-    return (
-      <div className="grid gap-2 sm:grid-cols-[minmax(7rem,9.5rem)_1fr] sm:items-center">
-        <span className="text-sm font-semibold text-slate-800">
-          Data legal <span className="text-red-600">*</span>
-        </span>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            id="legal-dec-dia"
-            className="select-field min-w-[7rem] flex-1"
-            value={modal.legal_dia}
-            onChange={(e) => setModal({ ...modal, legal_dia: parseInt(e.target.value, 10) })}
-          >
-            {DIAS_MES.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-          <span className="text-slate-500">+</span>
-          <select
-            id="legal-dec-uteis"
-            className="select-field min-w-[7rem] flex-1"
-            value={modal.legal_dias_uteis}
-            onChange={(e) =>
-              setModal({ ...modal, legal_dias_uteis: parseInt(e.target.value, 10) })
-            }
-          >
-            {DIAS_UTEIS_OPCOES.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-    );
-  }
-
-  if (f === "mensal") {
-    return (
-      <div className="grid gap-2 sm:grid-cols-[minmax(7rem,9.5rem)_1fr] sm:items-center">
-        <label className="text-sm font-semibold text-slate-800" htmlFor="legal-dia-mensal">
-          Data legal <span className="text-red-600">*</span>
-        </label>
-        <select
-          id="legal-dia-mensal"
-          className="select-field"
-          value={modal.legal_dia}
-          onChange={(e) => setModal({ ...modal, legal_dia: parseInt(e.target.value, 10) })}
-        >
-          {DIAS_MES.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
-      </div>
-    );
-  }
-
-  /* bimestral, trimestral, semestral, anual */
   return (
-    <div className="grid gap-2 sm:grid-cols-[minmax(7rem,9.5rem)_1fr] sm:items-center">
-      <span className="text-sm font-semibold text-slate-800">
-        Data legal <span className="text-red-600">*</span>
-      </span>
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          className="select-field min-w-[6.5rem] flex-1"
-          value={modal.legal_dia}
-          onChange={(e) => setModal({ ...modal, legal_dia: parseInt(e.target.value, 10) })}
-          aria-label="Dia"
-        >
-          {DIAS_MES.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
-        <select
-          className="select-field min-w-[8rem] flex-1"
-          value={modal.legal_mes}
-          onChange={(e) => setModal({ ...modal, legal_mes: parseInt(e.target.value, 10) })}
-          aria-label="Mês"
-        >
-          {MESES_OPCOES.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className="grid gap-2 sm:grid-cols-[minmax(7rem,9.5rem)_1fr] sm:items-start">
+      <span className="pt-2.5 text-sm font-semibold text-slate-800">Data legal</span>
+      <p className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm text-slate-600">
+        —
+      </p>
     </div>
   );
 }

@@ -135,6 +135,19 @@ create table public.alvara_tasks (
   unique (company_alvara_id, due_date)
 );
 
+create table public.alvara_task_history (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.alvara_tasks(id) on delete cascade,
+  event_type text not null
+    check (event_type in ('created', 'status', 'notes', 'attachment', 'due_date', 'system')),
+  summary text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index idx_alvara_task_history_task
+  on public.alvara_task_history (task_id, created_at desc);
+
 create index idx_alvara_tasks_due
   on public.alvara_tasks (due_date) where status = 'pendente';
 create index idx_alvara_tasks_ca
@@ -158,6 +171,32 @@ create trigger trg_co_alvaras_upd   before update on public.company_alvaras for 
 create trigger trg_alvara_tasks_upd before update on public.alvara_tasks  for each row execute function public.set_updated_at();
 create trigger trg_sync_config_upd  before update on public.sync_config   for each row execute function public.set_updated_at();
 create trigger trg_profiles_upd     before update on public.profiles     for each row execute function public.set_updated_at();
+
+create or replace function public.alvara_task_log_created()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.alvara_task_history (task_id, event_type, summary, metadata)
+  values (
+    new.id,
+    'created',
+    'Tarefa criada',
+    jsonb_build_object(
+      'due_date', new.due_date::text,
+      'status', new.status
+    )
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_alvara_task_created_hist on public.alvara_tasks;
+create trigger trg_alvara_task_created_hist
+  after insert on public.alvara_tasks
+  for each row execute function public.alvara_task_log_created();
 
 -- Novo registo no Auth cria linha em public.profiles
 create or replace function public.handle_new_user()
@@ -206,6 +245,7 @@ alter table public.sync_config      enable row level security;
 alter table public.sync_logs        enable row level security;
 alter table public.profiles         enable row level security;
 alter table public.alvara_tasks     enable row level security;
+alter table public.alvara_task_history enable row level security;
 
 -- Sem policy: utilizadores acedem via rotas /api/users (service role). Evita leitura direta (RLS deny).
 
@@ -214,6 +254,7 @@ create policy "auth_full" on public.alvara_groups    for all using (auth.role() 
 create policy "auth_full" on public.alvaras          for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.company_alvaras  for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.alvara_tasks     for all using (auth.role() = 'authenticated');
+create policy "auth_full" on public.alvara_task_history for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.sync_config      for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.sync_logs        for all using (auth.role() = 'authenticated');
 

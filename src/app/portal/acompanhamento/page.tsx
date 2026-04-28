@@ -25,7 +25,7 @@ import {
   UserCircle,
   XCircle,
 } from "lucide-react";
-import Link from "next/link";
+import { TaskEditModal } from "@/components/acompanhamento/task-edit-modal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -114,6 +114,11 @@ function companyLabel(c: Company | null | undefined): string {
   return (c.razao_social ?? c.nome_fantasia ?? "—").trim() || "—";
 }
 
+function taskHasEmissao(t: TaskRow): boolean {
+  const em = t.company_alvaras?.data_emissao;
+  return em != null && String(em).trim() !== "";
+}
+
 export default function AcompanhamentoPage() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,8 +130,13 @@ export default function AcompanhamentoPage() {
   const [yearMenuOpen, setYearMenuOpen] = useState(false);
   const [laneMap, setLaneMap] = useState<Record<string, UiLane>>({});
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
+  const [selectedAlvaraNames, setSelectedAlvaraNames] = useState<string[]>([]);
+  const [taskQuery, setTaskQuery] = useState("");
+  const [taskMenuOpen, setTaskMenuOpen] = useState(false);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const companyMenuRef = useRef<HTMLDivElement>(null);
   const yearMenuRef = useRef<HTMLDivElement>(null);
+  const taskMenuRef = useRef<HTMLDivElement>(null);
 
   const hoje = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
 
@@ -138,6 +148,7 @@ export default function AcompanhamentoPage() {
     function onDocClick(e: MouseEvent) {
       if (!companyMenuRef.current?.contains(e.target as Node)) setCompanyMenuOpen(false);
       if (!yearMenuRef.current?.contains(e.target as Node)) setYearMenuOpen(false);
+      if (!taskMenuRef.current?.contains(e.target as Node)) setTaskMenuOpen(false);
     }
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
@@ -189,6 +200,15 @@ export default function AcompanhamentoPage() {
     return Array.from(set).sort((a, b) => b - a);
   }, [tasks]);
 
+  const uniqueAlvaraNames = useMemo(() => {
+    const names = new Set<string>();
+    tasks.forEach((t) => {
+      const n = t.company_alvaras?.alvaras?.name?.trim();
+      if (n) names.add(n);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [tasks]);
+
   const uniqueCompanies = useMemo(() => {
     const names = new Set<string>();
     tasks.forEach((t) => {
@@ -204,13 +224,25 @@ export default function AcompanhamentoPage() {
     return uniqueCompanies.filter((c) => c.toLowerCase().includes(q));
   }, [uniqueCompanies, companyQuery]);
 
+  const filteredAlvaraNamesList = useMemo(() => {
+    const q = taskQuery.trim().toLowerCase();
+    if (!q) return uniqueAlvaraNames;
+    return uniqueAlvaraNames.filter((n) => n.toLowerCase().includes(q));
+  }, [uniqueAlvaraNames, taskQuery]);
+
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
-      if (selectedCompanies.length === 0) return true;
-      const label = companyLabel(t.company_alvaras?.companies);
-      return selectedCompanies.includes(label);
+      if (selectedCompanies.length > 0) {
+        const label = companyLabel(t.company_alvaras?.companies);
+        if (!selectedCompanies.includes(label)) return false;
+      }
+      if (selectedAlvaraNames.length > 0) {
+        const an = t.company_alvaras?.alvaras?.name?.trim() ?? "";
+        if (!selectedAlvaraNames.includes(an)) return false;
+      }
+      return true;
     });
-  }, [tasks, selectedCompanies]);
+  }, [tasks, selectedCompanies, selectedAlvaraNames]);
 
   const tasksByColumn = useMemo(() => {
     const pendente: TaskRow[] = [];
@@ -279,6 +311,10 @@ export default function AcompanhamentoPage() {
   }
 
   async function soConcluir(t: TaskRow) {
+    if (!taskHasEmissao(t)) {
+      toast.error("Não é possível concluir sem data de emissão no vínculo. Abra os detalhes ou use «Dar baixa».");
+      return;
+    }
     try {
       await apiJson("/api/alvara-tasks/" + t.id, {
         method: "PATCH",
@@ -324,25 +360,16 @@ export default function AcompanhamentoPage() {
     }
   }
 
-  async function salvarNotas(t: TaskRow) {
-    const n = window.prompt("Notas da tarefa:", t.notes ?? "");
-    if (n === null) return;
-    try {
-      await apiJson("/api/alvara-tasks/" + t.id, {
-        method: "PATCH",
-        body: JSON.stringify({ notes: n || null }),
-      });
-      toast.success("Notas atualizadas");
-      void load();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro");
-    }
+  function onOpenTaskDetail(id: string) {
+    setDetailTaskId(id);
   }
 
   function clearFilters() {
     setSelectedYears([]);
     setSelectedCompanies([]);
+    setSelectedAlvaraNames([]);
     setCompanyQuery("");
+    setTaskQuery("");
     toast.message("Filtros limpos");
   }
 
@@ -369,6 +396,10 @@ export default function AcompanhamentoPage() {
 
     if (target === "concluido") {
       if (task.status === "concluida") return;
+      if (!taskHasEmissao(task)) {
+        toast.error("Conclusão exige data de emissão no vínculo.");
+        return;
+      }
       await soConcluir(task);
       return;
     }
@@ -401,6 +432,13 @@ export default function AcompanhamentoPage() {
         ? selectedCompanies[0]
         : `${selectedCompanies.length} empresas selecionadas`;
 
+  const selectedAlvarasLabel =
+    selectedAlvaraNames.length === 0
+      ? "Todos os tipos"
+      : selectedAlvaraNames.length === 1
+        ? selectedAlvaraNames[0]
+        : `${selectedAlvaraNames.length} tipos selecionados`;
+
   return (
     <div className="space-y-6 text-slate-900 [color-scheme:light]">
       {/* Cabeçalho — alinhado ao portal + tom verde do modelo */}
@@ -410,9 +448,9 @@ export default function AcompanhamentoPage() {
           Gestão de alvarás
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-600">
-          Controle por validade e empresa. Filtre por um ou mais anos (data de vencimento da tarefa) e por
-          empresas. Arraste os cartões entre colunas; &quot;Em andamento&quot; é organização local
-          (navegador).
+          Controle por validade e empresa. Filtre por anos, empresas e tipo de alvará. Para{" "}
+          <strong>concluir</strong> uma tarefa é necessária <strong>data de emissão</strong> no vínculo (ou use
+          «Dar baixa»). Arraste os cartões entre colunas; &quot;Em andamento&quot; é organização local.
         </p>
       </div>
 
@@ -524,6 +562,60 @@ export default function AcompanhamentoPage() {
           ) : null}
         </div>
 
+        <div ref={taskMenuRef} className="relative min-w-[240px] flex-1">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Tipo de alvará (tarefa)
+          </label>
+          <button
+            type="button"
+            className="input-field flex h-10 w-full items-center justify-between text-left"
+            onClick={() => setTaskMenuOpen((o) => !o)}
+            aria-expanded={taskMenuOpen}
+          >
+            <span className="truncate">{selectedAlvarasLabel}</span>
+            <ChevronDown className={cn("h-4 w-4 shrink-0 transition", taskMenuOpen && "rotate-180")} />
+          </button>
+          {taskMenuOpen ? (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+              <div className="border-b border-slate-100 p-2">
+                <input
+                  type="search"
+                  className="input-field h-9 text-sm"
+                  placeholder="Buscar tipo…"
+                  value={taskQuery}
+                  onChange={(e) => setTaskQuery(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+              <ul className="max-h-56 overflow-y-auto p-1">
+                {filteredAlvaraNamesList.length === 0 ? (
+                  <li className="px-3 py-2 text-sm text-slate-500">Nenhum tipo encontrado</li>
+                ) : (
+                  filteredAlvaraNamesList.map((name) => {
+                    const checked = selectedAlvaraNames.includes(name);
+                    return (
+                      <li key={name}>
+                        <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-50">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setSelectedAlvaraNames((prev) =>
+                                e.target.checked ? [...prev, name] : prev.filter((x) => x !== name)
+                              );
+                            }}
+                          />
+                          <span className="truncate">{name}</span>
+                        </label>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+
         <button
           type="button"
           onClick={clearFilters}
@@ -592,11 +684,11 @@ export default function AcompanhamentoPage() {
                         <TaskCard
                           task={t}
                           hoje={hoje}
+                          onOpenDetail={() => onOpenTaskDetail(t.id)}
                           onBaixa={() => void darBaixaNoVinculo(t)}
                           onConcluir={() => void soConcluir(t)}
                           onReabrir={() => void reabrir(t)}
                           onCancelar={() => void cancelarTarefa(t)}
-                          onEditNotas={() => void salvarNotas(t)}
                         />
                       </article>
                     ))
@@ -617,8 +709,16 @@ export default function AcompanhamentoPage() {
 
       <p className="text-center text-xs text-slate-400">
         <ClipboardList className="mb-0.5 inline h-3.5 w-3.5 align-text-bottom" /> Arrastar para{" "}
-        <strong>Concluído</strong> conclui a tarefa (igual a &quot;Só concluir&quot;). Canceladas ficam ocultas.
+        <strong>Concluído</strong> só funciona com data de emissão no vínculo. Use o ícone de edição para o painel
+        completo e histórico.
       </p>
+
+      <TaskEditModal
+        taskId={detailTaskId}
+        open={detailTaskId != null}
+        onClose={() => setDetailTaskId(null)}
+        onSaved={() => void load()}
+      />
     </div>
   );
 }
@@ -626,19 +726,19 @@ export default function AcompanhamentoPage() {
 function TaskCard({
   task,
   hoje,
+  onOpenDetail,
   onBaixa,
   onConcluir,
   onReabrir,
   onCancelar,
-  onEditNotas,
 }: {
   task: TaskRow;
   hoje: string;
+  onOpenDetail: () => void;
   onBaixa: () => void;
   onConcluir: () => void;
   onReabrir: () => void;
   onCancelar: () => void;
-  onEditNotas: () => void;
 }) {
   const ca = task.company_alvaras;
   const c = ca?.companies;
@@ -648,7 +748,7 @@ function TaskCard({
   const venc = validityMeta(ca?.data_vencimento);
   const atrasada = task.status === "pendente" && task.due_date < hoje;
   const hasFile = Boolean(ca?.arquivo_url);
-  const empresaHref = c ? "/portal/empresas/" + c.id : null;
+  const podeConcluir = taskHasEmissao(task);
 
   return (
     <>
@@ -665,10 +765,10 @@ function TaskCard({
           <button
             type="button"
             className="rounded p-1 hover:bg-slate-100 hover:text-slate-700"
-            title="Editar notas"
+            title="Detalhes e histórico"
             onClick={(e) => {
               e.stopPropagation();
-              onEditNotas();
+              onOpenDetail();
             }}
           >
             <Pencil className="h-4 w-4" />
@@ -694,13 +794,7 @@ function TaskCard({
 
       <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-800">
         <Building2 className="h-3.5 w-3.5 shrink-0" />
-        {empresaHref ? (
-          <Link href={empresaHref} className="truncate hover:underline" onClick={(e) => e.stopPropagation()}>
-            {companyLabel(c)}
-          </Link>
-        ) : (
-          <span className="truncate">{companyLabel(c)}</span>
-        )}
+        <span className="truncate">{companyLabel(c)}</span>
       </p>
 
       <div className="mt-2 rounded-xl bg-slate-50 px-2.5 py-1.5 font-mono text-[0.7rem] text-slate-700">
@@ -736,23 +830,33 @@ function TaskCard({
           <Paperclip className="h-3.5 w-3.5" />
           {hasFile ? "Comprovante no vínculo" : "Sem anexo no vínculo"}
         </span>
-        {empresaHref ? (
-          <Link
-            href={empresaHref}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[0.65rem] font-medium text-slate-600 hover:bg-slate-50"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Upload className="h-3 w-3" />
-            Abrir empresa
-          </Link>
-        ) : null}
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[0.65rem] font-medium text-slate-600 hover:bg-slate-50"
+          onClick={(e) => {
+            e.stopPropagation();
+            toast.message("Upload de anexo em breve", {
+              description: "Abra a tarefa para mais opções.",
+            });
+          }}
+        >
+          <Upload className="h-3 w-3" />
+          Adicionar anexo
+        </button>
       </div>
 
       {task.status === "pendente" ? (
         <>
           <button
             type="button"
-            className="mt-3 w-full rounded-full bg-emerald-100 py-2 text-[0.75rem] font-semibold text-emerald-900 transition hover:bg-emerald-200"
+            className={cn(
+              "mt-3 w-full rounded-full py-2 text-[0.75rem] font-semibold transition",
+              podeConcluir
+                ? "bg-emerald-100 text-emerald-900 hover:bg-emerald-200"
+                : "cursor-not-allowed bg-slate-100 text-slate-400"
+            )}
+            disabled={!podeConcluir}
+            title={!podeConcluir ? "Exige data de emissão no vínculo" : undefined}
             onClick={(e) => {
               e.stopPropagation();
               onConcluir();

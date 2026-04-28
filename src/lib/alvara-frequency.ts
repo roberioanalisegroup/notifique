@@ -132,69 +132,36 @@ function nextWeekdayStrictlyAfter(emission: Date, weekday: number): Date {
   throw new Error("Dia da semana inválido");
 }
 
-function nextMonthlyWithDay(emission: Date, day: number): Date {
-  const y = emission.getFullYear();
-  const m = emission.getMonth();
-  let cand = new Date(y, m, day);
-  if (cand <= emission) cand = new Date(y, m + 1, day);
-  return cand;
-}
-
-function nextAnnualWithDayMonth(emission: Date, day: number, month: number): Date {
-  let y = emission.getFullYear();
-  let cand = new Date(y, month - 1, day);
-  if (cand <= emission) cand = new Date(y + 1, month - 1, day);
-  return cand;
-}
-
-function monthInCycle(m: number, anchorMonth: number, periodMonths: number): boolean {
-  return ((m - anchorMonth) % periodMonths + periodMonths) % periodMonths === 0;
-}
-
-function nextPeriodicDayMonth(
-  emission: Date,
-  day: number,
-  anchorMonth: number,
-  periodMonths: number
-): Date {
-  let iter = new Date(emission.getFullYear(), emission.getMonth(), 1);
-  for (let i = 0; i < 480; i++) {
-    const mo = iter.getMonth() + 1;
-    const y = iter.getFullYear();
-    if (monthInCycle(mo, anchorMonth, periodMonths)) {
-      const cand = new Date(y, iter.getMonth(), day);
-      if (cand > emission) return cand;
-    }
-    iter = addMonths(iter, 1);
-  }
-  throw new Error("Não foi possível calcular o vencimento periódico");
-}
-
-function nextDecendial(emission: Date, diaInicial: number, diasUteis: number): Date {
-  let anchor = new Date(emission.getFullYear(), emission.getMonth(), diaInicial);
-  if (anchor <= emission) {
-    anchor = addMonths(anchor, 1);
-    anchor = new Date(anchor.getFullYear(), anchor.getMonth(), diaInicial);
-  }
-  for (let step = 0; step < 80; step++) {
-    const v = addBusinessDays(anchor, diasUteis);
-    const vNorm = new Date(v.getFullYear(), v.getMonth(), v.getDate());
-    if (vNorm > emission) return vNorm;
-    anchor = addDays(anchor, 10);
-  }
-  throw new Error("Não foi possível calcular o decendial");
-}
-
-function periodMonthsFor(frequencia: AlvaraFrequencia): number | null {
+/** Passo em meses para vencimentos calculados só a partir da data de emissão (ciclo). */
+function monthsStepRelativo(frequencia: AlvaraFrequencia): number {
   switch (frequencia) {
+    case "mensal":
+      return 1;
     case "bimestral":
       return 2;
     case "trimestral":
       return 3;
     case "semestral":
       return 6;
+    case "anual":
+      return 12;
     default:
-      return null;
+      return 0;
+  }
+}
+
+/** Frequências em que não se usa dia/mês fixo: o próximo vencimento soma o período à data de referência (emissão ou vencimento anterior). */
+export function isFrequenciaRelativaEmissao(f: AlvaraFrequencia): boolean {
+  switch (f) {
+    case "mensal":
+    case "bimestral":
+    case "trimestral":
+    case "semestral":
+    case "anual":
+    case "decendial":
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -203,37 +170,16 @@ export function validateLegalForFrequencia(
   frequencia: AlvaraFrequencia,
   L: AlvaraLegalDates
 ): string | null {
-  const { legal_dia, legal_mes, legal_dia_semana, legal_dias_uteis } = L;
+  const { legal_dia_semana } = L;
+  if (isFrequenciaRelativaEmissao(frequencia)) {
+    return null;
+  }
   switch (frequencia) {
     case "diaria":
       return null;
     case "semanal":
       if (legal_dia_semana == null || legal_dia_semana < 0 || legal_dia_semana > 6) {
         return "Selecione o dia da semana (data legal).";
-      }
-      return null;
-    case "decendial":
-      if (legal_dia == null || legal_dia < 1 || legal_dia > 31) {
-        return "Selecione o dia inicial (data legal).";
-      }
-      if (legal_dias_uteis == null || legal_dias_uteis < 0 || legal_dias_uteis > 60) {
-        return "Selecione os dias úteis (data legal).";
-      }
-      return null;
-    case "mensal":
-      if (legal_dia == null || legal_dia < 1 || legal_dia > 31) {
-        return "Selecione o dia do mês (data legal).";
-      }
-      return null;
-    case "bimestral":
-    case "trimestral":
-    case "semestral":
-    case "anual":
-      if (legal_dia == null || legal_dia < 1 || legal_dia > 31) {
-        return "Selecione o dia (data legal).";
-      }
-      if (legal_mes == null || legal_mes < 1 || legal_mes > 12) {
-        return "Selecione o mês (data legal).";
       }
       return null;
     default:
@@ -256,10 +202,7 @@ export function computeVencimentoDate(
   const err = validateLegalForFrequencia(frequencia, legal);
   if (err) throw new Error(err);
 
-  const dia = legal.legal_dia ?? 1;
-  const mes = legal.legal_mes ?? 1;
   const wd = legal.legal_dia_semana ?? 1;
-  const du = legal.legal_dias_uteis ?? 0;
 
   let next: Date;
   switch (frequencia) {
@@ -270,20 +213,16 @@ export function computeVencimentoDate(
       next = nextWeekdayStrictlyAfter(emission, wd);
       break;
     case "decendial":
-      next = nextDecendial(emission, dia, du);
+      next = addDays(emission, 10);
       break;
     case "mensal":
-      next = nextMonthlyWithDay(emission, dia);
-      break;
-    case "anual":
-      next = nextAnnualWithDayMonth(emission, dia, mes);
-      break;
     case "bimestral":
     case "trimestral":
-    case "semestral": {
-      const p = periodMonthsFor(frequencia);
-      if (!p) throw new Error("Período inválido");
-      next = nextPeriodicDayMonth(emission, dia, mes, p);
+    case "semestral":
+    case "anual": {
+      const n = monthsStepRelativo(frequencia);
+      if (!n) throw new Error("Período inválido");
+      next = addMonths(emission, n);
       break;
     }
   }
@@ -303,7 +242,6 @@ export function computeDataVencimentoISO(
 
 /** Resumo curto para tabelas (ex.: "15/mar" ou "Segunda"). */
 export function formatLegalSummary(frequencia: AlvaraFrequencia, legal: AlvaraLegalDates): string {
-  const L = MESES_OPCOES.find((m) => m.value === legal.legal_mes);
   switch (frequencia) {
     case "diaria":
       return "—";
@@ -311,17 +249,18 @@ export function formatLegalSummary(frequencia: AlvaraFrequencia, legal: AlvaraLe
       const d = DIAS_SEMANA_OPCOES.find((x) => x.value === legal.legal_dia_semana);
       return d?.label ?? "—";
     }
-    case "decendial":
-      return legal.legal_dia != null && legal.legal_dias_uteis != null
-        ? `Dia ${legal.legal_dia} + ${legal.legal_dias_uteis} úteis`
-        : "—";
     case "mensal":
-      return legal.legal_dia != null ? `Dia ${legal.legal_dia}` : "—";
+      return "+1 mês (emissão)";
     case "bimestral":
+      return "+2 meses (emissão)";
     case "trimestral":
+      return "+3 meses (emissão)";
     case "semestral":
+      return "+6 meses (emissão)";
     case "anual":
-      return legal.legal_dia != null && L ? `${legal.legal_dia}/${L.label.slice(0, 3)}` : "—";
+      return "+12 meses (emissão)";
+    case "decendial":
+      return "+10 dias (emissão)";
     default:
       return "—";
   }
