@@ -81,20 +81,24 @@ export async function PATCH(
     id: string;
   };
 
-  if (
+  const hasEm =
     updated.data_emissao &&
     typeof updated.data_emissao === "string" &&
-    updated.data_emissao.length >= 10 &&
-    updated.data_vencimento &&
-    typeof updated.data_vencimento === "string"
-  ) {
+    updated.data_emissao.length >= 10;
+
+  if (!hasEm) {
+    await supabase
+      .from("alvara_tasks")
+      .update({ due_date: null, updated_at: new Date().toISOString() })
+      .eq("company_alvara_id", params.id)
+      .eq("status", "pendente");
+  } else if (updated.data_vencimento && typeof updated.data_vencimento === "string") {
     const due = String(updated.data_vencimento).slice(0, 10);
     await supabase
       .from("alvara_tasks")
       .update({ due_date: due, updated_at: new Date().toISOString() })
       .eq("company_alvara_id", params.id)
-      .eq("status", "pendente")
-      .is("due_date", null);
+      .eq("status", "pendente");
   }
 
   return NextResponse.json({ company_alvara: data });

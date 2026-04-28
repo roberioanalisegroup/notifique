@@ -126,6 +126,8 @@ export interface Alvara {
   legal_dia_semana: number | null;
   /** Dias úteis após o dia inicial — decendial */
   legal_dias_uteis: number | null;
+  /** No 1.º ciclo da tarefa: dias corridos após criação para mover de Pendente a Em andamento. */
+  prazo_inicio_dias: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -137,6 +139,8 @@ export interface AlvaraTask {
   company_alvara_id: string;
   /** Preenchido após registo da data de emissão no vínculo (regra de frequência). */
   due_date: string | null;
+  /** Só 1.º ciclo: último dia para passar o card a Em andamento (Pendente). Ciclos seguintes: null. */
+  inicio_obrigatorio_ate: string | null;
   status: "pendente" | "concluida" | "cancelada";
   title: string | null;
   completed_at: string | null;

@@ -36,6 +36,7 @@ type ModalState = {
   legal_mes: number;
   legal_dia_semana: number;
   legal_dias_uteis: number;
+  prazo_inicio_dias: number;
 };
 
 function defaultModal(): ModalState {
@@ -50,6 +51,7 @@ function defaultModal(): ModalState {
     legal_mes: 1,
     legal_dia_semana: 1,
     legal_dias_uteis: 5,
+    prazo_inicio_dias: 30,
   };
 }
 
@@ -66,6 +68,7 @@ function rowToModal(r: Row): ModalState {
     legal_mes: r.legal_mes ?? 1,
     legal_dia_semana: r.legal_dia_semana ?? 1,
     legal_dias_uteis: r.legal_dias_uteis ?? 5,
+    prazo_inicio_dias: r.prazo_inicio_dias ?? 30,
   };
 }
 
@@ -249,6 +252,7 @@ function AlvarasContent() {
         legal_mes: legal.legal_mes,
         legal_dia_semana: legal.legal_dia_semana,
         legal_dias_uteis: legal.legal_dias_uteis,
+        prazo_inicio_dias: modal.prazo_inicio_dias,
       };
       if (modal.id) {
         await apiJson("/api/alvaras/" + modal.id, { method: "PATCH", body: JSON.stringify(body) });
@@ -326,7 +330,8 @@ function AlvarasContent() {
                 <th>Frequência</th>
                 <th>Data legal</th>
                 <th>Fim de semana</th>
-                <th>Vinculados</th>
+                <th className="tabular-nums">Prazo início</th>
+                <th className="tabular-nums">Vinculados</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -364,6 +369,7 @@ function AlvarasContent() {
                   <td className="max-w-[12rem] text-xs text-slate-600">
                     {WEEKEND_ADJUST_LABELS[r.weekend_adjust] ?? r.weekend_adjust}
                   </td>
+                  <td className="tabular-nums text-slate-700">{r.prazo_inicio_dias ?? 30} d</td>
                   <td className="tabular-nums text-slate-600">{r.vinculados}</td>
                   <td className="space-x-2">
                     <button
@@ -385,7 +391,7 @@ function AlvarasContent() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-slate-500">
+                  <td colSpan={9} className="py-10 text-center text-slate-500">
                     Nenhum alvará
                   </td>
                 </tr>
@@ -510,6 +516,31 @@ function AlvarasContent() {
                   </select>
                   <p className="mt-1.5 text-xs text-slate-500">
                     Se o vencimento calculado cair em sábado ou domingo, aplica-se este ajuste.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[minmax(7rem,9.5rem)_1fr] sm:items-start">
+                <label
+                  className="pt-2.5 text-sm font-semibold text-slate-800"
+                  htmlFor="alvara-prazo-inicio"
+                >
+                  Início obrigatório
+                </label>
+                <div>
+                  <input
+                    id="alvara-prazo-inicio"
+                    type="number"
+                    min={1}
+                    max={3650}
+                    className="input-field max-w-[10rem]"
+                    value={modal.prazo_inicio_dias}
+                    onChange={(e) =>
+                      setModal({ ...modal, prazo_inicio_dias: Number(e.target.value) || 30 })
+                    }
+                  />
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    Dias corridos após criar a tarefa (1.º ciclo) para mover o card de Pendente para Em andamento.
+                    Nos ciclos seguintes usa-se só o vencimento da tarefa.
                   </p>
                 </div>
               </div>

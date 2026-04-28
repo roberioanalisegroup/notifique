@@ -122,6 +122,25 @@ function taskPodeConcluir(t: TaskRow): boolean {
   return hasEmissao && hasVencimentoTarefa;
 }
 
+function vinculoTemEmissao(ca: TaskRow["company_alvaras"]): boolean {
+  const em = ca?.data_emissao;
+  return em != null && String(em).trim() !== "";
+}
+
+function taskAtrasoInicio(t: TaskRow, uiColumn: ColumnId, hoje: string): boolean {
+  if (t.status !== "pendente") return false;
+  if (uiColumn !== "pendente") return false;
+  if (!t.inicio_obrigatorio_ate) return false;
+  if (vinculoTemEmissao(t.company_alvaras)) return false;
+  return t.inicio_obrigatorio_ate < hoje;
+}
+
+function taskAtrasoVencimento(t: TaskRow, hoje: string): boolean {
+  if (t.status !== "pendente") return false;
+  if (!t.due_date || String(t.due_date).trim() === "") return false;
+  return t.due_date < hoje;
+}
+
 export default function AcompanhamentoPage() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -198,6 +217,8 @@ export default function AcompanhamentoPage() {
     tasks.forEach((t) => {
       const y = yearFromIso(t.due_date);
       if (y != null) set.add(y);
+      const yi = yearFromIso(t.inicio_obrigatorio_ate);
+      if (yi != null) set.add(yi);
       if (t.due_date == null || String(t.due_date).trim() === "") set.add(cy);
     });
     return Array.from(set).sort((a, b) => b - a);
@@ -672,6 +693,7 @@ export default function AcompanhamentoPage() {
                       >
                         <TaskCard
                           task={t}
+                          uiColumn={col.id}
                           hoje={hoje}
                           onOpenDetail={() => onOpenTaskDetail(t.id)}
                           onBaixa={() => void darBaixaNoVinculo(t)}
@@ -714,6 +736,7 @@ export default function AcompanhamentoPage() {
 
 function TaskCard({
   task,
+  uiColumn,
   hoje,
   onOpenDetail,
   onBaixa,
@@ -722,6 +745,7 @@ function TaskCard({
   onCancelar,
 }: {
   task: TaskRow;
+  uiColumn: ColumnId;
   hoje: string;
   onOpenDetail: () => void;
   onBaixa: () => void;
@@ -735,11 +759,10 @@ function TaskCard({
   const g = a?.alvara_groups;
   const freq = a ? (FREQUENCIA_LABELS[a.frequencia] ?? a.frequencia) : "—";
   const venc = validityMeta(ca?.data_vencimento);
-  const atrasada =
-    task.status === "pendente" &&
-    task.due_date != null &&
-    String(task.due_date).trim() !== "" &&
-    task.due_date < hoje;
+  const temEm = vinculoTemEmissao(ca);
+  const atrasoInicio = taskAtrasoInicio(task, uiColumn, hoje);
+  const atrasoVenc = taskAtrasoVencimento(task, hoje);
+  const atrasada = atrasoInicio || atrasoVenc;
   const hasFile = Boolean(ca?.arquivo_url);
   const podeConcluir = taskPodeConcluir(task);
 
@@ -806,9 +829,19 @@ function TaskCard({
       </div>
 
       <p className="mt-2 text-[0.7rem] text-slate-600">
-        <span className="font-medium text-slate-500">Vence (tarefa):</span>{" "}
-        {formatDate(task.due_date, { empty: "—" })}
-        {atrasada ? " · atrasada" : ""}
+        {!temEm && task.inicio_obrigatorio_ate ? (
+          <>
+            <span className="font-medium text-slate-500">Início Obrigatório:</span>{" "}
+            {formatDate(task.inicio_obrigatorio_ate, { empty: "—" })}
+            {atrasoInicio ? " · atraso para iniciar" : ""}
+          </>
+        ) : (
+          <>
+            <span className="font-medium text-slate-500">Vencimento (tarefa):</span>{" "}
+            {formatDate(task.due_date, { empty: "—" })}
+            {atrasoVenc ? " · atrasada" : ""}
+          </>
+        )}
       </p>
 
       <p className="mt-1 text-[0.7rem] text-slate-600">Periodicidade: {freq}</p>

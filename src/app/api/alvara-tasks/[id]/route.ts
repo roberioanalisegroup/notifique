@@ -4,6 +4,7 @@ import {
   isAlvaraFrequencia,
   isWeekendAdjust,
 } from "@/lib/alvara-frequency";
+import { proximoVencimentoISOFromEmissao } from "@/lib/alvara-task-generation";
 import type { Alvara, AlvaraTask } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { format } from "date-fns";
@@ -320,28 +321,35 @@ export async function PATCH(
   }
 
   if (newStatus === "concluida") {
-    const { data: caF } = await supabase
+    const { data: caLink } = await supabase
       .from("company_alvaras")
-      .select("alvara_id")
+      .select("data_emissao, alvara_id")
       .eq("id", taskRow.company_alvara_id)
       .single();
 
-    if (caF?.alvara_id) {
-      const { data: aRow } = await supabase
-        .from("alvaras")
-        .select("is_active")
-        .eq("id", caF.alvara_id)
-        .single();
+    if (caLink?.alvara_id && caLink?.data_emissao) {
+      const { data: alvFull } = await supabase.from("alvaras").select("*").eq("id", caLink.alvara_id).single();
+      const alv = alvFull as Alvara | null;
 
-      if (aRow?.is_active) {
+      if (alv?.is_active) {
+        const nextDue = proximoVencimentoISOFromEmissao(String(caLink.data_emissao).slice(0, 10), alv);
         const { error: insE } = await supabase.from("alvara_tasks").insert({
           company_alvara_id: taskRow.company_alvara_id,
-          due_date: null,
+          due_date: nextDue,
+          inicio_obrigatorio_ate: null,
           status: "pendente",
           title: null,
         });
         if (!insE) {
-          await insertHistory(supabase, id, "system", "Próxima tarefa criada (vencimento após nova emissão)", {});
+          await insertHistory(
+            supabase,
+            id,
+            "system",
+            nextDue
+              ? `Próxima tarefa criada com vencimento ${nextDue} (a partir da emissão do ciclo).`
+              : "Próxima tarefa criada.",
+            { proxima_data: nextDue }
+          );
         } else if (!isPgUniqueViolation(insE)) {
           console.warn("[alvara-tasks] próxima instância:", insE.message);
         }

@@ -1,4 +1,6 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { inicioObrigatorioAteFromCriacao } from "@/lib/alvara-task-generation";
+import { format } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
 
 function isPgUniqueViolation(err: { code?: string; message?: string } | null) {
@@ -49,8 +51,8 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Garante uma tarefa pendente por vínculo (tipo ativo), sem data de vencimento até registo da emissão no vínculo.
- * Ignora vínculos que já tenham qualquer tarefa pendente.
+ * Garante uma tarefa pendente por vínculo (tipo ativo). Sem vencimento até registo da emissão;
+ * no 1.º ciclo define `inicio_obrigatorio_ate` (criação + prazo_inicio_dias do tipo).
  */
 export async function POST(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
@@ -69,7 +71,7 @@ export async function POST(request: NextRequest) {
     .select(
       `
       id,
-      alvaras ( id, is_active )
+      alvaras ( id, is_active, prazo_inicio_dias )
     `
     );
   if (e1) {
@@ -78,7 +80,7 @@ export async function POST(request: NextRequest) {
 
   const rows = (vinculos ?? []) as unknown as {
     id: string;
-    alvaras: { id: string; is_active: boolean } | null;
+    alvaras: { id: string; is_active: boolean; prazo_inicio_dias?: number | null } | null;
   }[];
   const { data: pendentes, error: eP } = await supabase
     .from("alvara_tasks")
@@ -102,9 +104,17 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
+    const baseDia = format(new Date(), "yyyy-MM-dd");
+    const prazoDias = Math.min(
+      3650,
+      Math.max(1, Number(a.prazo_inicio_dias ?? 30) || 30)
+    );
+    const inicioOb = inicioObrigatorioAteFromCriacao(baseDia, prazoDias);
+
     const { error: e2 } = await supabase.from("alvara_tasks").insert({
       company_alvara_id: ca.id,
       due_date: null,
+      inicio_obrigatorio_ate: inicioOb,
       status: "pendente",
       title: null,
     });

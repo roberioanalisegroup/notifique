@@ -185,11 +185,12 @@ export default function GeracaoTarefasPage() {
             Geração e manutenção de tarefas
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            Cada vínculo (empresa + tipo de alvará ativo) pode ter <strong>uma tarefa pendente</strong>. As
-            tarefas novas nascem <strong>sem data de vencimento</strong>; o vencimento preenche-se quando{" "}
-            <code className="rounded bg-slate-100 px-1">data_emissao</code> é registada no vínculo (regra de
-            periodicidade). Ao <strong>concluir</strong>, é criada a próxima pendente, outra vez sem vencimento
-            até nova emissão.
+            Cada vínculo ativo pode ter <strong>uma tarefa pendente</strong>. No <strong>1.º ciclo</strong>, a meta
+            para sair de Pendente é o <strong>Início Obrigatório</strong> (dias configurados no tipo). Após
+            registar a <strong>emissão</strong>, o <strong>vencimento da tarefa</strong> é calculado
+            automaticamente. Ao concluir, a <strong>próxima</strong> pendente já nasce com esse vencimento
+            (com base na emissão do ciclo); desse modo só o vencimento conta como prazo, não o “início
+            obrigatório”.
           </p>
         </div>
         <button type="button" onClick={() => void load()} className="btn-secondary shrink-0" disabled={loading}>
@@ -243,7 +244,8 @@ export default function GeracaoTarefasPage() {
             <thead>
               <tr>
                 <th className="w-10" />
-                <th>Vencimento</th>
+                <th>Venc. tarefa</th>
+                <th>Início obr.</th>
                 <th>Empresa</th>
                 <th>Tipo</th>
                 <th>Notas</th>
@@ -252,7 +254,7 @@ export default function GeracaoTarefasPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-500">
+                  <td colSpan={6} className="py-12 text-center text-slate-500">
                     A carregar…
                   </td>
                 </tr>
@@ -268,6 +270,7 @@ export default function GeracaoTarefasPage() {
                       />
                     </td>
                     <td className="whitespace-nowrap font-medium">{formatDate(t.due_date, { empty: "—" })}</td>
+                    <td className="whitespace-nowrap text-slate-600">{formatDate(t.inicio_obrigatorio_ate, { empty: "—" })}</td>
                     <td>{companyLabel(t.company_alvaras?.companies)}</td>
                     <td>{t.company_alvaras?.alvaras?.name ?? "—"}</td>
                     <td className="max-w-xs truncate text-slate-600">{t.notes ?? "—"}</td>
@@ -276,7 +279,7 @@ export default function GeracaoTarefasPage() {
               )}
               {!loading && tasks.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-10 text-center text-slate-500">
+                  <td colSpan={6} className="py-10 text-center text-slate-500">
                     Nenhuma tarefa pendente no intervalo da lista.
                   </td>
                 </tr>

@@ -42,6 +42,15 @@ export async function PATCH(
   if (body.weekend_adjust != null && !isWeekendAdjust(body.weekend_adjust)) {
     return NextResponse.json({ error: "Ajuste de fim de semana inválido" }, { status: 400 });
   }
+  if (body.prazo_inicio_dias !== undefined && body.prazo_inicio_dias !== null) {
+    const p = Number(body.prazo_inicio_dias);
+    if (!Number.isFinite(p) || p < 1 || p > 3650) {
+      return NextResponse.json(
+        { error: "prazo_inicio_dias deve estar entre 1 e 3650." },
+        { status: 400 }
+      );
+    }
+  }
 
   const { data: current, error: curErr } = await supabase
     .from("alvaras")

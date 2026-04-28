@@ -75,6 +75,8 @@ export function TaskEditModal({
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [vincEmissao, setVincEmissao] = useState("");
+  const [vincVenc, setVincVenc] = useState("");
 
   const load = useCallback(async () => {
     if (!taskId) return;
@@ -100,8 +102,42 @@ export function TaskEditModal({
       setTask(null);
       setHistory([]);
       setNotes("");
+      setVincEmissao("");
+      setVincVenc("");
     }
   }, [open, taskId, load]);
+
+  useEffect(() => {
+    if (!task?.company_alvaras) {
+      setVincEmissao("");
+      setVincVenc("");
+      return;
+    }
+    setVincEmissao(task.company_alvaras.data_emissao?.slice(0, 10) ?? "");
+    setVincVenc(task.company_alvaras.data_vencimento?.slice(0, 10) ?? "");
+  }, [task]);
+
+  async function saveVinculo() {
+    const caId = task?.company_alvaras?.id;
+    if (!caId || !taskId) return;
+    setSaving(true);
+    try {
+      await apiJson("/api/company-alvaras/" + caId, {
+        method: "PATCH",
+        body: JSON.stringify({
+          data_emissao: vincEmissao.trim() || null,
+          data_vencimento: vincVenc.trim() || null,
+        }),
+      });
+      toast.success("Datas do vínculo atualizadas");
+      await load();
+      onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function saveNotes() {
     if (!taskId) return;
@@ -216,18 +252,63 @@ export function TaskEditModal({
                 {ca?.numero ? `📄 ${ca.numero}` : `Grupo · ${g?.name ?? "Sem grupo"}`}
               </div>
 
+              <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+                <p className="mb-2 font-semibold text-slate-800">Datas do vínculo</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="form-label mb-1 block text-slate-700">Data de emissão</span>
+                    <input
+                      type="date"
+                      className="input-field"
+                      value={vincEmissao}
+                      onChange={(e) => setVincEmissao(e.target.value)}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="form-label mb-1 block text-slate-700">Data de vencimento (vínculo)</span>
+                    <input
+                      type="date"
+                      className="input-field"
+                      value={vincVenc}
+                      onChange={(e) => setVincVenc(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <p className="mt-2 text-[0.7rem] leading-snug text-slate-500">
+                  O <strong>vencimento da tarefa</strong> não é editado à mão: ao guardar a emissão, o sistema
+                  recalcula o vencimento pelo tipo (salvo se definir explicitamente o vencimento do vínculo).
+                </p>
+                <button
+                  type="button"
+                  className="btn-secondary mt-3 text-xs"
+                  disabled={saving || !ca?.id}
+                  onClick={() => void saveVinculo()}
+                >
+                  Guardar datas do vínculo
+                </button>
+              </div>
+
               <div className="grid gap-2 rounded-xl bg-violet-50/50 p-3 text-xs text-slate-700 sm:grid-cols-2">
-                <span className="flex items-center gap-1">
-                  <CalendarDays className="h-3.5 w-3.5 text-slate-500" />
-                  Emissão vínculo: {formatDate(ca?.data_emissao ?? null, { empty: "—" })}
-                </span>
-                <span className="flex items-center gap-1">
-                  <CalendarDays className="h-3.5 w-3.5 text-slate-500" />
-                  Venc. vínculo: {formatDate(ca?.data_vencimento ?? null, { empty: "—" })}
-                </span>
-                <span className="sm:col-span-2">
-                  <span className="font-medium text-slate-600">Vence (tarefa):</span>{" "}
-                  {formatDate(task.due_date, { empty: "—" })}
+                {!hasEmissao && task.inicio_obrigatorio_ate ? (
+                  <span className="flex items-start gap-1 sm:col-span-2">
+                    <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    <span>
+                      <span className="font-medium text-slate-600">Início Obrigatório:</span>{" "}
+                      {formatDate(task.inicio_obrigatorio_ate, { empty: "—" })}{" "}
+                      <span className="text-slate-500">
+                        (1.º ciclo — em <strong>Pendente</strong>, inicie até esta data)
+                      </span>
+                    </span>
+                  </span>
+                ) : null}
+                <span className="flex items-start gap-1 sm:col-span-2">
+                  <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+                  <span>
+                    <span className="font-medium text-slate-600">Vencimento (tarefa):</span>{" "}
+                    {formatDate(task.due_date, {
+                      empty: hasEmissao ? "—" : "(após registar emissão)",
+                    })}
+                  </span>
                 </span>
                 <span className="sm:col-span-2">
                   <span className="font-medium text-slate-600">Periodicidade (tipo):</span>{" "}

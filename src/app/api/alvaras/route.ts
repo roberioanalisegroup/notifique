@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
     legal_mes?: number | null;
     legal_dia_semana?: number | null;
     legal_dias_uteis?: number | null;
+    prazo_inicio_dias?: number;
     is_active?: boolean;
   };
   try {
@@ -104,6 +105,17 @@ export async function POST(request: NextRequest) {
   }
   if (!isWeekendAdjust(weekend_adjust)) {
     return NextResponse.json({ error: "Ajuste de fim de semana inválido" }, { status: 400 });
+  }
+
+  let prazo_inicio = 30;
+  if (body.prazo_inicio_dias !== undefined && body.prazo_inicio_dias !== null) {
+    prazo_inicio = Number(body.prazo_inicio_dias);
+    if (!Number.isFinite(prazo_inicio) || prazo_inicio < 1 || prazo_inicio > 3650) {
+      return NextResponse.json(
+        { error: "prazo_inicio_dias deve estar entre 1 e 3650." },
+        { status: 400 }
+      );
+    }
   }
 
   const legal: AlvaraLegalDates = {
@@ -133,6 +145,7 @@ export async function POST(request: NextRequest) {
       legal_mes: legal.legal_mes,
       legal_dia_semana: legal.legal_dia_semana,
       legal_dias_uteis: legal.legal_dias_uteis,
+      prazo_inicio_dias: prazo_inicio,
       is_active: body.is_active ?? true,
     })
     .select(

@@ -87,6 +87,28 @@ export function addCalendarDaysToIso(iso: string, days: number): string {
   return format(addDays(parseISO(iso), days), "yyyy-MM-dd");
 }
 
+/** Data limite “Início Obrigatório” (1.º ciclo): criação da tarefa + N dias corridos. */
+export function inicioObrigatorioAteFromCriacao(dataCriacaoIso: string, prazoDias: number): string {
+  const n = Math.min(3650, Math.max(1, Math.floor(prazoDias)));
+  return addCalendarDaysToIso(dataCriacaoIso.slice(0, 10), n);
+}
+
+/**
+ * Próxima data de vencimento (uma iteração) a partir da data de emissão de referência.
+ */
+export function proximoVencimentoISOFromEmissao(dataEmissao: string, alvara: Alvara): string | null {
+  if (!alvara.is_active) return null;
+  if (!isAlvaraFrequencia(alvara.frequencia) || !isWeekendAdjust(alvara.weekend_adjust)) {
+    return null;
+  }
+  const em = dataEmissao.slice(0, 10);
+  try {
+    return computeDataVencimentoISO(em, alvara.frequencia, alvara.weekend_adjust, legalFor(alvara));
+  } catch {
+    return null;
+  }
+}
+
 /** Janela alinhada ao painel: hoje … hoje+offsetDias (inclusive, como o dashboard de stats). */
 export function janelaAPartirDe(anchor: Date, offsetDias: number): { inicio: string; fim: string } {
   const inicio = format(anchor, "yyyy-MM-dd");
