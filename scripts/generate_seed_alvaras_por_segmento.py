@@ -8,6 +8,62 @@ ROOT = Path(__file__).resolve().parents[1]
 XLSX = ROOT / "alvaras_exemplos" / "alvaras_por_segmento.xlsx"
 OUT = ROOT / "supabase" / "migrations" / "seed_alvaras_por_segmento.sql"
 
+# Descrição do grupo alinhada ao tipo de segmento (chave = coluna Segmento da planilha).
+SEGMENT_DESCRIPTIONS: dict[str, str] = {
+    "Todos os tipos de empresa": (
+        "Alvarás e cadastros comuns a qualquer CNPJ com atividade econômica: "
+        "funcionamento municipal, Habite-se, ISS, estadual, CNPJ na Receita Federal."
+    ),
+    "Alimentação & Bebidas": (
+        "Estabelecimentos que produzem, manipulam ou vendem alimentos e bebidas: "
+        "VISA, MAPA, inspeção de carnes e licenças sanitárias e de bombeiros."
+    ),
+    "Saúde & Farmácias": (
+        "Clínicas, consultórios, laboratórios, hospitais e farmácias: ANVISA, conselhos, "
+        "radiação, resíduos de saúde e segurança."
+    ),
+    "Construção Civil & Imóveis": (
+        "Incorporação, construção, reformas e obras: CREA/CAU, licenças ambientais, "
+        "ART e registro em cartório."
+    ),
+    "Indústria & Manufatura": (
+        "Fábricas e transformação de produtos: licenças ambientais, MAPA, "
+        "ANVISA onde aplicável e cadastros estaduais/federais."
+    ),
+    "Educação & Cursos": (
+        "Escolas, cursos livres, EAD e treinamentos: autorização ou reconhecimento "
+        "do órgão de ensino, conselhos e MEC/estadual/municipal."
+    ),
+    "Transporte & Logística": (
+        "Fretes, armazenagem, passageiros e veículos: ANTT, DER, DETRAN, "
+        "rastreamento e responsabilidade civil."
+    ),
+    "Financeiro & Contábil": (
+        "Serviços financeiros, contábeis e correlatos: Banco Central, SUSEP, CVM, "
+        "registro em conselhos e compliance setorial."
+    ),
+    "Comércio & Varejo": (
+        "Lojas físicas e varejo em geral: funcionamento, vigilância sanitária quando "
+        "houver produtos sujeitos a regulamentação e licenças municipais/estaduais."
+    ),
+    "Tecnologia & Software": (
+        "Empresas de TI, software e serviços digitais: cadastros gerais, LGPD onde "
+        "couber e exigências específicas de certificação ou fornecimento ao setor público."
+    ),
+    "Hotelaria & Turismo": (
+        "Hotéis, pousadas, agências e parques: cadastur/ministério do Turismo, "
+        "bombeiros, meio ambiente e outorgas."
+    ),
+    "Beleza & Estética": (
+        "Salões, barbearias e clínicas de estética: funcionamento municipal, VISA, "
+        "bombeiros e registros em conselhos quando há atos médicos ou cosméticos."
+    ),
+}
+
+
+def segment_description(name: str) -> str:
+    return SEGMENT_DESCRIPTIONS.get(name.strip(), f"Grupo de alvarás do segmento «{name.strip()}».")
+
 
 def esc(s: object | None) -> str:
     if s is None:
@@ -56,7 +112,8 @@ def main() -> None:
     vg = []
     for i, name in enumerate(order):
         col = palette[i % len(palette)]
-        vg.append(f"  ('{esc(name)}', 'Segmento importado (planilha exemplos).', '{col}')")
+        desc = esc(segment_description(name))
+        vg.append(f"  ('{esc(name)}', '{desc}', '{col}')")
     lines.append("INSERT INTO public.alvara_groups (name, description, color)")
     lines.append("SELECT v.name, v.description, v.color")
     lines.append("FROM (VALUES")
@@ -65,6 +122,13 @@ def main() -> None:
     lines.append(
         "WHERE NOT EXISTS (SELECT 1 FROM public.alvara_groups g WHERE g.name = v.name);"
     )
+    lines.append("")
+    lines.append("-- Atualiza descrições se o grupo já existia (reexecução / alinhar texto)")
+    lines.append("UPDATE public.alvara_groups g SET description = v.description")
+    lines.append("FROM (VALUES")
+    lines.append(",\n".join(vg))
+    lines.append(") AS v(name, description, color_unused)")
+    lines.append("WHERE g.name = v.name AND g.description IS DISTINCT FROM v.description;")
     lines.append("")
 
     va_rows: list[tuple[str, str, str, str]] = []

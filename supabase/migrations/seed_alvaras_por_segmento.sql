@@ -5,20 +5,38 @@
 INSERT INTO public.alvara_groups (name, description, color)
 SELECT v.name, v.description, v.color
 FROM (VALUES
-  ('Todos os tipos de empresa', 'Segmento importado (planilha exemplos).', '#64748b'),
-  ('Alimentação & Bebidas', 'Segmento importado (planilha exemplos).', '#22c55e'),
-  ('Saúde & Farmácias', 'Segmento importado (planilha exemplos).', '#ec4899'),
-  ('Construção Civil & Imóveis', 'Segmento importado (planilha exemplos).', '#f97316'),
-  ('Indústria & Manufatura', 'Segmento importado (planilha exemplos).', '#6366f1'),
-  ('Educação & Cursos', 'Segmento importado (planilha exemplos).', '#0ea5e9'),
-  ('Transporte & Logística', 'Segmento importado (planilha exemplos).', '#a855f7'),
-  ('Financeiro & Contábil', 'Segmento importado (planilha exemplos).', '#eab308'),
-  ('Comércio & Varejo', 'Segmento importado (planilha exemplos).', '#14b8a6'),
-  ('Tecnologia & Software', 'Segmento importado (planilha exemplos).', '#ef4444'),
-  ('Hotelaria & Turismo', 'Segmento importado (planilha exemplos).', '#8b5cf6'),
-  ('Beleza & Estética', 'Segmento importado (planilha exemplos).', '#f43f5e')
+  ('Todos os tipos de empresa', 'Alvarás e cadastros comuns a qualquer CNPJ com atividade econômica: funcionamento municipal, Habite-se, ISS, estadual, CNPJ na Receita Federal.', '#64748b'),
+  ('Alimentação & Bebidas', 'Estabelecimentos que produzem, manipulam ou vendem alimentos e bebidas: VISA, MAPA, inspeção de carnes e licenças sanitárias e de bombeiros.', '#22c55e'),
+  ('Saúde & Farmácias', 'Clínicas, consultórios, laboratórios, hospitais e farmácias: ANVISA, conselhos, radiação, resíduos de saúde e segurança.', '#ec4899'),
+  ('Construção Civil & Imóveis', 'Incorporação, construção, reformas e obras: CREA/CAU, licenças ambientais, ART e registro em cartório.', '#f97316'),
+  ('Indústria & Manufatura', 'Fábricas e transformação de produtos: licenças ambientais, MAPA, ANVISA onde aplicável e cadastros estaduais/federais.', '#6366f1'),
+  ('Educação & Cursos', 'Escolas, cursos livres, EAD e treinamentos: autorização ou reconhecimento do órgão de ensino, conselhos e MEC/estadual/municipal.', '#0ea5e9'),
+  ('Transporte & Logística', 'Fretes, armazenagem, passageiros e veículos: ANTT, DER, DETRAN, rastreamento e responsabilidade civil.', '#a855f7'),
+  ('Financeiro & Contábil', 'Serviços financeiros, contábeis e correlatos: Banco Central, SUSEP, CVM, registro em conselhos e compliance setorial.', '#eab308'),
+  ('Comércio & Varejo', 'Lojas físicas e varejo em geral: funcionamento, vigilância sanitária quando houver produtos sujeitos a regulamentação e licenças municipais/estaduais.', '#14b8a6'),
+  ('Tecnologia & Software', 'Empresas de TI, software e serviços digitais: cadastros gerais, LGPD onde couber e exigências específicas de certificação ou fornecimento ao setor público.', '#ef4444'),
+  ('Hotelaria & Turismo', 'Hotéis, pousadas, agências e parques: cadastur/ministério do Turismo, bombeiros, meio ambiente e outorgas.', '#8b5cf6'),
+  ('Beleza & Estética', 'Salões, barbearias e clínicas de estética: funcionamento municipal, VISA, bombeiros e registros em conselhos quando há atos médicos ou cosméticos.', '#f43f5e')
 ) AS v(name, description, color)
 WHERE NOT EXISTS (SELECT 1 FROM public.alvara_groups g WHERE g.name = v.name);
+
+-- Atualiza descrições se o grupo já existia (reexecução / alinhar texto)
+UPDATE public.alvara_groups g SET description = v.description
+FROM (VALUES
+  ('Todos os tipos de empresa', 'Alvarás e cadastros comuns a qualquer CNPJ com atividade econômica: funcionamento municipal, Habite-se, ISS, estadual, CNPJ na Receita Federal.', '#64748b'),
+  ('Alimentação & Bebidas', 'Estabelecimentos que produzem, manipulam ou vendem alimentos e bebidas: VISA, MAPA, inspeção de carnes e licenças sanitárias e de bombeiros.', '#22c55e'),
+  ('Saúde & Farmácias', 'Clínicas, consultórios, laboratórios, hospitais e farmácias: ANVISA, conselhos, radiação, resíduos de saúde e segurança.', '#ec4899'),
+  ('Construção Civil & Imóveis', 'Incorporação, construção, reformas e obras: CREA/CAU, licenças ambientais, ART e registro em cartório.', '#f97316'),
+  ('Indústria & Manufatura', 'Fábricas e transformação de produtos: licenças ambientais, MAPA, ANVISA onde aplicável e cadastros estaduais/federais.', '#6366f1'),
+  ('Educação & Cursos', 'Escolas, cursos livres, EAD e treinamentos: autorização ou reconhecimento do órgão de ensino, conselhos e MEC/estadual/municipal.', '#0ea5e9'),
+  ('Transporte & Logística', 'Fretes, armazenagem, passageiros e veículos: ANTT, DER, DETRAN, rastreamento e responsabilidade civil.', '#a855f7'),
+  ('Financeiro & Contábil', 'Serviços financeiros, contábeis e correlatos: Banco Central, SUSEP, CVM, registro em conselhos e compliance setorial.', '#eab308'),
+  ('Comércio & Varejo', 'Lojas físicas e varejo em geral: funcionamento, vigilância sanitária quando houver produtos sujeitos a regulamentação e licenças municipais/estaduais.', '#14b8a6'),
+  ('Tecnologia & Software', 'Empresas de TI, software e serviços digitais: cadastros gerais, LGPD onde couber e exigências específicas de certificação ou fornecimento ao setor público.', '#ef4444'),
+  ('Hotelaria & Turismo', 'Hotéis, pousadas, agências e parques: cadastur/ministério do Turismo, bombeiros, meio ambiente e outorgas.', '#8b5cf6'),
+  ('Beleza & Estética', 'Salões, barbearias e clínicas de estética: funcionamento municipal, VISA, bombeiros e registros em conselhos quando há atos médicos ou cosméticos.', '#f43f5e')
+) AS v(name, description, color_unused)
+WHERE g.name = v.name AND g.description IS DISTINCT FROM v.description;
 
 -- Alvarás (anual, weekend_adjust none)
 INSERT INTO public.alvaras (group_id, name, description, orgao_emissor, frequencia, weekend_adjust)
