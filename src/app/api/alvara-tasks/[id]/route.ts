@@ -4,6 +4,7 @@ import {
   isAlvaraFrequencia,
   isWeekendAdjust,
 } from "@/lib/alvara-frequency";
+import { proximoVencimentoISOFromEmissao } from "@/lib/alvara-task-generation";
 import type { Alvara, AlvaraTask } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { format } from "date-fns";
@@ -24,6 +25,10 @@ type Body = {
   registrarBaixaNoVinculo?: boolean;
   arquivo_url?: string | null;
 };
+
+function isPgUniqueViolation(err: { code?: string; message?: string } | null) {
+  return err?.code === "23505" || (err?.message?.toLowerCase().includes("duplicate") ?? false);
+}
 
 async function insertHistory(
   supabase: SupabaseClient,
@@ -285,6 +290,37 @@ export async function PATCH(
         anterior: taskRow.notes,
         novo: body.notes,
       });
+    }
+  }
+
+  if (newStatus === "concluida") {
+    const { data: caF } = await supabase
+      .from("company_alvaras")
+      .select("id, data_emissao, alvara_id")
+      .eq("id", taskRow.company_alvara_id)
+      .single();
+    const em = caF?.data_emissao ? String(caF.data_emissao).slice(0, 10) : null;
+    if (em && caF?.alvara_id) {
+      const { data: alv } = await supabase.from("alvaras").select("*").eq("id", caF.alvara_id).single();
+      const a = alv as Alvara | null;
+      if (a?.is_active) {
+        const nextDue = proximoVencimentoISOFromEmissao(em, a);
+        if (nextDue) {
+          const { error: insE } = await supabase.from("alvara_tasks").insert({
+            company_alvara_id: taskRow.company_alvara_id,
+            due_date: nextDue,
+            status: "pendente",
+            title: null,
+          });
+          if (!insE) {
+            await insertHistory(supabase, id, "system", `Próxima tarefa gerada para ${nextDue}`, {
+              proxima_data: nextDue,
+            });
+          } else if (!isPgUniqueViolation(insE)) {
+            console.warn("[alvara-tasks] próxima instância:", insE.message);
+          }
+        }
+      }
     }
   }
 

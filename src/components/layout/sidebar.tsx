@@ -41,6 +41,10 @@ const items: Item[] = [
     href: "/portal/acompanhamento",
     label: "Acompanhamento",
     icon: <CalendarCheck className="h-5 w-5 shrink-0" />,
+    children: [
+      { href: "/portal/acompanhamento", label: "Quadro Kanban" },
+      { href: "/portal/acompanhamento/geracao", label: "Geração e manutenção" },
+    ],
   },
   {
     id: "empresas",

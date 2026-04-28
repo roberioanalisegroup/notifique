@@ -19,13 +19,14 @@ import {
   Loader2,
   Paperclip,
   Pencil,
-  RefreshCw,
+  Settings2,
   Trash2,
   Upload,
   UserCircle,
   XCircle,
 } from "lucide-react";
 import { TaskEditModal } from "@/components/acompanhamento/task-edit-modal";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -122,7 +123,6 @@ function taskHasEmissao(t: TaskRow): boolean {
 export default function AcompanhamentoPage() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
   const [selectedYears, setSelectedYears] = useState<number[]>(() => [new Date().getFullYear()]);
   const [companyQuery, setCompanyQuery] = useState("");
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
@@ -265,27 +265,6 @@ export default function AcompanhamentoPage() {
 
     return { pendente, andamento, concluido };
   }, [filteredTasks, laneMap]);
-
-  async function gerarTarefas() {
-    setGenerating(true);
-    try {
-      const r = await apiJson<{
-        janela: { inicio: string; fim: string; offsetDias: number };
-        inseridos: number;
-        ignoradosDuplicata: number;
-      }>("/api/alvara-tasks", { method: "POST", body: JSON.stringify({ offsetDias: 365 }) });
-      toast.success(
-        r.inseridos > 0
-          ? `Incluídas ${r.inseridos} tarefa(s). Janela: ${r.janela.inicio} a ${r.janela.fim}.`
-          : `Nenhuma tarefa nova; ${r.ignoradosDuplicata} já existiam.`
-      );
-      void load();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao gerar tarefas");
-    } finally {
-      setGenerating(false);
-    }
-  }
 
   async function darBaixaNoVinculo(t: TaskRow) {
     if (
@@ -455,10 +434,13 @@ export default function AcompanhamentoPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={gerarTarefas} disabled={generating} className="btn-primary inline-flex items-center gap-2">
-          {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {generating ? "A gerar…" : "Gerar / atualizar tarefas (até 1 ano)"}
-        </button>
+        <Link
+          href="/portal/acompanhamento/geracao"
+          className="btn-primary inline-flex items-center gap-2 no-underline"
+        >
+          <Settings2 className="h-4 w-4" />
+          Geração e manutenção
+        </Link>
         <button type="button" onClick={() => void load()} className="btn-secondary" disabled={loading}>
           {loading ? "A atualizar…" : "Atualizar quadro"}
         </button>
@@ -702,7 +684,7 @@ export default function AcompanhamentoPage() {
 
       {!loading && tasks.length === 0 ? (
         <p className="text-center text-sm text-slate-500">
-          Nenhuma tarefa no período. Use &quot;Gerar / atualizar tarefas&quot; para criar entradas com base nos
+          Nenhuma tarefa no período. Em <strong>Geração e manutenção</strong> pode gerar entradas com base nos
           vínculos e nas regras dos tipos de alvará.
         </p>
       ) : null}
