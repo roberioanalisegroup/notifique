@@ -174,7 +174,7 @@ function taskAtrasoVencimento(t: TaskRow, hoje: string): boolean {
 export default function AcompanhamentoPage() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedYears, setSelectedYears] = useState<number[]>(() => [new Date().getFullYear()]);
+  const [selectedYears, setSelectedYears] = useState<number[]>([]);
   const [companyQuery, setCompanyQuery] = useState("");
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [companyMenuOpen, setCompanyMenuOpen] = useState(false);
@@ -519,10 +519,33 @@ export default function AcompanhamentoPage() {
             <ChevronDown className={cn("h-4 w-4 shrink-0 transition", yearMenuOpen && "rotate-180")} />
           </button>
           {yearMenuOpen ? (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 flex max-h-72 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
               <p className="px-2 py-1.5 text-[0.7rem] text-slate-500">
                 Nenhum marcado = todas as tarefas. Vários anos = intervalo do menor ao maior.
               </p>
+              <div className="flex flex-wrap gap-2 border-b border-slate-100 px-2 pb-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedYears(yearOptions.slice());
+                  }}
+                >
+                  Marcar todos
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedYears([]);
+                  }}
+                >
+                  Desmarcar
+                </button>
+              </div>
+              <div className="max-h-56 overflow-y-auto p-1">
               {yearOptions.map((y) => {
                 const checked = selectedYears.includes(y);
                 return (
@@ -543,6 +566,7 @@ export default function AcompanhamentoPage() {
                   </label>
                 );
               })}
+              </div>
             </div>
           ) : null}
         </div>
@@ -571,6 +595,28 @@ export default function AcompanhamentoPage() {
                   onChange={(e) => setCompanyQuery(e.target.value)}
                   onClick={(e) => e.stopPropagation()}
                 />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCompanies(uniqueCompanies.slice());
+                    }}
+                  >
+                    Marcar todos
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCompanies([]);
+                    }}
+                  >
+                    Desmarcar
+                  </button>
+                </div>
               </div>
               <ul className="max-h-56 overflow-y-auto p-1">
                 {filteredCompaniesList.length === 0 ? (
@@ -625,6 +671,28 @@ export default function AcompanhamentoPage() {
                   onChange={(e) => setTaskQuery(e.target.value)}
                   onClick={(e) => e.stopPropagation()}
                 />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedAlvaraNames(uniqueAlvaraNames.slice());
+                    }}
+                  >
+                    Marcar todos
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedAlvaraNames([]);
+                    }}
+                  >
+                    Desmarcar
+                  </button>
+                </div>
               </div>
               <ul className="max-h-56 overflow-y-auto p-1">
                 {filteredAlvaraNamesList.length === 0 ? (
