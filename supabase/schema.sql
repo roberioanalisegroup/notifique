@@ -102,6 +102,7 @@ create table public.alvaras (
   legal_dias_uteis   smallint check (legal_dias_uteis is null or (legal_dias_uteis >= 0 and legal_dias_uteis <= 60)),
   prazo_inicio_dias  smallint not null default 30
     check (prazo_inicio_dias >= 1 and prazo_inicio_dias <= 3650),
+  anexo_obrigatorio boolean not null default false,
   is_active        boolean not null default true,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()

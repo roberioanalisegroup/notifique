@@ -112,6 +112,38 @@ export function formatDate(
   });
 }
 
+/** Converte ISO `yyyy-mm-dd` para texto **dd/mm/aaaa** (entrada manual pt-BR). */
+export function formatIsoDateParaBR(iso: string | null | undefined): string {
+  if (!iso || typeof iso !== "string") return "";
+  const part = iso.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(part)) return "";
+  const [y, m, d] = part.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/** Interpreta **dd/mm/aaaa** em data-only ISO `yyyy-mm-dd` ou `null` se vazio. */
+export function parseDataBRParaIso(s: string): string | null {
+  const t = s.trim();
+  if (t === "") return null;
+  const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  const day = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10);
+  const year = parseInt(m[3], 10);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) return null;
+  const dt = new Date(year, month - 1, day);
+  if (dt.getFullYear() !== year || dt.getMonth() !== month - 1 || dt.getDate() !== day) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** Máscara dd/mm/aaaa enquanto digita (apenas dígitos, no máx. 8). */
+export function maskDataBRInput(raw: string): string {
+  const d = raw.replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+
 export function formatCurrency(
   value: number | null | undefined,
   options?: { empty?: string }

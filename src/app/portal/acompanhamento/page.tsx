@@ -2,6 +2,7 @@
 
 import { apiJson } from "@/lib/api-client";
 import { FREQUENCIA_LABELS } from "@/lib/alvara-frequency";
+import { prazoInicioPrimeiroCiclo } from "@/lib/alvara-task-generation";
 import { cn, formatDate } from "@/lib/utils";
 import type { Alvara, AlvaraGroup, AlvaraTask, Company, CompanyAlvara } from "@/types";
 import { format } from "date-fns";
@@ -115,11 +116,37 @@ function companyLabel(c: Company | null | undefined): string {
   return (c.razao_social ?? c.nome_fantasia ?? "—").trim() || "—";
 }
 
+function taskMotivoNaoConclusao(t: TaskRow): string {
+  const em = t.company_alvaras?.data_emissao;
+  const hasEmissao = em != null && String(em).trim() !== "";
+  if (!hasEmissao) {
+    return "Para concluir é preciso registar a data de emissão no vínculo (ou usar «Dar baixa no vínculo»).";
+  }
+  const exigeAnexo = t.company_alvaras?.alvaras?.anexo_obrigatorio === true;
+  if (exigeAnexo) {
+    const url = t.company_alvaras?.arquivo_url;
+    if (!url || String(url).trim() === "") {
+      return "Este tipo de alvará exige um documento anexo no vínculo antes de concluir.";
+    }
+  }
+  const hasVencimentoTarefa = t.due_date != null && String(t.due_date).trim() !== "";
+  if (!hasVencimentoTarefa) {
+    return "O vencimento da tarefa preenche-se ao registar a emissão no vínculo; use também «Dar baixa» se aplicável.";
+  }
+  return "Não é possível concluir esta tarefa.";
+}
+
 function taskPodeConcluir(t: TaskRow): boolean {
   const em = t.company_alvaras?.data_emissao;
   const hasEmissao = em != null && String(em).trim() !== "";
   const hasVencimentoTarefa = t.due_date != null && String(t.due_date).trim() !== "";
-  return hasEmissao && hasVencimentoTarefa;
+  if (!hasEmissao || !hasVencimentoTarefa) return false;
+  const exigeAnexo = t.company_alvaras?.alvaras?.anexo_obrigatorio === true;
+  if (exigeAnexo) {
+    const url = t.company_alvaras?.arquivo_url;
+    if (!url || String(url).trim() === "") return false;
+  }
+  return true;
 }
 
 function vinculoTemEmissao(ca: TaskRow["company_alvaras"]): boolean {
@@ -130,9 +157,12 @@ function vinculoTemEmissao(ca: TaskRow["company_alvaras"]): boolean {
 function taskAtrasoInicio(t: TaskRow, uiColumn: ColumnId, hoje: string): boolean {
   if (t.status !== "pendente") return false;
   if (uiColumn !== "pendente") return false;
-  if (!t.inicio_obrigatorio_ate) return false;
   if (vinculoTemEmissao(t.company_alvaras)) return false;
-  return t.inicio_obrigatorio_ate < hoje;
+  const lim =
+    prazoInicioPrimeiroCiclo(t.created_at, t.company_alvaras?.alvaras?.prazo_inicio_dias) ??
+    t.inicio_obrigatorio_ate;
+  if (!lim) return false;
+  return lim < hoje;
 }
 
 function taskAtrasoVencimento(t: TaskRow, hoje: string): boolean {
@@ -154,7 +184,9 @@ export default function AcompanhamentoPage() {
   const [selectedAlvaraNames, setSelectedAlvaraNames] = useState<string[]>([]);
   const [taskQuery, setTaskQuery] = useState("");
   const [taskMenuOpen, setTaskMenuOpen] = useState(false);
-  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [detailModal, setDetailModal] = useState<{ taskId: string; column: ColumnId } | null>(
+    null
+  );
   const companyMenuRef = useRef<HTMLDivElement>(null);
   const yearMenuRef = useRef<HTMLDivElement>(null);
   const taskMenuRef = useRef<HTMLDivElement>(null);
@@ -315,9 +347,7 @@ export default function AcompanhamentoPage() {
 
   async function soConcluir(t: TaskRow) {
     if (!taskPodeConcluir(t)) {
-      toast.error(
-        "Para concluir é preciso ter data de emissão no vínculo e vencimento da tarefa (definido ao registar a emissão). Use «Dar baixa» ou edite o vínculo na empresa."
-      );
+      toast.error(taskMotivoNaoConclusao(t));
       return;
     }
     try {
@@ -365,8 +395,8 @@ export default function AcompanhamentoPage() {
     }
   }
 
-  function onOpenTaskDetail(id: string) {
-    setDetailTaskId(id);
+  function onOpenTaskDetail(id: string, column: ColumnId) {
+    setDetailModal({ taskId: id, column });
   }
 
   function clearFilters() {
@@ -395,6 +425,7 @@ export default function AcompanhamentoPage() {
 
   async function onDropColumn(e: React.DragEvent, target: ColumnId) {
     e.preventDefault();
+    setDragTaskId(null);
     const id = e.dataTransfer.getData("text/plain");
     const task = tasks.find((x) => x.id === id);
     if (!task) return;
@@ -402,9 +433,7 @@ export default function AcompanhamentoPage() {
     if (target === "concluido") {
       if (task.status === "concluida") return;
       if (!taskPodeConcluir(task)) {
-        toast.error(
-          "Conclusão exige emissão no vínculo e vencimento da tarefa (preenchido ao registar a emissão)."
-        );
+        toast.error(taskMotivoNaoConclusao(task));
         return;
       }
       await soConcluir(task);
@@ -695,7 +724,7 @@ export default function AcompanhamentoPage() {
                           task={t}
                           uiColumn={col.id}
                           hoje={hoje}
-                          onOpenDetail={() => onOpenTaskDetail(t.id)}
+                          onOpenDetail={() => onOpenTaskDetail(t.id, col.id)}
                           onBaixa={() => void darBaixaNoVinculo(t)}
                           onConcluir={() => void soConcluir(t)}
                           onReabrir={() => void reabrir(t)}
@@ -725,9 +754,10 @@ export default function AcompanhamentoPage() {
       </p>
 
       <TaskEditModal
-        taskId={detailTaskId}
-        open={detailTaskId != null}
-        onClose={() => setDetailTaskId(null)}
+        taskId={detailModal?.taskId ?? null}
+        quadroColumn={detailModal?.column ?? null}
+        open={detailModal != null}
+        onClose={() => setDetailModal(null)}
         onSaved={() => void load()}
       />
     </div>
@@ -760,6 +790,15 @@ function TaskCard({
   const freq = a ? (FREQUENCIA_LABELS[a.frequencia] ?? a.frequencia) : "—";
   const venc = validityMeta(ca?.data_vencimento);
   const temEm = vinculoTemEmissao(ca);
+  /** Na API só o 1.º ciclo tem esta data; renovações seguintes ficam null — assim distinguimos cartões. */
+  const primeiroCiclo = Boolean(
+    task.inicio_obrigatorio_ate && String(task.inicio_obrigatorio_ate).trim() !== ""
+  );
+  const dataPrazoPrimeiroCiclo =
+    prazoInicioPrimeiroCiclo(task.created_at, a?.prazo_inicio_dias) ??
+    task.inicio_obrigatorio_ate?.slice(0, 10) ??
+    null;
+  const prazoInicioGrid = !temEm ? dataPrazoPrimeiroCiclo : null;
   const atrasoInicio = taskAtrasoInicio(task, uiColumn, hoje);
   const atrasoVenc = taskAtrasoVencimento(task, hoje);
   const atrasada = atrasoInicio || atrasoVenc;
@@ -813,37 +852,51 @@ function TaskCard({
         <span className="truncate">{companyLabel(c)}</span>
       </p>
 
-      <div className="mt-2 rounded-xl bg-slate-50 px-2.5 py-1.5 font-mono text-[0.7rem] text-slate-700">
+      <div className="mt-2 rounded-xl bg-slate-50 px-2.5 py-1.5 text-[0.7rem] text-slate-700">
         {ca?.numero ? `📄 ${ca.numero}` : `Tipo · ${g?.name ?? "Sem grupo"}`}
       </div>
 
-      <div className="mt-2 grid grid-cols-1 gap-1 rounded-xl bg-violet-50/60 px-2 py-2 text-[0.7rem] text-slate-700 sm:grid-cols-2">
-        <span className="flex items-center gap-1">
-          <CalendarDays className="h-3 w-3 shrink-0 text-slate-500" />
-          Emissão: {formatDate(ca?.data_emissao ?? null, { empty: "—" })}
-        </span>
-        <span className={cn("flex items-center gap-1", atrasada && "font-semibold text-amber-800")}>
-          <CalendarDays className="h-3 w-3 shrink-0 text-slate-500" />
-          {temEm ? "Validade (vínculo):" : "Prazo de início:"}{" "}
-          {temEm
-            ? formatDate(ca?.data_vencimento ?? null, { empty: "—" })
-            : formatDate(task.inicio_obrigatorio_ate ?? ca?.data_vencimento ?? null, { empty: "—" })}
-        </span>
+      <div className="mt-2 flex items-center gap-1 rounded-lg border border-slate-100 bg-white px-2 py-1.5 text-[0.7rem] font-medium text-slate-800 shadow-sm">
+        <CalendarDays className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+        <span>Criação da tarefa: {formatDate(task.created_at, { empty: "—" })}</span>
+      </div>
+
+      <div className="mt-2 rounded-xl bg-violet-50/60 px-2 py-2 text-[0.7rem] text-slate-700">
+        <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+          <span className="flex items-center gap-1">
+            <CalendarDays className="h-3 w-3 shrink-0 text-slate-500" />
+            Emissão: {formatDate(ca?.data_emissao ?? null, { empty: "—" })}
+          </span>
+          <span className={cn("flex items-center gap-1", atrasada && "font-semibold text-amber-800")}>
+            <CalendarDays className="h-3 w-3 shrink-0 text-slate-500" />
+            {temEm ? "Validade (vínculo):" : "Prazo de início:"}{" "}
+            {temEm
+              ? formatDate(ca?.data_vencimento ?? null, { empty: "—" })
+              : formatDate(prazoInicioGrid ?? ca?.data_vencimento ?? null, { empty: "—" })}
+          </span>
+        </div>
+        {temEm && primeiroCiclo ? (
+          <p className="mt-2 border-t border-violet-200/80 pt-2 text-[0.7rem] leading-snug text-slate-700">
+            <span className="font-medium text-slate-600">Prazo de início (1.º ciclo):</span>{" "}
+            <span className="tabular-nums">{formatDate(dataPrazoPrimeiroCiclo, { empty: "—" })}</span>
+          </p>
+        ) : null}
       </div>
 
       <p className="mt-2 text-[0.7rem] text-slate-600">
-        {!temEm && task.inicio_obrigatorio_ate ? (
+        <span className="font-medium text-slate-500">Vencimento (tarefa):</span>{" "}
+        {task.due_date != null && String(task.due_date).trim() !== "" ? (
           <>
-            <span className="font-medium text-slate-500">Prazo de início:</span>{" "}
-            {formatDate(task.inicio_obrigatorio_ate, { empty: "—" })}
-            {atrasoInicio ? " · atraso para iniciar" : ""}
-          </>
-        ) : (
-          <>
-            <span className="font-medium text-slate-500">Vencimento (tarefa):</span>{" "}
             {formatDate(task.due_date, { empty: "—" })}
             {atrasoVenc ? " · atrasada" : ""}
           </>
+        ) : (
+          <span className="text-slate-500">
+            —
+            {!temEm ? (
+              <span className="text-slate-400"> (sem data até à primeira emissão)</span>
+            ) : null}
+          </span>
         )}
       </p>
 
@@ -885,7 +938,7 @@ function TaskCard({
                 : "cursor-not-allowed bg-slate-100 text-slate-400"
             )}
             disabled={!podeConcluir}
-            title={!podeConcluir ? "Exige emissão no vínculo e vencimento da tarefa (após registar emissão)" : undefined}
+            title={!podeConcluir ? taskMotivoNaoConclusao(task) : undefined}
             onClick={(e) => {
               e.stopPropagation();
               onConcluir();

@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
     legal_dia_semana?: number | null;
     legal_dias_uteis?: number | null;
     prazo_inicio_dias?: number;
+    anexo_obrigatorio?: boolean;
     is_active?: boolean;
   };
   try {
@@ -132,26 +133,40 @@ export async function POST(request: NextRequest) {
   const group_id =
     body.group_id && String(body.group_id).trim() !== "" ? String(body.group_id).trim() : null;
 
-  const { data, error } = await supabase
+  const rowBase = {
+    group_id,
+    name: body.name.trim(),
+    description: body.description ?? null,
+    orgao_emissor: body.orgao_emissor ?? null,
+    frequencia,
+    weekend_adjust,
+    legal_dia: legal.legal_dia,
+    legal_mes: legal.legal_mes,
+    legal_dia_semana: legal.legal_dia_semana,
+    legal_dias_uteis: legal.legal_dias_uteis,
+    prazo_inicio_dias: prazo_inicio,
+    is_active: body.is_active ?? true,
+  };
+
+  const selectAlvara = `*, alvara_groups ( id, name, color )`;
+
+  let { data, error } = await supabase
     .from("alvaras")
     .insert({
-      group_id,
-      name: body.name.trim(),
-      description: body.description ?? null,
-      orgao_emissor: body.orgao_emissor ?? null,
-      frequencia,
-      weekend_adjust,
-      legal_dia: legal.legal_dia,
-      legal_mes: legal.legal_mes,
-      legal_dia_semana: legal.legal_dia_semana,
-      legal_dias_uteis: legal.legal_dias_uteis,
-      prazo_inicio_dias: prazo_inicio,
-      is_active: body.is_active ?? true,
+      ...rowBase,
+      anexo_obrigatorio: body.anexo_obrigatorio === true,
     })
-    .select(
-      `*, alvara_groups ( id, name, color )`
-    )
+    .select(selectAlvara)
     .single();
+
+  if (
+    error?.message?.includes("anexo_obrigatorio") &&
+    error.message.includes("does not exist")
+  ) {
+    const r2 = await supabase.from("alvaras").insert(rowBase).select(selectAlvara).single();
+    data = r2.data;
+    error = r2.error;
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -128,6 +128,8 @@ export interface Alvara {
   legal_dias_uteis: number | null;
   /** No 1.º ciclo da tarefa: dias corridos após criação para mover de Pendente a Em andamento. */
   prazo_inicio_dias: number;
+  /** Se verdadeiro, concluir a tarefa exige documento em `company_alvaras.arquivo_url`. */
+  anexo_obrigatorio?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;

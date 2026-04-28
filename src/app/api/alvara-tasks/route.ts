@@ -1,3 +1,4 @@
+import { resetCompanyAlvaraIfNoActiveTasks } from "@/lib/alvara-task-vinculo-reset";
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { inicioObrigatorioAteFromCriacao } from "@/lib/alvara-task-generation";
 import { format, parseISO } from "date-fns";
@@ -100,6 +101,13 @@ export async function POST(request: NextRequest) {
   for (const ca of rows) {
     const a = ca.alvaras;
     if (!a?.is_active) continue;
+
+    try {
+      await resetCompanyAlvaraIfNoActiveTasks(supabase, ca.id);
+    } catch {
+      /* segue mesmo assim; vínculo pode ainda ter tarefas ativas */
+    }
+
     if (comPendente.has(ca.id)) {
       skipped++;
       continue;

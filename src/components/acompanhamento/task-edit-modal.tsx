@@ -2,7 +2,9 @@
 
 import { apiJson } from "@/lib/api-client";
 import { FREQUENCIA_LABELS } from "@/lib/alvara-frequency";
-import { cn, formatDate } from "@/lib/utils";
+import { prazoInicioPrimeiroCiclo } from "@/lib/alvara-task-generation";
+import { linhasHistoricoTarefa } from "@/lib/alvara-task-history-present";
+import { cn, formatDate, formatIsoDateParaBR, maskDataBRInput, parseDataBRParaIso } from "@/lib/utils";
 import type { Alvara, AlvaraGroup, AlvaraTask, AlvaraTaskHistory, Company, CompanyAlvara } from "@/types";
 import {
   Building2,
@@ -14,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type TaskDetail = AlvaraTask & {
@@ -31,16 +33,18 @@ function companyLabel(c: Company | null | undefined): string {
   return (c.razao_social ?? c.nome_fantasia ?? "—").trim() || "—";
 }
 
-function eventLabel(t: string): string {
-  const m: Record<string, string> = {
-    created: "Criação",
-    status: "Estado",
-    notes: "Descrição",
-    attachment: "Anexo",
-    due_date: "Vencimento",
-    system: "Sistema",
-  };
-  return m[t] ?? t;
+type QuadroColumn = "pendente" | "andamento" | "concluido";
+
+/** Coluna atual no Kanban + estado na API — «Em andamento» é só organização local até concluir. */
+function textoEstadoNoModal(
+  status: AlvaraTask["status"],
+  quadroColumn: QuadroColumn | null | undefined
+): string {
+  if (status === "concluida") return "Concluída";
+  if (status === "cancelada") return "Cancelada";
+  if (status === "pendente" && quadroColumn === "andamento") return "Em andamento no quadro";
+  if (status === "pendente") return "Pendente";
+  return status;
 }
 
 function validityMeta(expirationDate: string | null | undefined): { className: string; text: string } {
@@ -64,18 +68,22 @@ export function TaskEditModal({
   open,
   onClose,
   onSaved,
+  quadroColumn,
 }: {
   taskId: string | null;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
+  /** Coluna onde o cartão está no quadro (para refletir «Em andamento» local). */
+  quadroColumn?: QuadroColumn | null;
 }) {
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [history, setHistory] = useState<AlvaraTaskHistory[]>([]);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [vincEmissao, setVincEmissao] = useState("");
+  const [emissaoDraft, setEmissaoDraft] = useState("");
+  const emissaoDatePickerRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     if (!taskId) return;
@@ -101,27 +109,32 @@ export function TaskEditModal({
       setTask(null);
       setHistory([]);
       setNotes("");
-      setVincEmissao("");
+      setEmissaoDraft("");
     }
   }, [open, taskId, load]);
 
   useEffect(() => {
     if (!task?.company_alvaras) {
-      setVincEmissao("");
+      setEmissaoDraft("");
       return;
     }
-    setVincEmissao(task.company_alvaras.data_emissao?.slice(0, 10) ?? "");
+    setEmissaoDraft(formatIsoDateParaBR(task.company_alvaras.data_emissao ?? null));
   }, [task]);
 
   async function saveVinculo() {
     const caId = task?.company_alvaras?.id;
     if (!caId || !taskId) return;
+    const iso = parseDataBRParaIso(emissaoDraft);
+    if (emissaoDraft.trim() !== "" && iso === null) {
+      toast.error("Data de emissão inválida. Use o formato dia/mês/ano (dd/mm/aaaa).");
+      return;
+    }
     setSaving(true);
     try {
       await apiJson("/api/company-alvaras/" + caId, {
         method: "PATCH",
         body: JSON.stringify({
-          data_emissao: vincEmissao.trim() || null,
+          data_emissao: iso,
         }),
       });
       toast.success("Emissão do vínculo atualizada");
@@ -178,7 +191,34 @@ export function TaskEditModal({
   const g = a?.alvara_groups;
   const hasEmissao = Boolean(ca?.data_emissao && String(ca.data_emissao).trim());
   const hasVencimentoTarefa = Boolean(task?.due_date && String(task.due_date).trim());
-  const podeConcluirModal = Boolean(task && hasEmissao && hasVencimentoTarefa);
+  const exigeAnexoTipo = a?.anexo_obrigatorio === true;
+  const temAnexo = Boolean(ca?.arquivo_url && String(ca.arquivo_url).trim());
+  const okAnexo = !exigeAnexoTipo || temAnexo;
+  const podeConcluirModal = Boolean(task && hasEmissao && hasVencimentoTarefa && okAnexo);
+  const primeiroCicloModal = Boolean(
+    task?.inicio_obrigatorio_ate && String(task.inicio_obrigatorio_ate).trim() !== ""
+  );
+  const prazoInicioCalculado = task
+    ? prazoInicioPrimeiroCiclo(task.created_at, a?.prazo_inicio_dias)
+    : null;
+
+  function motivoNaoConclusaoModal(): string {
+    if (!task) return "";
+    if (!hasEmissao) {
+      return "Registe a data de emissão no vínculo para preencher o vencimento da tarefa, ou use «Dar baixa no vínculo».";
+    }
+    if (!hasVencimentoTarefa) {
+      return "O vencimento da tarefa é definido ao registar a emissão.";
+    }
+    if (exigeAnexoTipo && !temAnexo) {
+      return "Este tipo exige documento anexado ao vínculo.";
+    }
+    return "";
+  }
+
+  const timeline = [...history].sort(
+    (x, y) => new Date(x.created_at).getTime() - new Date(y.created_at).getTime()
+  );
   const venc = validityMeta(ca?.data_vencimento);
   const empresaHref = c ? "/portal/empresas/" + c.id : null;
 
@@ -224,8 +264,13 @@ export function TaskEditModal({
                 >
                   {venc.text}
                 </span>
-                <span className="text-xs font-medium uppercase text-slate-500">
-                  Estado: {task.status}
+                <span className="max-w-[min(100%,14rem)] text-right text-xs font-medium leading-snug text-slate-700">
+                  Estado: {textoEstadoNoModal(task.status, quadroColumn)}
+                  {task.status === "pendente" && quadroColumn === "andamento" ? (
+                    <span className="mt-1 block text-[0.65rem] font-normal text-slate-500">
+                      Na base de dados continua «pendente» até concluir a tarefa.
+                    </span>
+                  ) : null}
                 </span>
               </div>
 
@@ -243,8 +288,13 @@ export function TaskEditModal({
                 </p>
               </div>
 
-              <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 font-mono text-xs text-slate-700">
+              <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs text-slate-700">
                 {ca?.numero ? `📄 ${ca.numero}` : `Grupo · ${g?.name ?? "Sem grupo"}`}
+              </div>
+
+              <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-2 text-xs text-slate-800">
+                <span className="font-semibold text-violet-900">Data de criação da tarefa:</span>{" "}
+                <span className="tabular-nums">{formatDate(task.created_at, { empty: "—" })}</span>
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
@@ -252,24 +302,65 @@ export function TaskEditModal({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="form-label mb-1 block text-slate-700">Data de emissão</span>
-                    <input
-                      type="date"
-                      className="input-field"
-                      value={vincEmissao}
-                      onChange={(e) => setVincEmissao(e.target.value)}
-                    />
+                    <div className="relative max-w-[11rem]">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="dd/mm/aaaa"
+                        className="input-field w-full pr-10"
+                        value={emissaoDraft}
+                        onChange={(e) => setEmissaoDraft(maskDataBRInput(e.target.value))}
+                      />
+                      <input
+                        ref={emissaoDatePickerRef}
+                        type="date"
+                        lang="pt-BR"
+                        aria-hidden="true"
+                        tabIndex={-1}
+                        className="sr-only"
+                        value={parseDataBRParaIso(emissaoDraft) ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setEmissaoDraft(v ? formatIsoDateParaBR(v) : "");
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                        aria-label="Abrir calendário"
+                        title="Abrir calendário"
+                        onClick={() => {
+                          const el = emissaoDatePickerRef.current;
+                          if (!el) return;
+                          if (typeof el.showPicker === "function") {
+                            void el.showPicker();
+                          } else {
+                            el.focus();
+                            el.click();
+                          }
+                        }}
+                      >
+                        <CalendarDays className="h-4 w-4 shrink-0" />
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[0.65rem] text-slate-500">
+                      Digite a data — a máscara formata em dd/mm/aaaa — ou use o ícone à direita.
+                    </p>
                   </label>
                   <div className="block">
-                    <span className="form-label mb-1 block text-slate-700">Prazo de início</span>
+                    <span className="form-label mb-1 block text-slate-700">Prazo de início (1.º ciclo)</span>
                     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-800 tabular-nums">
-                      {formatDate(task.inicio_obrigatorio_ate, { empty: "—" })}
+                      {primeiroCicloModal || !hasEmissao ? (
+                        formatDate(prazoInicioCalculado ?? task.inicio_obrigatorio_ate, { empty: "—" })
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </div>
                     <p className="mt-1.5 text-[0.7rem] leading-snug text-slate-500">
-                      Igual à <strong>data de criação desta tarefa</strong> mais{" "}
-                      <strong>{a?.prazo_inicio_dias ?? 30}</strong> dias corridos definidos no tipo. No vínculo,
-                      este valor aparece como <strong>prazo de início</strong> até existir emissão; depois o mesmo
-                      campo no cadastro passa a mostrar a <strong>validade legal</strong> calculada a partir da
-                      emissão.
+                      No 1.º ciclo fica registado com base na data de criação da tarefa mais{" "}
+                      <strong>{a?.prazo_inicio_dias ?? 30}</strong> dias corridos (este valor mantém-se visível mesmo após
+                      registar emissão). Nos ciclos seguintes só se usa o <strong>vencimento da tarefa</strong> abaixo.
                     </p>
                   </div>
                 </div>
@@ -303,25 +394,34 @@ export function TaskEditModal({
                 </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                <Paperclip className="h-4 w-4" />
-                {ca?.arquivo_url ? (
-                  <span className="text-emerald-700">Anexo no vínculo registado</span>
-                ) : (
-                  <span>Sem anexo no vínculo</span>
-                )}
-                <button
-                  type="button"
-                  className="btn-secondary ml-auto inline-flex items-center gap-1 py-1.5 text-xs"
-                  onClick={() =>
-                    toast.message("Upload de anexo será disponibilizado em breve.", {
-                      description: "Por agora registe o ficheiro na ficha da empresa, se necessário.",
-                    })
-                  }
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  Adicionar anexo
-                </button>
+              <div className="flex flex-wrap items-start gap-2 text-xs text-slate-600">
+                <Paperclip className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p>
+                    {ca?.arquivo_url ? (
+                      <span className="text-emerald-700">Documento associado ao vínculo.</span>
+                    ) : (
+                      <span>Sem documento no vínculo.</span>
+                    )}
+                    {exigeAnexoTipo ? (
+                      <span className="font-medium text-amber-900"> Este tipo exige anexo para concluir.</span>
+                    ) : (
+                      <span className="text-slate-500"> Anexo opcional ao concluir.</span>
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-secondary inline-flex items-center gap-1 py-1.5 text-xs"
+                    onClick={() =>
+                      toast.message("Upload de anexo será disponibilizado em breve.", {
+                        description: "Por agora registe o ficheiro na ficha da empresa, se necessário.",
+                      })
+                    }
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    Adicionar anexo
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -350,32 +450,30 @@ export function TaskEditModal({
                   <History className="h-4 w-4 text-slate-500" />
                   <h4 className="text-sm font-semibold text-slate-900">Histórico</h4>
                 </div>
-                <ul className="max-h-64 divide-y divide-slate-100 overflow-y-auto">
-                  {history.length === 0 ? (
-                    <li className="px-4 py-6 text-center text-xs text-slate-400">Sem eventos.</li>
+                <div className="max-h-72 overflow-y-auto px-4 py-4">
+                  {timeline.length === 0 ? (
+                    <p className="py-6 text-center text-xs text-slate-400">Sem registos ainda.</p>
                   ) : (
-                    history.map((h) => (
-                      <li key={h.id} className="px-4 py-3 text-xs">
-                        <div className="flex flex-wrap items-baseline justify-between gap-2">
-                          <span className="font-semibold text-slate-800">
-                            {eventLabel(h.event_type)}
-                          </span>
-                          <time className="tabular-nums text-slate-400">
+                    <div className="relative ms-2 border-l-2 border-violet-200 pl-6">
+                      {timeline.map((h) => (
+                        <div key={h.id} className="relative pb-8 last:pb-1">
+                          <span
+                            className="absolute -left-[calc(0.375rem+5px)] top-1.5 h-2.5 w-2.5 rounded-full bg-violet-500 ring-4 ring-white"
+                            aria-hidden
+                          />
+                          <time className="block text-[0.7rem] font-medium tabular-nums text-slate-500">
                             {formatDate(h.created_at, { empty: "—" })}
                           </time>
+                          <div className="mt-1.5 space-y-1 text-[0.8125rem] leading-snug text-slate-700">
+                            {linhasHistoricoTarefa(h).map((line, i) => (
+                              <p key={i}>{line}</p>
+                            ))}
+                          </div>
                         </div>
-                        {h.summary ? (
-                          <p className="mt-1 text-slate-600">{h.summary}</p>
-                        ) : null}
-                        {h.metadata && Object.keys(h.metadata).length > 0 ? (
-                          <pre className="mt-2 max-h-24 overflow-auto rounded-lg bg-slate-50 p-2 font-mono text-[0.65rem] text-slate-600">
-                            {JSON.stringify(h.metadata, null, 2)}
-                          </pre>
-                        ) : null}
-                      </li>
-                    ))
+                      ))}
+                    </div>
                   )}
-                </ul>
+                </div>
               </div>
 
               <div className="flex flex-col gap-2 border-t border-slate-100 pt-4">
@@ -385,21 +483,13 @@ export function TaskEditModal({
                       type="button"
                       className="btn-primary"
                       disabled={saving || !podeConcluirModal}
-                      title={
-                        !podeConcluirModal
-                          ? "Registe a data de emissão no vínculo para preencher o vencimento da tarefa, ou use Dar baixa"
-                          : undefined
-                      }
+                      title={!podeConcluirModal ? motivoNaoConclusaoModal() || undefined : undefined}
                       onClick={() => void patchStatus({ status: "concluida" })}
                     >
                       Concluir tarefa
                     </button>
-                    {!hasEmissao || !hasVencimentoTarefa ? (
-                      <p className="text-xs text-amber-800">
-                        Para concluir é necessário <strong>data de emissão</strong> no vínculo e{" "}
-                        <strong>vencimento da tarefa</strong> (preenchido automaticamente quando regista a emissão na
-                        empresa ou com «Dar baixa»).
-                      </p>
+                    {!podeConcluirModal ? (
+                      <p className="text-xs text-amber-800">{motivoNaoConclusaoModal()}</p>
                     ) : null}
                     <button
                       type="button"

@@ -37,6 +37,7 @@ type ModalState = {
   legal_dia_semana: number;
   legal_dias_uteis: number;
   prazo_inicio_dias: number;
+  anexo_obrigatorio: boolean;
 };
 
 function defaultModal(): ModalState {
@@ -52,6 +53,7 @@ function defaultModal(): ModalState {
     legal_dia_semana: 1,
     legal_dias_uteis: 5,
     prazo_inicio_dias: 30,
+    anexo_obrigatorio: false,
   };
 }
 
@@ -69,6 +71,7 @@ function rowToModal(r: Row): ModalState {
     legal_dia_semana: r.legal_dia_semana ?? 1,
     legal_dias_uteis: r.legal_dias_uteis ?? 5,
     prazo_inicio_dias: r.prazo_inicio_dias ?? 30,
+    anexo_obrigatorio: r.anexo_obrigatorio === true,
   };
 }
 
@@ -253,6 +256,7 @@ function AlvarasContent() {
         legal_dia_semana: legal.legal_dia_semana,
         legal_dias_uteis: legal.legal_dias_uteis,
         prazo_inicio_dias: modal.prazo_inicio_dias,
+        anexo_obrigatorio: modal.anexo_obrigatorio,
       };
       if (modal.id) {
         await apiJson("/api/alvaras/" + modal.id, { method: "PATCH", body: JSON.stringify(body) });
@@ -331,6 +335,7 @@ function AlvarasContent() {
                 <th>Data legal</th>
                 <th>Fim de semana</th>
                 <th className="tabular-nums">Prazo início</th>
+                <th>Anexo</th>
                 <th className="tabular-nums">Vinculados</th>
                 <th>Ações</th>
               </tr>
@@ -370,6 +375,13 @@ function AlvarasContent() {
                     {WEEKEND_ADJUST_LABELS[r.weekend_adjust] ?? r.weekend_adjust}
                   </td>
                   <td className="tabular-nums text-slate-700">{r.prazo_inicio_dias ?? 30} d</td>
+                  <td className="text-xs text-slate-700">
+                    {r.anexo_obrigatorio === true ? (
+                      <span className="font-medium text-amber-900">Obrigatório</span>
+                    ) : (
+                      <span className="text-slate-600">Opcional</span>
+                    )}
+                  </td>
                   <td className="tabular-nums text-slate-600">{r.vinculados}</td>
                   <td className="space-x-2">
                     <button
@@ -391,7 +403,7 @@ function AlvarasContent() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-slate-500">
+                  <td colSpan={10} className="py-10 text-center text-slate-500">
                     Nenhum alvará
                   </td>
                 </tr>
@@ -541,6 +553,38 @@ function AlvarasContent() {
                   <p className="mt-1.5 text-xs text-slate-500">
                     Dias corridos após criar a tarefa (1.º ciclo) para mover o card de Pendente para Em andamento.
                     Nos ciclos seguintes usa-se só o vencimento da tarefa.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-[minmax(7rem,9.5rem)_1fr] sm:items-start">
+                <span className="pt-2.5 text-sm font-semibold text-slate-800">Documento no vínculo</span>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                      <input
+                        type="radio"
+                        name="anexo-obrigatorio"
+                        className="h-4 w-4 accent-blue-600"
+                        checked={!modal.anexo_obrigatorio}
+                        onChange={() => setModal({ ...modal, anexo_obrigatorio: false })}
+                      />
+                      Opcional ao concluir
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                      <input
+                        type="radio"
+                        name="anexo-obrigatorio"
+                        className="h-4 w-4 accent-blue-600"
+                        checked={modal.anexo_obrigatorio}
+                        onChange={() => setModal({ ...modal, anexo_obrigatorio: true })}
+                      />
+                      Obrigatório para concluir a tarefa
+                    </label>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Se for obrigatório, o utilizador só pode concluir a tarefa com um ficheiro associado ao vínculo
+                    empresa–alvará.
                   </p>
                 </div>
               </div>

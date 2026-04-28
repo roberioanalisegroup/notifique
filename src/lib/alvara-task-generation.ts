@@ -93,6 +93,16 @@ export function inicioObrigatorioAteFromCriacao(dataCriacaoIso: string, prazoDia
   return addCalendarDaysToIso(dataCriacaoIso.slice(0, 10), n);
 }
 
+/** Exibição no painel: mesmo critério da API ao criar a tarefa (data de criação + dias do tipo). */
+export function prazoInicioPrimeiroCiclo(
+  createdAtIso: string | null | undefined,
+  prazoDias: number | null | undefined
+): string | null {
+  if (!createdAtIso) return null;
+  const n = Math.min(3650, Math.max(1, Number(prazoDias ?? 30) || 30));
+  return inicioObrigatorioAteFromCriacao(createdAtIso, n);
+}
+
 /**
  * Próxima data de vencimento (uma iteração) a partir da data de emissão de referência.
  */

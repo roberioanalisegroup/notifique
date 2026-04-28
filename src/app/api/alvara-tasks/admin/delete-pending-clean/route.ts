@@ -1,3 +1,4 @@
+import { resetCompanyAlvaraIfNoActiveTasks } from "@/lib/alvara-task-vinculo-reset";
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -69,15 +70,39 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const { data: caRows, error: caErr } = await supabase
+    .from("alvara_tasks")
+    .select("company_alvara_id")
+    .in("id", cleanIds);
+
+  if (caErr) {
+    return NextResponse.json({ error: caErr.message }, { status: 500 });
+  }
+
+  const caIdsParaReset = Array.from(
+    new Set((caRows ?? []).map((r) => String(r.company_alvara_id)))
+  );
+
   const { error: dErr } = await supabase.from("alvara_tasks").delete().in("id", cleanIds);
   if (dErr) {
     return NextResponse.json({ error: dErr.message }, { status: 500 });
+  }
+
+  let vinculosLimpos = 0;
+  for (const caId of caIdsParaReset) {
+    try {
+      const r = await resetCompanyAlvaraIfNoActiveTasks(supabase, caId);
+      if (r.reset) vinculosLimpos++;
+    } catch {
+      /* não bloqueia o fluxo principal */
+    }
   }
 
   return NextResponse.json({
     ok: true,
     deleted: cleanIds.length,
     skipped: ids.length - cleanIds.length,
+    vinculos_datas_limpos: vinculosLimpos,
     admin_user_id: userId,
   });
 }

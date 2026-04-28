@@ -251,11 +251,16 @@ export async function PATCH(
   }
 
   if (newStatus === "concluida") {
-    const { data: caCheck } = await supabase
+    const { data: caCheck, error: caCheckErr } = await supabase
       .from("company_alvaras")
-      .select("data_emissao")
+      .select("data_emissao, arquivo_url, alvara_id")
       .eq("id", taskRow.company_alvara_id)
       .single();
+
+    if (caCheckErr) {
+      return NextResponse.json({ error: caCheckErr.message }, { status: 500 });
+    }
+
     const em = caCheck?.data_emissao;
     if (em == null || String(em).trim() === "") {
       return NextResponse.json(
@@ -266,6 +271,27 @@ export async function PATCH(
         { status: 400 }
       );
     }
+
+    let exigeAnexo = false;
+    const aid = caCheck?.alvara_id;
+    if (aid) {
+      const r = await supabase.from("alvaras").select("anexo_obrigatorio").eq("id", aid).maybeSingle();
+      if (!r.error && r.data && (r.data as { anexo_obrigatorio?: boolean }).anexo_obrigatorio === true) {
+        exigeAnexo = true;
+      }
+    }
+
+    const arq = caCheck?.arquivo_url;
+    if (exigeAnexo && (arq == null || String(arq).trim() === "")) {
+      return NextResponse.json(
+        {
+          error:
+            "Este tipo de alvará exige um documento anexado ao vínculo. Associe o ficheiro antes de concluir a tarefa.",
+        },
+        { status: 400 }
+      );
+    }
+
     const { data: dueRow } = await supabase
       .from("alvara_tasks")
       .select("due_date")

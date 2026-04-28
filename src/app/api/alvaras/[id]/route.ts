@@ -51,6 +51,11 @@ export async function PATCH(
       );
     }
   }
+  if (body.anexo_obrigatorio !== undefined && body.anexo_obrigatorio !== null) {
+    if (typeof body.anexo_obrigatorio !== "boolean") {
+      return NextResponse.json({ error: "anexo_obrigatorio deve ser booleano." }, { status: 400 });
+    }
+  }
 
   const { data: current, error: curErr } = await supabase
     .from("alvaras")
@@ -100,12 +105,28 @@ export async function PATCH(
     updated_at?: string;
   };
 
-  const { data, error } = await supabase
+  const selectPatch = `*, alvara_groups ( id, name, color )`;
+  const ts = new Date().toISOString();
+
+  let updatePayload: Record<string, unknown> = { ...patchBody, updated_at: ts };
+  let { data, error } = await supabase
     .from("alvaras")
-    .update({ ...patchBody, updated_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq("id", id)
-    .select(`*, alvara_groups ( id, name, color )`)
+    .select(selectPatch)
     .single();
+
+  if (
+    error?.message?.includes("anexo_obrigatorio") &&
+    error.message.includes("does not exist") &&
+    Object.prototype.hasOwnProperty.call(patchBody, "anexo_obrigatorio")
+  ) {
+    const { anexo_obrigatorio: _drop, ...rest } = patchBody as Record<string, unknown>;
+    updatePayload = { ...rest, updated_at: ts };
+    const r2 = await supabase.from("alvaras").update(updatePayload).eq("id", id).select(selectPatch).single();
+    data = r2.data;
+    error = r2.error;
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

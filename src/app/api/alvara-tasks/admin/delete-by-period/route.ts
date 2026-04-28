@@ -1,3 +1,4 @@
+import { resetCompanyAlvaraIfNoActiveTasks } from "@/lib/alvara-task-vinculo-reset";
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { createClient } from "@/lib/supabase/server";
 import { verifyUserPasswordMatchesSession } from "@/lib/verify-user-password";
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
 
   const { data: toDelete, error: qErr } = await supabase
     .from("alvara_tasks")
-    .select("id")
+    .select("id, company_alvara_id")
     .gte("due_date", from)
     .lte("due_date", to);
 
@@ -73,6 +74,9 @@ export async function POST(request: NextRequest) {
   }
 
   const delIds = (toDelete ?? []).map((r) => r.id as string);
+  const caIdsParaReset = Array.from(
+    new Set((toDelete ?? []).map((r) => String(r.company_alvara_id)))
+  );
   if (delIds.length === 0) {
     return NextResponse.json({ deleted: 0, message: "Nenhuma tarefa no período." });
   }
@@ -82,9 +86,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: dErr.message }, { status: 500 });
   }
 
+  let vinculosLimpos = 0;
+  for (const caId of caIdsParaReset) {
+    try {
+      const r = await resetCompanyAlvaraIfNoActiveTasks(supabase, caId);
+      if (r.reset) vinculosLimpos++;
+    } catch {
+      /* não bloqueia */
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     deleted: delIds.length,
     intervalo: { from, to },
+    vinculos_datas_limpos: vinculosLimpos,
   });
 }
