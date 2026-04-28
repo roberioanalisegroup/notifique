@@ -606,7 +606,7 @@ export default function EmpresaPerfilPage() {
                     <th>Alvará / Grupo</th>
                     <th>Nº</th>
                     <th>Emissão</th>
-                    <th>Venc.</th>
+                    <th>Prazo / validade</th>
                     <th>Notif.</th>
                     <th>Status</th>
                     <th>Ações</th>

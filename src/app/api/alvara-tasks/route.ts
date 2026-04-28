@@ -1,6 +1,6 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { inicioObrigatorioAteFromCriacao } from "@/lib/alvara-task-generation";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
 
 function isPgUniqueViolation(err: { code?: string; message?: string } | null) {
@@ -51,8 +51,9 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Garante uma tarefa pendente por vínculo (tipo ativo). Sem vencimento até registo da emissão;
- * no 1.º ciclo define `inicio_obrigatorio_ate` (criação + prazo_inicio_dias do tipo).
+ * Garante uma tarefa pendente por vínculo (tipo ativo). Define `inicio_obrigatorio_ate` = data de criação
+ * da tarefa + `prazo_inicio_dias` do tipo; sincroniza esse prazo em `company_alvaras.data_vencimento` só
+ * enquanto não houver emissão (depois a validade legal substitui).
  */
 export async function POST(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
@@ -104,20 +105,22 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    const baseDia = format(new Date(), "yyyy-MM-dd");
     const prazoDias = Math.min(
       3650,
       Math.max(1, Number(a.prazo_inicio_dias ?? 30) || 30)
     );
-    const inicioOb = inicioObrigatorioAteFromCriacao(baseDia, prazoDias);
 
-    const { error: e2 } = await supabase.from("alvara_tasks").insert({
-      company_alvara_id: ca.id,
-      due_date: null,
-      inicio_obrigatorio_ate: inicioOb,
-      status: "pendente",
-      title: null,
-    });
+    const { data: insertedRow, error: e2 } = await supabase
+      .from("alvara_tasks")
+      .insert({
+        company_alvara_id: ca.id,
+        due_date: null,
+        inicio_obrigatorio_ate: null,
+        status: "pendente",
+        title: null,
+      })
+      .select("id, created_at")
+      .single();
 
     if (e2) {
       if (isPgUniqueViolation(e2)) {
@@ -125,10 +128,49 @@ export async function POST(request: NextRequest) {
       } else {
         if (errors.length < 5) errors.push(e2.message);
       }
-    } else {
-      inserted++;
-      comPendente.add(ca.id);
+      continue;
     }
+
+    if (!insertedRow?.id || !insertedRow.created_at) {
+      if (errors.length < 5) errors.push("Inserção sem retorno de id/created_at");
+      continue;
+    }
+
+    const baseDia = format(parseISO(String(insertedRow.created_at)), "yyyy-MM-dd");
+    const inicioOb = inicioObrigatorioAteFromCriacao(baseDia, prazoDias);
+
+    const { error: eUp } = await supabase
+      .from("alvara_tasks")
+      .update({ inicio_obrigatorio_ate: inicioOb, updated_at: new Date().toISOString() })
+      .eq("id", insertedRow.id);
+
+    if (eUp) {
+      if (errors.length < 5) errors.push(eUp.message);
+      await supabase.from("alvara_tasks").delete().eq("id", insertedRow.id);
+      continue;
+    }
+
+    const { data: caV } = await supabase
+      .from("company_alvaras")
+      .select("data_emissao")
+      .eq("id", ca.id)
+      .single();
+
+    const semEmissao =
+      !caV?.data_emissao || String(caV.data_emissao).trim() === "";
+
+    if (semEmissao) {
+      await supabase
+        .from("company_alvaras")
+        .update({
+          data_vencimento: inicioOb,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", ca.id);
+    }
+
+    inserted++;
+    comPendente.add(ca.id);
   }
 
   return NextResponse.json({

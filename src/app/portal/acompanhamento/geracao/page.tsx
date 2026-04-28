@@ -245,7 +245,7 @@ export default function GeracaoTarefasPage() {
               <tr>
                 <th className="w-10" />
                 <th>Venc. tarefa</th>
-                <th>Início obr.</th>
+                <th>Prazo início</th>
                 <th>Empresa</th>
                 <th>Tipo</th>
                 <th>Notas</th>

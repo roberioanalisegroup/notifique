@@ -76,7 +76,6 @@ export function TaskEditModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [vincEmissao, setVincEmissao] = useState("");
-  const [vincVenc, setVincVenc] = useState("");
 
   const load = useCallback(async () => {
     if (!taskId) return;
@@ -103,18 +102,15 @@ export function TaskEditModal({
       setHistory([]);
       setNotes("");
       setVincEmissao("");
-      setVincVenc("");
     }
   }, [open, taskId, load]);
 
   useEffect(() => {
     if (!task?.company_alvaras) {
       setVincEmissao("");
-      setVincVenc("");
       return;
     }
     setVincEmissao(task.company_alvaras.data_emissao?.slice(0, 10) ?? "");
-    setVincVenc(task.company_alvaras.data_vencimento?.slice(0, 10) ?? "");
   }, [task]);
 
   async function saveVinculo() {
@@ -126,10 +122,9 @@ export function TaskEditModal({
         method: "PATCH",
         body: JSON.stringify({
           data_emissao: vincEmissao.trim() || null,
-          data_vencimento: vincVenc.trim() || null,
         }),
       });
-      toast.success("Datas do vínculo atualizadas");
+      toast.success("Emissão do vínculo atualizada");
       await load();
       onSaved();
     } catch (e) {
@@ -264,19 +259,23 @@ export function TaskEditModal({
                       onChange={(e) => setVincEmissao(e.target.value)}
                     />
                   </label>
-                  <label className="block">
-                    <span className="form-label mb-1 block text-slate-700">Data de vencimento (vínculo)</span>
-                    <input
-                      type="date"
-                      className="input-field"
-                      value={vincVenc}
-                      onChange={(e) => setVincVenc(e.target.value)}
-                    />
-                  </label>
+                  <div className="block">
+                    <span className="form-label mb-1 block text-slate-700">Prazo de início</span>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-800 tabular-nums">
+                      {formatDate(task.inicio_obrigatorio_ate, { empty: "—" })}
+                    </div>
+                    <p className="mt-1.5 text-[0.7rem] leading-snug text-slate-500">
+                      Igual à <strong>data de criação desta tarefa</strong> mais{" "}
+                      <strong>{a?.prazo_inicio_dias ?? 30}</strong> dias corridos definidos no tipo. No vínculo,
+                      este valor aparece como <strong>prazo de início</strong> até existir emissão; depois o mesmo
+                      campo no cadastro passa a mostrar a <strong>validade legal</strong> calculada a partir da
+                      emissão.
+                    </p>
+                  </div>
                 </div>
                 <p className="mt-2 text-[0.7rem] leading-snug text-slate-500">
-                  O <strong>vencimento da tarefa</strong> não é editado à mão: ao guardar a emissão, o sistema
-                  recalcula o vencimento pelo tipo (salvo se definir explicitamente o vencimento do vínculo).
+                  O <strong>vencimento da tarefa</strong> (renovação) preenche-se automaticamente ao guardar a emissão,
+                  pela periodicidade do tipo.
                 </p>
                 <button
                   type="button"
@@ -284,23 +283,11 @@ export function TaskEditModal({
                   disabled={saving || !ca?.id}
                   onClick={() => void saveVinculo()}
                 >
-                  Guardar datas do vínculo
+                  Guardar emissão no vínculo
                 </button>
               </div>
 
               <div className="grid gap-2 rounded-xl bg-violet-50/50 p-3 text-xs text-slate-700 sm:grid-cols-2">
-                {!hasEmissao && task.inicio_obrigatorio_ate ? (
-                  <span className="flex items-start gap-1 sm:col-span-2">
-                    <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
-                    <span>
-                      <span className="font-medium text-slate-600">Início Obrigatório:</span>{" "}
-                      {formatDate(task.inicio_obrigatorio_ate, { empty: "—" })}{" "}
-                      <span className="text-slate-500">
-                        (1.º ciclo — em <strong>Pendente</strong>, inicie até esta data)
-                      </span>
-                    </span>
-                  </span>
-                ) : null}
                 <span className="flex items-start gap-1 sm:col-span-2">
                   <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
                   <span>

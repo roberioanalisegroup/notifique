@@ -824,14 +824,17 @@ function TaskCard({
         </span>
         <span className={cn("flex items-center gap-1", atrasada && "font-semibold text-amber-800")}>
           <CalendarDays className="h-3 w-3 shrink-0 text-slate-500" />
-          Venc. vínculo: {formatDate(ca?.data_vencimento ?? null, { empty: "—" })}
+          {temEm ? "Validade (vínculo):" : "Prazo de início:"}{" "}
+          {temEm
+            ? formatDate(ca?.data_vencimento ?? null, { empty: "—" })
+            : formatDate(task.inicio_obrigatorio_ate ?? ca?.data_vencimento ?? null, { empty: "—" })}
         </span>
       </div>
 
       <p className="mt-2 text-[0.7rem] text-slate-600">
         {!temEm && task.inicio_obrigatorio_ate ? (
           <>
-            <span className="font-medium text-slate-500">Início Obrigatório:</span>{" "}
+            <span className="font-medium text-slate-500">Prazo de início:</span>{" "}
             {formatDate(task.inicio_obrigatorio_ate, { empty: "—" })}
             {atrasoInicio ? " · atraso para iniciar" : ""}
           </>

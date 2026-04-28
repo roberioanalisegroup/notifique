@@ -155,6 +155,7 @@ export interface CompanyAlvara {
   alvara_id: string;
   numero: string | null;
   data_emissao: string | null;
+  /** Até haver emissão: prazo de início (criação da tarefa + dias do tipo). Após emissão: validade legal do certificado. */
   data_vencimento: string | null;
   data_notificacao: string | null;
   status: string;
