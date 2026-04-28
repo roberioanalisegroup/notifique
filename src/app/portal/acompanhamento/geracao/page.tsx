@@ -179,7 +179,7 @@ export default function GeracaoTarefasPage() {
             href="/portal/acompanhamento"
             className="text-sm font-medium text-blue-600 hover:text-blue-700"
           >
-            ← Quadro Kanban
+            ← Acompanhamento
           </Link>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
             Geração e manutenção de tarefas

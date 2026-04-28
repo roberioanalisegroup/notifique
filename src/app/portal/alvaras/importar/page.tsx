@@ -209,7 +209,7 @@ export default function ImportarAlvarasPage() {
     <div className="space-y-6 text-slate-900 [color-scheme:light]">
       <div>
         <Link href="/portal/alvaras" className="text-sm font-medium text-blue-600 hover:text-blue-700">
-          ← Voltar aos tipos de alvará
+          ← Alvarás
         </Link>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900">Importar tipos de alvará (CSV)</h1>
         <p className="mt-0.5 text-sm text-slate-500">

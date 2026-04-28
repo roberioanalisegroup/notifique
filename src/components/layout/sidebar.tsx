@@ -19,15 +19,35 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-const STORAGE_KEY = "portal-sidebar-collapsed";
-
 type Item = {
   id: string;
   href: string;
   label: string;
   icon: React.ReactNode;
+  /** Se definido com filhos: o rótulo principal é um link para `href` (lista de empresas, tipos de alvará, acompanhamento, etc.). */
+  parentNavigates?: boolean;
   children?: { href: string; label: string }[];
 };
+
+function accordionInitialOpen(
+  item: Item,
+  pathname: string | null
+): boolean {
+  if (!item.children?.length) return true;
+  if (item.parentNavigates) {
+    return (
+      pathname === item.href ||
+      (item.href !== "/" && !!pathname?.startsWith(item.href + "/"))
+    );
+  }
+  return (
+    item.children.some(
+      (c) => pathname === c.href || pathname?.startsWith(c.href + "/")
+    ) ?? true
+  );
+}
+
+const STORAGE_KEY = "portal-sidebar-collapsed";
 
 const items: Item[] = [
   {
@@ -41,29 +61,25 @@ const items: Item[] = [
     href: "/portal/acompanhamento",
     label: "Acompanhamento",
     icon: <CalendarCheck className="h-5 w-5 shrink-0" />,
-    children: [
-      { href: "/portal/acompanhamento", label: "Quadro Kanban" },
-      { href: "/portal/acompanhamento/geracao", label: "Geração e manutenção" },
-    ],
+    parentNavigates: true,
+    children: [{ href: "/portal/acompanhamento/geracao", label: "Geração e manutenção" }],
   },
   {
     id: "empresas",
     href: "/portal/empresas",
     label: "Empresas",
     icon: <Building2 className="h-5 w-5 shrink-0" />,
-    children: [
-      { href: "/portal/empresas", label: "Lista" },
-      { href: "/portal/empresas/importar", label: "Importar" },
-    ],
+    parentNavigates: true,
+    children: [{ href: "/portal/empresas/importar", label: "Importar" }],
   },
   {
     id: "alvaras",
     href: "/portal/alvaras",
     label: "Alvarás",
     icon: <FileStack className="h-5 w-5 shrink-0" />,
+    parentNavigates: true,
     children: [
       { href: "/portal/alvaras/grupos", label: "Grupos" },
-      { href: "/portal/alvaras", label: "Tipos" },
       { href: "/portal/alvaras/importar", label: "Importar" },
     ],
   },
@@ -93,11 +109,17 @@ function NavItem({
   setOpenFlyout: (id: string | null) => void;
 }) {
   const pathname = usePathname();
-  const [accordionOpen, setAccordionOpen] = useState(
-    item.children?.some(
-      (c) => pathname === c.href || pathname?.startsWith(c.href + "/")
-    ) ?? true
+  const [accordionOpen, setAccordionOpen] = useState(() =>
+    accordionInitialOpen(item, pathname)
   );
+
+  useEffect(() => {
+    if (!item.parentNavigates || !item.children?.length) return;
+    const open =
+      pathname === item.href ||
+      (item.href !== "/" && !!pathname?.startsWith(item.href + "/"));
+    if (open) setAccordionOpen(true);
+  }, [pathname, item.href, item.parentNavigates, item.children]);
 
   const active =
     pathname === item.href ||
@@ -105,6 +127,137 @@ function NavItem({
     false;
 
   const flyoutOpen = openFlyout === item.id;
+
+  const sectionUnderHref =
+    pathname === item.href ||
+    (item.href !== "/" && !!pathname?.startsWith(item.href + "/"));
+
+  const parentLinkExactActive = item.parentNavigates && pathname === item.href;
+
+  if (item.children && item.parentNavigates && collapsed) {
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          title={item.label}
+          onClick={() => setOpenFlyout(flyoutOpen ? null : item.id)}
+          className={cn(
+            "flex w-full items-center justify-center rounded-xl p-2.5 text-sm font-medium transition-colors",
+            "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+            flyoutOpen && "bg-slate-100 text-slate-900 ring-1 ring-slate-200/80",
+            !flyoutOpen && sectionUnderHref && "bg-blue-50 text-blue-800 ring-1 ring-blue-200/80"
+          )}
+        >
+          {item.icon}
+        </button>
+        {flyoutOpen && (
+          <div
+            className="absolute left-full top-0 z-[70] ml-2 min-w-[11rem] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1.5 shadow-portal-md ring-1 ring-slate-900/5"
+            role="menu"
+          >
+            <Link
+              href={item.href}
+              onClick={() => {
+                setOpenFlyout(null);
+                mobileClose?.();
+              }}
+              className={cn(
+                "block border-b border-slate-100 px-3 py-2 text-sm font-medium transition-colors",
+                parentLinkExactActive
+                  ? "bg-blue-50 text-blue-800"
+                  : "text-slate-800 hover:bg-slate-50"
+              )}
+            >
+              {item.label}
+            </Link>
+            {item.children.map((c) => {
+              const cActive =
+                pathname === c.href || pathname?.startsWith(c.href + "/");
+              return (
+                <Link
+                  key={c.href}
+                  href={c.href}
+                  onClick={() => {
+                    setOpenFlyout(null);
+                    mobileClose?.();
+                  }}
+                  className={cn(
+                    "block px-3 py-2 text-sm transition-colors",
+                    cActive
+                      ? "font-medium text-blue-700"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  )}
+                >
+                  {c.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (item.children && item.parentNavigates && !collapsed) {
+    return (
+      <div>
+        <div className="flex w-full items-center gap-0.5 rounded-xl">
+          <Link
+            href={item.href}
+            onClick={mobileClose}
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+              parentLinkExactActive
+                ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-600/20"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            )}
+          >
+            {item.icon}
+            <span className="truncate">{item.label}</span>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setAccordionOpen(!accordionOpen)}
+            className={cn(
+              "shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600",
+              accordionOpen && "text-slate-600"
+            )}
+            aria-expanded={accordionOpen}
+            aria-label={accordionOpen ? "Recolher submenu" : "Expandir submenu"}
+          >
+            {accordionOpen ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+        {accordionOpen && (
+          <div className="mt-1 space-y-0.5 border-l-2 border-slate-200/80 pl-3 ml-1.5">
+            {item.children.map((c) => {
+              const cActive =
+                pathname === c.href || pathname?.startsWith(c.href + "/");
+              return (
+                <Link
+                  key={c.href}
+                  href={c.href}
+                  onClick={mobileClose}
+                  className={cn(
+                    "block rounded-lg px-3 py-1.5 text-sm transition-colors",
+                    cActive
+                      ? "font-medium text-blue-700"
+                      : "text-slate-500 hover:text-slate-900"
+                  )}
+                >
+                  {c.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (item.children && collapsed) {
     return (
@@ -297,9 +450,9 @@ export function Sidebar() {
       <aside
         id="portal-sidebar"
         className={cn(
-          "fixed z-50 flex h-screen w-[17rem] max-w-[85vw] flex-col border-slate-200/90 bg-white shadow-xl shadow-slate-200/40 transition-[transform,width] duration-300 ease-out [color-scheme:light]",
+          "fixed z-50 flex h-screen min-h-0 w-[17rem] max-w-[85vw] flex-col border-slate-200/90 bg-white shadow-xl shadow-slate-200/40 transition-[transform,width] duration-300 ease-out [color-scheme:light]",
           "left-0 top-0",
-          "md:relative md:max-w-none md:shadow-sm md:shadow-slate-200/30",
+          "md:relative md:z-50 md:max-w-none md:shadow-sm md:shadow-slate-200/30",
           "md:shrink-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           "md:translate-x-0",
@@ -355,7 +508,7 @@ export function Sidebar() {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-0.5 overflow-y-auto overflow-x-visible p-2.5">
+        <nav className="relative z-[1] min-h-0 flex-1 space-y-0.5 overflow-y-auto overflow-x-visible p-2.5 [&_a]:cursor-pointer [&_button]:cursor-pointer [&_svg]:pointer-events-none">
           {items.map((item) => (
             <NavItem
               key={item.id}

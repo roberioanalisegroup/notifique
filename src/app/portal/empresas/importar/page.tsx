@@ -141,7 +141,7 @@ export default function ImportarPage() {
           href="/portal/empresas"
           className="text-sm font-medium text-blue-600 hover:text-blue-700"
         >
-          ← Voltar à lista
+          ← Empresas
         </Link>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900">Importar empresas (CSV)</h1>
         <p className="mt-0.5 text-sm text-slate-500">
