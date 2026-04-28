@@ -4,7 +4,6 @@ import {
   isAlvaraFrequencia,
   isWeekendAdjust,
 } from "@/lib/alvara-frequency";
-import { proximoVencimentoISOFromEmissao } from "@/lib/alvara-task-generation";
 import type { Alvara, AlvaraTask } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { format } from "date-fns";
@@ -112,7 +111,7 @@ export async function PATCH(
 
   const { data: taskRow, error: tErr } = await supabase
     .from("alvara_tasks")
-    .select("id, company_alvara_id, status, notes")
+    .select("id, company_alvara_id, status, notes, due_date")
     .eq("id", id)
     .single();
 
@@ -213,6 +212,18 @@ export async function PATCH(
       return NextResponse.json({ error: uErr.message }, { status: 500 });
     }
 
+    const { error: uDue } = await supabase
+      .from("alvara_tasks")
+      .update({
+        due_date: dataVencimento,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (uDue) {
+      return NextResponse.json({ error: uDue.message }, { status: 500 });
+    }
+
     ca = { ...ca, data_emissao: hoje };
 
     await insertHistory(supabase, id, "system", "Baixa registada no vínculo", {
@@ -250,6 +261,21 @@ export async function PATCH(
         {
           error:
             "Não é possível concluir sem data de emissão no vínculo. Registe a emissão na empresa ou use «Dar baixa no vínculo».",
+        },
+        { status: 400 }
+      );
+    }
+    const { data: dueRow } = await supabase
+      .from("alvara_tasks")
+      .select("due_date")
+      .eq("id", id)
+      .single();
+    const due = dueRow?.due_date;
+    if (due == null || String(due).trim() === "") {
+      return NextResponse.json(
+        {
+          error:
+            "O vencimento da tarefa só é definido após registar a data de emissão no vínculo (a periodicidade calcula o próximo vencimento). Edite o vínculo na empresa ou use «Dar baixa».",
         },
         { status: 400 }
       );
@@ -296,29 +322,28 @@ export async function PATCH(
   if (newStatus === "concluida") {
     const { data: caF } = await supabase
       .from("company_alvaras")
-      .select("id, data_emissao, alvara_id")
+      .select("alvara_id")
       .eq("id", taskRow.company_alvara_id)
       .single();
-    const em = caF?.data_emissao ? String(caF.data_emissao).slice(0, 10) : null;
-    if (em && caF?.alvara_id) {
-      const { data: alv } = await supabase.from("alvaras").select("*").eq("id", caF.alvara_id).single();
-      const a = alv as Alvara | null;
-      if (a?.is_active) {
-        const nextDue = proximoVencimentoISOFromEmissao(em, a);
-        if (nextDue) {
-          const { error: insE } = await supabase.from("alvara_tasks").insert({
-            company_alvara_id: taskRow.company_alvara_id,
-            due_date: nextDue,
-            status: "pendente",
-            title: null,
-          });
-          if (!insE) {
-            await insertHistory(supabase, id, "system", `Próxima tarefa gerada para ${nextDue}`, {
-              proxima_data: nextDue,
-            });
-          } else if (!isPgUniqueViolation(insE)) {
-            console.warn("[alvara-tasks] próxima instância:", insE.message);
-          }
+
+    if (caF?.alvara_id) {
+      const { data: aRow } = await supabase
+        .from("alvaras")
+        .select("is_active")
+        .eq("id", caF.alvara_id)
+        .single();
+
+      if (aRow?.is_active) {
+        const { error: insE } = await supabase.from("alvara_tasks").insert({
+          company_alvara_id: taskRow.company_alvara_id,
+          due_date: null,
+          status: "pendente",
+          title: null,
+        });
+        if (!insE) {
+          await insertHistory(supabase, id, "system", "Próxima tarefa criada (vencimento após nova emissão)", {});
+        } else if (!isPgUniqueViolation(insE)) {
+          console.warn("[alvara-tasks] próxima instância:", insE.message);
         }
       }
     }

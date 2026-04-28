@@ -124,16 +124,23 @@ create table public.company_alvaras (
 create table public.alvara_tasks (
   id                    uuid primary key default gen_random_uuid(),
   company_alvara_id     uuid not null references public.company_alvaras(id) on delete cascade,
-  due_date              date not null,
+  due_date              date,
   status                text not null default 'pendente'
     check (status in ('pendente', 'concluida', 'cancelada')),
   title                 text,
   completed_at          timestamptz,
   notes                 text,
   created_at            timestamptz not null default now(),
-  updated_at            timestamptz not null default now(),
-  unique (company_alvara_id, due_date)
+  updated_at            timestamptz not null default now()
 );
+
+create unique index idx_alvara_tasks_company_alvara_due_unique
+  on public.alvara_tasks (company_alvara_id, due_date)
+  where due_date is not null;
+
+create unique index idx_alvara_tasks_um_pendente_sem_vencimento_por_vinculo
+  on public.alvara_tasks (company_alvara_id)
+  where status = 'pendente' and due_date is null;
 
 create table public.alvara_task_history (
   id uuid primary key default gen_random_uuid(),

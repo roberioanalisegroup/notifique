@@ -146,6 +146,8 @@ export function TaskEditModal({
   const a = ca?.alvaras;
   const g = a?.alvara_groups;
   const hasEmissao = Boolean(ca?.data_emissao && String(ca.data_emissao).trim());
+  const hasVencimentoTarefa = Boolean(task?.due_date && String(task.due_date).trim());
+  const podeConcluirModal = Boolean(task && hasEmissao && hasVencimentoTarefa);
   const venc = validityMeta(ca?.data_vencimento);
   const empresaHref = c ? "/portal/empresas/" + c.id : null;
 
@@ -314,20 +316,21 @@ export function TaskEditModal({
                     <button
                       type="button"
                       className="btn-primary"
-                      disabled={saving || !hasEmissao}
+                      disabled={saving || !podeConcluirModal}
                       title={
-                        !hasEmissao
-                          ? "Registe data de emissão no vínculo ou use Dar baixa"
+                        !podeConcluirModal
+                          ? "Registe a data de emissão no vínculo para preencher o vencimento da tarefa, ou use Dar baixa"
                           : undefined
                       }
                       onClick={() => void patchStatus({ status: "concluida" })}
                     >
                       Concluir tarefa
                     </button>
-                    {!hasEmissao ? (
+                    {!hasEmissao || !hasVencimentoTarefa ? (
                       <p className="text-xs text-amber-800">
-                        Para concluir é obrigatório ter <strong>data de emissão</strong> no vínculo, ou usar
-                        «Dar baixa» (define emissão a hoje).
+                        Para concluir é necessário <strong>data de emissão</strong> no vínculo e{" "}
+                        <strong>vencimento da tarefa</strong> (preenchido automaticamente quando regista a emissão na
+                        empresa ou com «Dar baixa»).
                       </p>
                     ) : null}
                     <button

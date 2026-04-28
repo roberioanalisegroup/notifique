@@ -115,9 +115,11 @@ function companyLabel(c: Company | null | undefined): string {
   return (c.razao_social ?? c.nome_fantasia ?? "—").trim() || "—";
 }
 
-function taskHasEmissao(t: TaskRow): boolean {
+function taskPodeConcluir(t: TaskRow): boolean {
   const em = t.company_alvaras?.data_emissao;
-  return em != null && String(em).trim() !== "";
+  const hasEmissao = em != null && String(em).trim() !== "";
+  const hasVencimentoTarefa = t.due_date != null && String(t.due_date).trim() !== "";
+  return hasEmissao && hasVencimentoTarefa;
 }
 
 export default function AcompanhamentoPage() {
@@ -196,6 +198,7 @@ export default function AcompanhamentoPage() {
     tasks.forEach((t) => {
       const y = yearFromIso(t.due_date);
       if (y != null) set.add(y);
+      if (t.due_date == null || String(t.due_date).trim() === "") set.add(cy);
     });
     return Array.from(set).sort((a, b) => b - a);
   }, [tasks]);
@@ -290,8 +293,10 @@ export default function AcompanhamentoPage() {
   }
 
   async function soConcluir(t: TaskRow) {
-    if (!taskHasEmissao(t)) {
-      toast.error("Não é possível concluir sem data de emissão no vínculo. Abra os detalhes ou use «Dar baixa».");
+    if (!taskPodeConcluir(t)) {
+      toast.error(
+        "Para concluir é preciso ter data de emissão no vínculo e vencimento da tarefa (definido ao registar a emissão). Use «Dar baixa» ou edite o vínculo na empresa."
+      );
       return;
     }
     try {
@@ -375,8 +380,10 @@ export default function AcompanhamentoPage() {
 
     if (target === "concluido") {
       if (task.status === "concluida") return;
-      if (!taskHasEmissao(task)) {
-        toast.error("Conclusão exige data de emissão no vínculo.");
+      if (!taskPodeConcluir(task)) {
+        toast.error(
+          "Conclusão exige emissão no vínculo e vencimento da tarefa (preenchido ao registar a emissão)."
+        );
         return;
       }
       await soConcluir(task);
@@ -690,9 +697,9 @@ export default function AcompanhamentoPage() {
       ) : null}
 
       <p className="text-center text-xs text-slate-400">
-        <ClipboardList className="mb-0.5 inline h-3.5 w-3.5 align-text-bottom" /> Arrastar para{" "}
-        <strong>Concluído</strong> só funciona com data de emissão no vínculo. Use o ícone de edição para o painel
-        completo e histórico.
+        <ClipboardList className="mb-0.5 inline h-3.5 w-3.5 align-text-bottom" /> Para <strong>concluir</strong> é
+        necessário ter emissão no vínculo e o vencimento da tarefa (calculado ao registar a emissão). Use o ícone de
+        edição para detalhes e histórico.
       </p>
 
       <TaskEditModal
@@ -728,9 +735,13 @@ function TaskCard({
   const g = a?.alvara_groups;
   const freq = a ? (FREQUENCIA_LABELS[a.frequencia] ?? a.frequencia) : "—";
   const venc = validityMeta(ca?.data_vencimento);
-  const atrasada = task.status === "pendente" && task.due_date < hoje;
+  const atrasada =
+    task.status === "pendente" &&
+    task.due_date != null &&
+    String(task.due_date).trim() !== "" &&
+    task.due_date < hoje;
   const hasFile = Boolean(ca?.arquivo_url);
-  const podeConcluir = taskHasEmissao(task);
+  const podeConcluir = taskPodeConcluir(task);
 
   return (
     <>
@@ -838,7 +849,7 @@ function TaskCard({
                 : "cursor-not-allowed bg-slate-100 text-slate-400"
             )}
             disabled={!podeConcluir}
-            title={!podeConcluir ? "Exige data de emissão no vínculo" : undefined}
+            title={!podeConcluir ? "Exige emissão no vínculo e vencimento da tarefa (após registar emissão)" : undefined}
             onClick={(e) => {
               e.stopPropagation();
               onConcluir();

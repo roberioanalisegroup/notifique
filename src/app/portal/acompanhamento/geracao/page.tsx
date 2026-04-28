@@ -34,7 +34,6 @@ export default function GeracaoTarefasPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
 
-  const [offsetDias, setOffsetDias] = useState(365);
   const [generating, setGenerating] = useState(false);
 
   const [advFrom, setAdvFrom] = useState(() => {
@@ -89,16 +88,14 @@ export default function GeracaoTarefasPage() {
   async function gerarTarefas() {
     setGenerating(true);
     try {
-      const off = Math.min(366, Math.max(7, offsetDias));
       const r = await apiJson<{
-        janela: { inicio: string; fim: string; offsetDias: number };
         inseridos: number;
-        ignoradosDuplicata: number;
-      }>("/api/alvara-tasks", { method: "POST", body: JSON.stringify({ offsetDias: off }) });
+        ignoradosJaComPendente: number;
+      }>("/api/alvara-tasks", { method: "POST", body: "{}" });
       toast.success(
         r.inseridos > 0
-          ? `Incluídas ${r.inseridos} nova(s) tarefa(s) (sem duplicar datas existentes). Janela: ${r.janela.inicio} → ${r.janela.fim}.`
-          : `Nenhuma tarefa nova necessária; ${r.ignoradosDuplicata} combinações já existiam.`
+          ? `Incluídas ${r.inseridos} nova(s) tarefa(s) pendente(s) sem vencimento até registo da emissão no vínculo.`
+          : `Nenhuma tarefa nova necessária (${r.ignoradosJaComPendente} vínculo(s) já têm tarefa pendente).`
       );
       void load();
     } catch (e) {
@@ -188,10 +185,11 @@ export default function GeracaoTarefasPage() {
             Geração e manutenção de tarefas
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            Gere novas tarefas só quando ainda não existem (mesma empresa + tipo + data de vencimento). Após
-            <strong> concluir</strong> uma tarefa com emissão registada, o sistema cria automaticamente a
-            próxima instância com vencimento calculado a partir dessa emissão. Vínculos podem ficar sem{" "}
-            <code className="rounded bg-slate-100 px-1">data_emissao</code> até serem tratados no quadro.
+            Cada vínculo (empresa + tipo de alvará ativo) pode ter <strong>uma tarefa pendente</strong>. As
+            tarefas novas nascem <strong>sem data de vencimento</strong>; o vencimento preenche-se quando{" "}
+            <code className="rounded bg-slate-100 px-1">data_emissao</code> é registada no vínculo (regra de
+            periodicidade). Ao <strong>concluir</strong>, é criada a próxima pendente, outra vez sem vencimento
+            até nova emissão.
           </p>
         </div>
         <button type="button" onClick={() => void load()} className="btn-secondary shrink-0" disabled={loading}>
@@ -203,24 +201,13 @@ export default function GeracaoTarefasPage() {
       <section className="card-portal p-5">
         <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
           <Wand2 className="h-5 w-5 text-emerald-700" />
-          Gerar tarefas na janela
+          Gerar tarefas em falta
         </h2>
         <p className="mt-2 text-sm text-slate-600">
-          Apenas combinações <strong>novas</strong> são inseridas (restrição única no banco). A data de
-          emissão do vínculo pode ser nula: o cálculo usa a janela a partir de hoje para estimar vencimentos.
+          Insere uma pendente por vínculo que ainda não tenha nenhuma. Não duplica enquanto existir tarefa
+          pendente para o mesmo vínculo.
         </p>
         <div className="mt-4 flex flex-wrap items-end gap-4">
-          <div>
-            <label className="form-label block">Dias à frente (7–366)</label>
-            <input
-              type="number"
-              min={7}
-              max={366}
-              className="input-field w-32"
-              value={offsetDias}
-              onChange={(e) => setOffsetDias(Number(e.target.value) || 365)}
-            />
-          </div>
           <button type="button" className="btn-primary inline-flex items-center gap-2" disabled={generating} onClick={() => void gerarTarefas()}>
             {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
             {generating ? "A gerar…" : "Gerar tarefas em falta"}
@@ -232,7 +219,8 @@ export default function GeracaoTarefasPage() {
         <div className="border-b border-slate-100 px-5 py-4">
           <h2 className="text-base font-semibold text-slate-900">Tarefas pendentes (seleção em massa)</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Lista: pendentes com vencimento entre {cy - 1} e {cy + 3}. Eliminação segura: só linhas{" "}
+            Lista: pendentes com <code className="rounded bg-slate-100 px-1">due_date</code> no intervalo {cy - 1}–{cy + 3}{" "}
+            ou <strong>sem vencimento</strong> (aguardam emissão no vínculo). Eliminação segura: só linhas{" "}
             <strong>pendentes</strong> sem eventos de histórico além da criação (ou sem histórico — legado).
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -279,7 +267,7 @@ export default function GeracaoTarefasPage() {
                         aria-label="Selecionar tarefa"
                       />
                     </td>
-                    <td className="whitespace-nowrap font-medium">{formatDate(t.due_date)}</td>
+                    <td className="whitespace-nowrap font-medium">{formatDate(t.due_date, { empty: "—" })}</td>
                     <td>{companyLabel(t.company_alvaras?.companies)}</td>
                     <td>{t.company_alvaras?.alvaras?.name ?? "—"}</td>
                     <td className="max-w-xs truncate text-slate-600">{t.notes ?? "—"}</td>

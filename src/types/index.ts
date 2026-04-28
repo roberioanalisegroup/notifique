@@ -131,11 +131,12 @@ export interface Alvara {
   updated_at: string;
 }
 
-/** Tarefas geradas na janela de acompanhamento (ciclo, ex. 30 dias) */
+/** Tarefas de acompanhamento por vínculo empresa–alvará (vencimento preenchido após emissão no vínculo). */
 export interface AlvaraTask {
   id: string;
   company_alvara_id: string;
-  due_date: string;
+  /** Preenchido após registo da data de emissão no vínculo (regra de frequência). */
+  due_date: string | null;
   status: "pendente" | "concluida" | "cancelada";
   title: string | null;
   completed_at: string | null;

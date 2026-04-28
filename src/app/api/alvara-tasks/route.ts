@@ -1,13 +1,5 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
-import {
-  janelaAPartirDe,
-  listVencimentosNaJanela,
-  mergeVencComCampoBanco,
-} from "@/lib/alvara-task-generation";
-import type { Alvara, Company, CompanyAlvara } from "@/types";
 import { NextRequest, NextResponse } from "next/server";
-
-type CaRow = CompanyAlvara & { alvaras: Alvara | null };
 
 function isPgUniqueViolation(err: { code?: string; message?: string } | null) {
   return err?.code === "23505" || (err?.message?.toLowerCase().includes("duplicate") ?? false);
@@ -36,16 +28,17 @@ export async function GET(request: NextRequest) {
       )
     `
     )
-    .order("due_date", { ascending: true, nullsFirst: false });
+    .order("due_date", { ascending: true, nullsFirst: true });
 
   if (status) {
     q = q.eq("status", status);
   }
-  if (from) {
-    q = q.gte("due_date", from);
-  }
-  if (to) {
-    q = q.lte("due_date", to);
+  if (from && to) {
+    q = q.or(`due_date.is.null,and(due_date.gte.${from},due_date.lte.${to})`);
+  } else if (from) {
+    q = q.or(`due_date.is.null,due_date.gte.${from}`);
+  } else if (to) {
+    q = q.or(`due_date.is.null,due_date.lte.${to}`);
   }
 
   const { data, error } = await q;
@@ -56,78 +49,82 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Gera tarefas na janela (padrão: hoje → hoje+30 dias, alinhado ao painel de stats).
- * Idempotente: ignora conflito por (company_alvara_id, due_date).
+ * Garante uma tarefa pendente por vínculo (tipo ativo), sem data de vencimento até registo da emissão no vínculo.
+ * Ignora vínculos que já tenham qualquer tarefa pendente.
  */
 export async function POST(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
 
-  let body: { offsetDias?: number } = {};
   try {
     const t = await request.text();
-    if (t) body = JSON.parse(t) as { offsetDias?: number };
+    if (t) JSON.parse(t);
   } catch {
-    body = {};
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
-
-  const offsetDias = Math.min(366, Math.max(7, Number(body.offsetDias) || 30));
-  const { inicio, fim } = janelaAPartirDe(new Date(), offsetDias);
 
   const { data: vinculos, error: e1 } = await supabase
     .from("company_alvaras")
     .select(
       `
       id,
-      data_emissao,
-      data_vencimento,
-      alvaras ( * )
+      alvaras ( id, is_active )
     `
     );
   if (e1) {
     return NextResponse.json({ error: e1.message }, { status: 500 });
   }
 
-  const rows = (vinculos ?? []) as unknown as CaRow[];
+  const rows = (vinculos ?? []) as unknown as {
+    id: string;
+    alvaras: { id: string; is_active: boolean } | null;
+  }[];
+  const { data: pendentes, error: eP } = await supabase
+    .from("alvara_tasks")
+    .select("company_alvara_id")
+    .eq("status", "pendente");
+
+  if (eP) {
+    return NextResponse.json({ error: eP.message }, { status: 500 });
+  }
+
+  const comPendente = new Set((pendentes ?? []).map((r) => r.company_alvara_id as string));
   let inserted = 0;
   let skipped = 0;
   const errors: string[] = [];
 
   for (const ca of rows) {
     const a = ca.alvaras;
-    if (!a?.is_active) {
+    if (!a?.is_active) continue;
+    if (comPendente.has(ca.id)) {
+      skipped++;
       continue;
     }
 
-    let vencs = listVencimentosNaJanela(a, ca.data_emissao, inicio, fim);
-    vencs = mergeVencComCampoBanco(vencs, ca.data_vencimento, inicio, fim);
-    for (const due of vencs) {
-      const { error: e2 } = await supabase.from("alvara_tasks").insert({
-        company_alvara_id: ca.id,
-        due_date: due,
-        status: "pendente",
-        title: null,
-      });
-      if (e2) {
-        if (isPgUniqueViolation(e2)) {
-          skipped++;
-        } else {
-          if (errors.length < 5) {
-            errors.push(e2.message);
-          }
-        }
+    const { error: e2 } = await supabase.from("alvara_tasks").insert({
+      company_alvara_id: ca.id,
+      due_date: null,
+      status: "pendente",
+      title: null,
+    });
+
+    if (e2) {
+      if (isPgUniqueViolation(e2)) {
+        skipped++;
       } else {
-        inserted++;
+        if (errors.length < 5) errors.push(e2.message);
       }
+    } else {
+      inserted++;
+      comPendente.add(ca.id);
     }
   }
 
   return NextResponse.json({
     ok: true,
-    janela: { inicio, fim, offsetDias },
     inseridos: inserted,
-    ignoradosDuplicata: skipped,
+    ignoradosJaComPendente: skipped,
     erros: errors.length > 0 ? errors : undefined,
   });
 }

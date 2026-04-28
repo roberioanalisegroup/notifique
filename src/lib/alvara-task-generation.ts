@@ -87,23 +87,6 @@ export function addCalendarDaysToIso(iso: string, days: number): string {
   return format(addDays(parseISO(iso), days), "yyyy-MM-dd");
 }
 
-/**
- * Próxima data de vencimento (uma iteração) a partir da data de emissão de referência.
- * Usado após concluir uma tarefa para criar a próxima instância.
- */
-export function proximoVencimentoISOFromEmissao(dataEmissao: string, alvara: Alvara): string | null {
-  if (!alvara.is_active) return null;
-  if (!isAlvaraFrequencia(alvara.frequencia) || !isWeekendAdjust(alvara.weekend_adjust)) {
-    return null;
-  }
-  const em = dataEmissao.slice(0, 10);
-  try {
-    return computeDataVencimentoISO(em, alvara.frequencia, alvara.weekend_adjust, legalFor(alvara));
-  } catch {
-    return null;
-  }
-}
-
 /** Janela alinhada ao painel: hoje … hoje+offsetDias (inclusive, como o dashboard de stats). */
 export function janelaAPartirDe(anchor: Date, offsetDias: number): { inicio: string; fim: string } {
   const inicio = format(anchor, "yyyy-MM-dd");
