@@ -1,4 +1,5 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { logCompanyHistory } from "@/lib/company-history";
 import {
   computeDataVencimentoISO,
   isAlvaraFrequencia,
@@ -122,5 +123,26 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const row = data as {
+    id: string;
+    company_id: string;
+    alvara_id: string;
+    alvaras?: { name?: string | null };
+  };
+  const alvaraNome = row.alvaras?.name?.trim() || "Tarefa";
+  const actorUserId = auth.isServiceRole ? null : auth.userId;
+  await logCompanyHistory(supabase, {
+    companyId: body.company_id,
+    eventType: "tarefa_vinculada",
+    summary: `Tarefa vinculada: ${alvaraNome}.`,
+    metadata: {
+      company_alvara_id: row.id,
+      alvara_id: row.alvara_id,
+      alvara_name: alvaraNome,
+    },
+    actorUserId,
+  });
+
   return NextResponse.json({ company_alvara: data });
 }

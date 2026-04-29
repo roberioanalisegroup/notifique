@@ -87,6 +87,7 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [readOnly, setReadOnly] = useState<Company | null>(null);
   const [manual, setManual] = useState<Manual>(emptyManual);
+  const [codigoEmpresa, setCodigoEmpresa] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -96,6 +97,7 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
       setConsultarReceita(true);
       setReadOnly(null);
       setManual(emptyManual());
+      setCodigoEmpresa("");
     }
   }, [open]);
 
@@ -210,6 +212,7 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
         cep: manual.cep.trim() || readOnly?.cep || null,
         telefone: manual.telefone.trim() || readOnly?.telefone || null,
         email: manual.email.trim() || readOnly?.email || null,
+        codigo_empresa: codigoEmpresa.trim().slice(0, 80) || null,
       };
 
       const res = await apiJson<{ company: Company; syncWarning?: string | null }>(
@@ -271,6 +274,24 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="form-label" htmlFor="nova-empresa-codigo">
+              Código da empresa (opcional)
+            </label>
+            <input
+              id="nova-empresa-codigo"
+              className="input-field mt-1.5 font-mono"
+              value={codigoEmpresa}
+              onChange={(e) => setCodigoEmpresa(e.target.value.slice(0, 80))}
+              placeholder="Ex.: CLI-1024"
+              maxLength={80}
+              autoComplete="off"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Referência interna manual; aparece na listagem e na pesquisa de empresas.
+            </p>
           </div>
 
           {mostrarConsultaReceitaSwitch && (

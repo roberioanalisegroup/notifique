@@ -8,6 +8,8 @@ export interface Company {
   numero_documento: string;
   /** 14 dígitos quando PJ/MEI/CAEPF; null se só CPF ou outros sem CNPJ. */
   cnpj: string | null;
+  /** Código interno manual (referência interna, busca na listagem). */
+  codigo_empresa?: string | null;
   razao_social: string | null;
   nome_fantasia: string | null;
   situacao_cadastral: string | null;
@@ -35,6 +37,29 @@ export interface Company {
   sync_error: string | null;
   created_at: string;
   updated_at: string;
+  /** Preenchido quando a empresa foi arquivada (soft-delete). Null = lista principal. */
+  archived_at?: string | null;
+}
+
+export type CompanyHistoryEventType =
+  | "cadastro_sync"
+  | "arquivamento"
+  | "restauracao"
+  | "tarefa_vinculada"
+  | "tarefa_desvinculada"
+  | "tarefa_atualizada"
+  | "codigo_empresa_atualizado";
+
+/** Linha do histórico da empresa (aba Histórico no cadastro). */
+export interface CompanyHistoryEvent {
+  id: string;
+  company_id: string;
+  event_type: CompanyHistoryEventType;
+  summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  actor_user_id: string | null;
+  actor_display_name?: string | null;
 }
 
 /** Opções de filtro da listagem de empresas (UFs, cidades e situações existentes no cadastro). */
@@ -169,7 +194,9 @@ export interface CompanyAlvara {
 
 export interface CompanyAlvaraSummary {
   id: string;
+  archived_at?: string | null;
   cadastro_tipo: CompanyCadastroTipo;
+  codigo_empresa?: string | null;
   numero_documento: string;
   cnpj: string | null;
   razao_social: string | null;

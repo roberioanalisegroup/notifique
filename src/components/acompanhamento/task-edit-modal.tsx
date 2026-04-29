@@ -289,7 +289,7 @@ export function TaskEditModal({
               </div>
 
               <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs text-slate-700">
-                {ca?.numero ? `📄 ${ca.numero}` : `Grupo · ${g?.name ?? "Sem grupo"}`}
+                {ca?.numero ? `📄 ${ca.numero}` : `Grupo: ${g?.name ?? "Sem grupo"}`}
               </div>
 
               <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-2 text-xs text-slate-800">

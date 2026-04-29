@@ -71,7 +71,7 @@ export async function fetchCompaniesForSync(
   supabase: SupabaseClient,
   config: SyncConfig | null
 ): Promise<Company[]> {
-  let q = supabase.from("companies").select("*");
+  let q = supabase.from("companies").select("*").is("archived_at", null);
   if (config?.date_start) {
     q = q.gte("data_abertura", config.date_start);
   }

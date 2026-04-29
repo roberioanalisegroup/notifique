@@ -33,6 +33,7 @@ create table public.companies (
   sync_error          text,
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now(),
+  archived_at         timestamptz,
   unique (numero_documento)
 );
 
@@ -275,6 +276,7 @@ drop view if exists public.companies_alvara_summary;
 create view public.companies_alvara_summary as
 select
   c.id,
+  c.archived_at,
   c.cadastro_tipo,
   c.numero_documento,
   c.cnpj,

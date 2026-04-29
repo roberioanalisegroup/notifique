@@ -7,9 +7,14 @@ export async function GET(request: NextRequest) {
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
 
-  const { data, error } = await supabase
-    .from("companies")
-    .select("uf, municipio, situacao_cadastral");
+  const { searchParams } = request.nextUrl;
+  const arquivadasOnly =
+    searchParams.get("arquivadas") === "1" || searchParams.get("arquivadas") === "true";
+
+  let q = supabase.from("companies").select("uf, municipio, situacao_cadastral");
+  q = arquivadasOnly ? q.not("archived_at", "is", null) : q.is("archived_at", null);
+
+  const { data, error } = await q;
 
   if (error) {
     const empty: CompanyFilterOptions = { ufs: [], citiesByUf: {}, situacoes: [] };

@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { apiJson } from "@/lib/api-client";
 import { FREQUENCIA_LABELS } from "@/lib/alvara-frequency";
 import { prazoInicioPrimeiroCiclo } from "@/lib/alvara-task-generation";
 import { cn, formatDate } from "@/lib/utils";
-import type { Alvara, AlvaraGroup, AlvaraTask, Company, CompanyAlvara } from "@/types";
+import type { Company } from "@/types";
 import { format } from "date-fns";
 import {
   Building2,
@@ -16,33 +16,42 @@ import {
   Eraser,
   FileSignature,
   GripVertical,
+  LayoutGrid,
+  List,
   ListTodo,
   Loader2,
   Paperclip,
   Pencil,
-  Settings2,
   Trash2,
   Upload,
   UserCircle,
   XCircle,
 } from "lucide-react";
+import { AcompanhamentoCalendarView } from "@/components/acompanhamento/acompanhamento-calendar-view";
+import { AcompanhamentoListView } from "@/components/acompanhamento/acompanhamento-list-view";
+import type { AcompanhamentoTaskRow as TaskRow } from "@/components/acompanhamento/acompanhamento-task-type";
 import { TaskEditModal } from "@/components/acompanhamento/task-edit-modal";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-
-type TaskRow = AlvaraTask & {
-  company_alvaras:
-    | (CompanyAlvara & {
-        companies: Company | null;
-        alvaras: (Alvara & { alvara_groups: AlvaraGroup | null }) | null;
-      })
-    | null;
-};
 
 type UiLane = "pendente" | "andamento";
 
 const LANES_STORAGE_KEY = "notifique-acompanhamento-lanes";
+
+const VIEW_MODE_KEY = "notifique-acompanhamento-viewmode";
+
+type ViewMode = "kanban" | "lista" | "calendario";
+
+function readViewMode(): ViewMode {
+  if (typeof window === "undefined") return "kanban";
+  try {
+    const v = localStorage.getItem(VIEW_MODE_KEY);
+    if (v === "lista" || v === "calendario" || v === "kanban") return v;
+  } catch {
+    /* ignore */
+  }
+  return "kanban";
+}
 
 type ColumnId = "pendente" | "andamento" | "concluido";
 
@@ -57,7 +66,7 @@ const COLUMNS: { id: ColumnId; label: string; icon: React.ReactNode; description
     id: "andamento",
     label: "Em andamento",
     icon: <ListTodo className="h-4 w-4" />,
-    description: "Coluna local — arraste para organizar o fluxo",
+    description: "Destaque do que está em tratamento (continua pendente no sistema)",
   },
   {
     id: "concluido",
@@ -67,18 +76,31 @@ const COLUMNS: { id: ColumnId; label: string; icon: React.ReactNode; description
   },
 ];
 
+function parseLaneMapJson(raw: string): Record<string, UiLane> {
+  const p = JSON.parse(raw) as Record<string, string>;
+  const out: Record<string, UiLane> = {};
+  for (const [k, v] of Object.entries(p)) {
+    if (v === "andamento") out[k] = "andamento";
+    else out[k] = "pendente";
+  }
+  return out;
+}
+
+/** Pendente vs Em andamento: guardado em localStorage (persiste e partilha entre separadores deste navegador). */
 function readLaneMap(): Record<string, UiLane> {
   if (typeof window === "undefined") return {};
   try {
-    const raw = sessionStorage.getItem(LANES_STORAGE_KEY);
-    if (!raw) return {};
-    const p = JSON.parse(raw) as Record<string, string>;
-    const out: Record<string, UiLane> = {};
-    for (const [k, v] of Object.entries(p)) {
-      if (v === "andamento") out[k] = "andamento";
-      else out[k] = "pendente";
+    let raw = localStorage.getItem(LANES_STORAGE_KEY);
+    if (!raw) {
+      const legacy = sessionStorage.getItem(LANES_STORAGE_KEY);
+      if (legacy) {
+        localStorage.setItem(LANES_STORAGE_KEY, legacy);
+        sessionStorage.removeItem(LANES_STORAGE_KEY);
+        raw = legacy;
+      }
     }
-    return out;
+    if (!raw) return {};
+    return parseLaneMapJson(raw);
   } catch {
     return {};
   }
@@ -86,7 +108,11 @@ function readLaneMap(): Record<string, UiLane> {
 
 function writeLaneMap(map: Record<string, UiLane>) {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem(LANES_STORAGE_KEY, JSON.stringify(map));
+  try {
+    localStorage.setItem(LANES_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // quota excedida ou modo privado restrito
+  }
 }
 
 function yearFromIso(d: string | null | undefined): number | null {
@@ -184,6 +210,8 @@ export default function AcompanhamentoPage() {
   const [selectedAlvaraNames, setSelectedAlvaraNames] = useState<string[]>([]);
   const [taskQuery, setTaskQuery] = useState("");
   const [taskMenuOpen, setTaskMenuOpen] = useState(false);
+  const [helpPanelOpen, setHelpPanelOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => readViewMode());
   const [detailModal, setDetailModal] = useState<{ taskId: string; column: ColumnId } | null>(
     null
   );
@@ -195,6 +223,27 @@ export default function AcompanhamentoPage() {
 
   useEffect(() => {
     setLaneMap(readLaneMap());
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, viewMode);
+    } catch {
+      /* ignore */
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key !== LANES_STORAGE_KEY || e.newValue == null) return;
+      try {
+        setLaneMap(parseLaneMapJson(e.newValue));
+      } catch {
+        // ignore
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   useEffect(() => {
@@ -224,23 +273,47 @@ export default function AcompanhamentoPage() {
     return sp.toString();
   }, [selectedYears]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) setLoading(true);
     try {
       const qs = buildQuery();
       const url = "/api/alvara-tasks" + (qs ? "?" + qs : "");
       const d = await apiJson<{ tasks: TaskRow[] }>(url);
       setTasks(d.tasks.filter((t) => t.status !== "cancelada"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao carregar tarefas");
+      if (!silent) {
+        toast.error(e instanceof Error ? e.message : "Erro ao carregar tarefas");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [buildQuery]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** Atualização em segundo plano: outra sessão, vínculo novo ou mesmo separador. */
+  useEffect(() => {
+    if (detailModal != null) return;
+    const intervalMs = 30_000;
+    const id = window.setInterval(() => {
+      void load({ silent: true });
+    }, intervalMs);
+    return () => window.clearInterval(id);
+  }, [load, detailModal]);
+
+  useEffect(() => {
+    function onVisibility() {
+      if (detailModal != null) return;
+      if (document.visibilityState === "visible") {
+        void load({ silent: true });
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [load, detailModal]);
 
   const yearOptions = useMemo(() => {
     const cy = new Date().getFullYear();
@@ -322,6 +395,14 @@ export default function AcompanhamentoPage() {
     return { pendente, andamento, concluido };
   }, [filteredTasks, laneMap]);
 
+  const getTaskUiColumn = useCallback(
+    (t: TaskRow): ColumnId => {
+      if (t.status === "concluida") return "concluido";
+      return (laneMap[t.id] ?? "pendente") === "andamento" ? "andamento" : "pendente";
+    },
+    [laneMap]
+  );
+
   async function darBaixaNoVinculo(t: TaskRow) {
     if (
       !confirm(
@@ -339,7 +420,7 @@ export default function AcompanhamentoPage() {
       delete next[t.id];
       persistLanes(next);
       toast.success("Baixa registada e vínculo atualizado");
-      void load();
+      void load({ silent: true });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     }
@@ -359,7 +440,7 @@ export default function AcompanhamentoPage() {
       delete next[t.id];
       persistLanes(next);
       toast.success("Tarefa concluída");
-      void load();
+      void load({ silent: true });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     }
@@ -372,7 +453,7 @@ export default function AcompanhamentoPage() {
         body: JSON.stringify({ status: "pendente" }),
       });
       toast.success("Tarefa reaberta");
-      void load();
+      void load({ silent: true });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     }
@@ -389,7 +470,7 @@ export default function AcompanhamentoPage() {
       delete next[t.id];
       persistLanes(next);
       toast.success("Tarefa cancelada");
-      void load();
+      void load({ silent: true });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     }
@@ -478,29 +559,190 @@ export default function AcompanhamentoPage() {
   return (
     <div className="space-y-6 text-slate-900 [color-scheme:light]">
       {/* Cabeçalho — alinhado ao portal + tom verde do modelo */}
-      <div>
-        <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight text-emerald-950">
-          <FileSignature className="h-7 w-7 text-emerald-800" aria-hidden />
-          Gestão de alvarás
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-slate-600">
-          Controle por validade e empresa. Filtre por anos, empresas e tipo de alvará. Para{" "}
-          <strong>concluir</strong> uma tarefa é necessária <strong>data de emissão</strong> no vínculo (ou use
-          «Dar baixa»). Arraste os cartões entre colunas; &quot;Em andamento&quot; é organização local.
-        </p>
-      </div>
+      <div className="space-y-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight text-emerald-950">
+            <FileSignature className="h-7 w-7 text-emerald-800" aria-hidden />
+            Gestão de alvarás
+          </h1>
+          <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+            <div
+              className="inline-flex rounded-lg border border-slate-200/90 bg-white p-0.5 shadow-sm"
+              role="group"
+              aria-label="Tipo de visualização"
+            >
+              <button
+                type="button"
+                title="Quadro Kanban"
+                aria-pressed={viewMode === "kanban"}
+                onClick={() => setViewMode("kanban")}
+                className={cn(
+                  "inline-flex h-9 w-9 items-center justify-center rounded-md transition sm:h-8 sm:w-8",
+                  viewMode === "kanban"
+                    ? "bg-emerald-800 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                )}
+              >
+                <LayoutGrid className="h-4 w-4" aria-hidden />
+              </button>
+              <button
+                type="button"
+                title="Lista"
+                aria-pressed={viewMode === "lista"}
+                onClick={() => setViewMode("lista")}
+                className={cn(
+                  "inline-flex h-9 w-9 items-center justify-center rounded-md transition sm:h-8 sm:w-8",
+                  viewMode === "lista"
+                    ? "bg-emerald-800 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                )}
+              >
+                <List className="h-4 w-4" aria-hidden />
+              </button>
+              <button
+                type="button"
+                title="Calendário"
+                aria-pressed={viewMode === "calendario"}
+                onClick={() => setViewMode("calendario")}
+                className={cn(
+                  "inline-flex h-9 w-9 items-center justify-center rounded-md transition sm:h-8 sm:w-8",
+                  viewMode === "calendario"
+                    ? "bg-emerald-800 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                )}
+              >
+                <CalendarDays className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+            <button
+              type="button"
+              id="acompanhamento-ajuda-toggle"
+              aria-expanded={helpPanelOpen}
+              aria-controls="acompanhamento-ajuda-conteudo"
+              onClick={() => setHelpPanelOpen((o) => !o)}
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-200/90 bg-white px-3 py-2 text-sm font-medium text-emerald-950 shadow-sm transition hover:bg-emerald-50/90"
+            >
+              <span>Dicas de Uso</span>
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 shrink-0 text-emerald-800 transition-transform duration-300",
+                  helpPanelOpen && "rotate-180"
+                )}
+                aria-hidden
+              />
+            </button>
+          </div>
+        </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Link
-          href="/portal/acompanhamento/geracao"
-          className="btn-primary inline-flex items-center gap-2 no-underline"
-        >
-          <Settings2 className="h-4 w-4" />
-          Geração e manutenção
-        </Link>
-        <button type="button" onClick={() => void load()} className="btn-secondary" disabled={loading}>
-          {loading ? "A atualizar…" : "Atualizar quadro"}
-        </button>
+        <div className="max-w-3xl">
+          <div
+            className={cn(
+              "grid transition-[grid-template-rows] duration-300 ease-in-out",
+              helpPanelOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+            )}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div
+                id="acompanhamento-ajuda-conteudo"
+                className="space-y-5 rounded-xl border border-emerald-200/90 bg-gradient-to-b from-emerald-50/90 to-white px-4 pb-4 pt-3 text-sm leading-relaxed text-slate-700 shadow-sm"
+              >
+                <section>
+                  <h2 className="text-base font-semibold text-slate-900">Quadro de Acompanhamento</h2>
+                  <p className="mt-2">
+                    Aqui você acompanha as tarefas geradas a partir dos alvarás das empresas.
+                  </p>
+                  <p className="mt-1.5">
+                    Veja rapidamente o que está pendente, em andamento ou concluído, sempre considerando a validade e a
+                    empresa.
+                  </p>
+                  <p className="mt-2 text-slate-600">
+                    Use os ícones ao lado de <strong className="text-slate-800">Dicas de Uso</strong> para alternar
+                    entre <strong className="text-slate-800">Kanban</strong>, <strong className="text-slate-800">lista</strong>{" "}
+                    e <strong className="text-slate-800">calendário</strong> (vencimento ou início obrigatório).
+                  </p>
+                </section>
+
+                <section>
+                  <h2 className="text-base font-semibold text-slate-900">Filtros</h2>
+                  <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-700">
+                    <li>
+                      <span className="font-medium text-slate-800">Anos:</span> considera o ano do vencimento da tarefa
+                    </li>
+                    <li>
+                      <span className="font-medium text-slate-800">Nenhum selecionado</span> → mostra todas
+                    </li>
+                    <li>
+                      <span className="font-medium text-slate-800">Vários selecionados</span> → mostra do menor ao
+                      maior ano
+                    </li>
+                    <li>
+                      <span className="font-medium text-slate-800">Empresas e Tipo de Alvará:</span> use para focar
+                      apenas no que precisa no momento
+                    </li>
+                  </ul>
+                </section>
+
+                <section>
+                  <h2 className="text-base font-semibold text-slate-900">Colunas</h2>
+                  <dl className="mt-2 space-y-3 text-slate-700">
+                    <div>
+                      <dt className="font-medium text-slate-800">Pendente</dt>
+                      <dd className="mt-0.5 pl-0 text-slate-600">Tarefas que ainda não foram iniciadas</dd>
+                    </div>
+                    <div>
+                      <dt className="font-medium text-slate-800">Em andamento</dt>
+                      <dd className="mt-0.5 text-slate-600">
+                        Use para destacar o que já está em tratamento ou com documentação em curso, à parte do que
+                        ainda não começou. É só organização no quadro: a tarefa continua{" "}
+                        <strong className="text-slate-800">pendente</strong> no sistema até passar para{" "}
+                        <strong className="text-slate-800">Concluído</strong> (ou usar «Dar baixa», quando aplicável).
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-medium text-slate-800">Concluído</dt>
+                      <dd className="mt-0.5 text-slate-600">Tarefas finalizadas</dd>
+                    </div>
+                  </dl>
+                </section>
+
+                <p className="rounded-lg bg-emerald-50/80 px-3 py-2 text-slate-700">
+                  No modo Kanban, pode arrastar os cartões entre as colunas para refletir o andamento.
+                </p>
+
+                <section>
+                  <h2 className="text-base font-semibold text-slate-900">Como concluir uma tarefa</h2>
+                  <p className="mt-2 font-medium text-slate-800">Para mover para Concluído:</p>
+                  <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-700">
+                    <li>
+                      Normalmente é preciso preencher a data de emissão no vínculo empresa–alvará
+                    </li>
+                    <li>O próprio cartão avisa se falta alguma informação</li>
+                  </ul>
+                  <p className="mt-3 font-medium text-slate-800">Se precisar encerrar sem emissão:</p>
+                  <p className="mt-1.5 text-slate-700">
+                    Use a opção &quot;Dar baixa&quot; dentro da tarefa
+                  </p>
+                </section>
+
+                <section>
+                  <h2 className="text-base font-semibold text-slate-900">Dicas rápidas</h2>
+                  <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-700">
+                    <li>As cores no Kanban, na lista e no calendário ajudam a ver prazos e estado</li>
+                    <li>
+                      O quadro atualiza sozinho em segundo plano (cerca de 30 segundos) e de novo ao voltar a este
+                      separador, para apanhar tarefas novas — por exemplo após vincular um alvará noutra página ou noutra
+                      sessão. Enquanto um card está em edição, essa atualização automática fica pausada.
+                    </li>
+                    <li>
+                      Em <strong className="text-slate-800">Configurações → Geração e manutenção</strong> pode
+                      recriar ou ajustar tarefas em massa (anos, empresas, etc.), por exemplo se tiver apagado cartões.
+                    </li>
+                  </ul>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Barra de filtros — estilo cartão do modelo */}
@@ -733,7 +975,7 @@ export default function AcompanhamentoPage() {
         </button>
       </div>
 
-      {/* Kanban */}
+      {/* Quadro: Kanban | Lista | Calendário */}
       {loading ? (
         <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-slate-500">
           <div className="flex flex-col items-center gap-3">
@@ -741,6 +983,18 @@ export default function AcompanhamentoPage() {
             <span className="text-sm">A carregar quadro…</span>
           </div>
         </div>
+      ) : viewMode === "lista" ? (
+        <AcompanhamentoListView
+          tasks={filteredTasks}
+          getUiColumn={getTaskUiColumn}
+          onOpen={(t) => onOpenTaskDetail(t.id, getTaskUiColumn(t))}
+        />
+      ) : viewMode === "calendario" ? (
+        <AcompanhamentoCalendarView
+          tasks={filteredTasks}
+          getUiColumn={getTaskUiColumn}
+          onOpen={(t) => onOpenTaskDetail(t.id, getTaskUiColumn(t))}
+        />
       ) : (
         <div className="-mx-1 flex flex-col gap-5 overflow-x-auto pb-4 md:flex-row md:items-start">
           {COLUMNS.map((col) => {
@@ -810,8 +1064,10 @@ export default function AcompanhamentoPage() {
 
       {!loading && tasks.length === 0 ? (
         <p className="text-center text-sm text-slate-500">
-          Nenhuma tarefa no período. Em <strong>Geração e manutenção</strong> pode gerar entradas com base nos
-          vínculos e nas regras dos tipos de alvará.
+          Nenhuma tarefa no período com estes filtros. As tarefas são criadas{" "}
+          <strong className="text-slate-700">automaticamente</strong> ao vincular alvarás às empresas. Se apagou
+          entradas ou precisa de manutenção em massa, use{" "}
+          <strong className="text-slate-700">Configurações → Geração e manutenção</strong> no menu lateral.
         </p>
       ) : null}
 
@@ -826,7 +1082,7 @@ export default function AcompanhamentoPage() {
         quadroColumn={detailModal?.column ?? null}
         open={detailModal != null}
         onClose={() => setDetailModal(null)}
-        onSaved={() => void load()}
+        onSaved={() => void load({ silent: true })}
       />
     </div>
   );
@@ -921,7 +1177,7 @@ function TaskCard({
       </p>
 
       <div className="mt-2 rounded-xl bg-slate-50 px-2.5 py-1.5 text-[0.7rem] text-slate-700">
-        {ca?.numero ? `📄 ${ca.numero}` : `Tipo · ${g?.name ?? "Sem grupo"}`}
+        {ca?.numero ? `📄 ${ca.numero}` : `Grupo: ${g?.name ?? "Sem grupo"}`}
       </div>
 
       <div className="mt-2 flex items-center gap-1 rounded-lg border border-slate-100 bg-white px-2 py-1.5 text-[0.7rem] font-medium text-slate-800 shadow-sm">
@@ -1043,3 +1299,4 @@ function TaskCard({
     </>
   );
 }
+

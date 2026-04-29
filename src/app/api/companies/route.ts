@@ -1,4 +1,8 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import {
+  applyCompaniesAlvaraSummarySort,
+  parseCompaniesSortParams,
+} from "@/lib/companies-list-sort";
 import { upsertCompanyByCNPJ } from "@/lib/sync-helpers";
 import { normalizeDocumentoForTipo, onlyDigits } from "@/lib/utils";
 import type { Company, CompanyCadastroTipo } from "@/types";
@@ -31,12 +35,17 @@ export async function GET(request: NextRequest) {
   const sync_status = searchParams.get("sync_status");
   const uf = searchParams.get("uf")?.trim() || null;
 
+  const arquivadasOnly =
+    searchParams.get("arquivadas") === "1" || searchParams.get("arquivadas") === "true";
+
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
   let q = supabase
     .from("companies_alvara_summary")
     .select("*", { count: "exact" });
+
+  q = arquivadasOnly ? q.not("archived_at", "is", null) : q.is("archived_at", null);
 
   if (search) {
     const digits = onlyDigits(search);
@@ -47,6 +56,7 @@ export async function GET(request: NextRequest) {
       const parts = [
         `razao_social.ilike.%${esc}%`,
         `nome_fantasia.ilike.%${esc}%`,
+        `codigo_empresa.ilike.%${esc}%`,
       ];
       const partial = onlyDigits(search);
       if (partial.length > 0) {
@@ -61,7 +71,12 @@ export async function GET(request: NextRequest) {
   if (sync_status) q = q.eq("sync_status", sync_status);
   if (uf) q = q.eq("uf", uf);
 
-  q = q.order("updated_at", { ascending: false }).range(from, to);
+  const { sort, order } = parseCompaniesSortParams(
+    searchParams.get("sort"),
+    searchParams.get("order")
+  );
+  q = applyCompaniesAlvaraSummarySort(q, sort, order);
+  q = q.range(from, to);
 
   const { data, error, count } = await q;
 
@@ -103,6 +118,7 @@ export async function POST(request: NextRequest) {
     cep?: string | null;
     telefone?: string | null;
     email?: string | null;
+    codigo_empresa?: string | null;
   };
   try {
     body = await request.json();
@@ -140,6 +156,14 @@ export async function POST(request: NextRequest) {
     cep: body.cep?.trim() ? onlyDigits(body.cep).slice(0, 8) || null : null,
     telefone: body.telefone?.trim() || null,
     email: body.email?.trim() || null,
+    ...(Object.prototype.hasOwnProperty.call(body, "codigo_empresa")
+      ? {
+          codigo_empresa:
+            typeof body.codigo_empresa === "string"
+              ? body.codigo_empresa.trim().slice(0, 80) || null
+              : null,
+        }
+      : {}),
     sync_status: sincronizar ? "pending" : "manual",
     sync_error: null,
     updated_at: new Date().toISOString(),

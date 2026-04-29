@@ -16,14 +16,19 @@ export async function GET(request: NextRequest) {
   const until = in30.toISOString().slice(0, 10);
 
   const [r0, r1, r2, r3, r4, r5] = await Promise.all([
-    supabase.from("companies").select("id", { count: "exact", head: true }),
     supabase
       .from("companies")
       .select("id", { count: "exact", head: true })
+      .is("archived_at", null),
+    supabase
+      .from("companies")
+      .select("id", { count: "exact", head: true })
+      .is("archived_at", null)
       .ilike("situacao_cadastral", "ATIVA"),
     supabase
       .from("companies")
       .select("id", { count: "exact", head: true })
+      .is("archived_at", null)
       .eq("sync_status", "pending"),
     supabase.from("alvaras").select("id", { count: "exact", head: true }),
     supabase
@@ -54,10 +59,11 @@ export async function GET(request: NextRequest) {
       numero,
       data_vencimento,
       status,
-      companies ( id, cnpj, razao_social, nome_fantasia ),
+      companies!inner ( id, cnpj, razao_social, nome_fantasia ),
       alvaras ( id, name, group_id )
     `
     )
+    .is("companies.archived_at", null)
     .not("data_vencimento", "is", null)
     .gte("data_vencimento", today)
     .lte("data_vencimento", until)

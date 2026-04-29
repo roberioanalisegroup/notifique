@@ -62,7 +62,6 @@ const items: Item[] = [
     label: "Acompanhamento",
     icon: <CalendarCheck className="h-5 w-5 shrink-0" />,
     parentNavigates: true,
-    children: [{ href: "/portal/acompanhamento/geracao", label: "Geração e manutenção" }],
   },
   {
     id: "empresas",
@@ -91,6 +90,7 @@ const items: Item[] = [
     children: [
       { href: "/portal/configuracoes/sincronizacao", label: "Sincronização" },
       { href: "/portal/configuracoes/usuarios", label: "Usuários" },
+      { href: "/portal/acompanhamento/geracao", label: "Geração e manutenção" },
     ],
   },
 ];

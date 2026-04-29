@@ -8,11 +8,18 @@ import {
   formatCurrency,
   formatDate,
 } from "@/lib/utils";
-import type { Alvara, AlvaraGroup, Company, CompanyAlvara } from "@/types";
+import type {
+  Alvara,
+  AlvaraGroup,
+  Company,
+  CompanyAlvara,
+  CompanyHistoryEvent,
+  CompanyHistoryEventType,
+} from "@/types";
 import { differenceInCalendarDays } from "date-fns";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type LinkRow = CompanyAlvara & {
@@ -57,6 +64,42 @@ function boolLabel(v: boolean | null | undefined): string {
   return "—";
 }
 
+function formatHistoryDt(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+const COMPANY_HISTORY_EVENT_LABEL: Record<CompanyHistoryEventType, string> = {
+  cadastro_sync: "Cadastro (Receita)",
+  arquivamento: "Arquivamento",
+  restauracao: "Restauração",
+  tarefa_vinculada: "Tarefa vinculada",
+  tarefa_desvinculada: "Tarefa desvinculada",
+  tarefa_atualizada: "Vínculo atualizado",
+  codigo_empresa_atualizado: "Código da empresa",
+};
+
+function companyHistoryEventBadgeClass(t: CompanyHistoryEventType): string {
+  const m: Record<CompanyHistoryEventType, string> = {
+    cadastro_sync: "bg-sky-100 text-sky-900",
+    arquivamento: "bg-amber-100 text-amber-950",
+    restauracao: "bg-emerald-100 text-emerald-900",
+    tarefa_vinculada: "bg-violet-100 text-violet-900",
+    tarefa_desvinculada: "bg-red-100 text-red-900",
+    tarefa_atualizada: "bg-slate-200 text-slate-800",
+    codigo_empresa_atualizado: "bg-teal-100 text-teal-900",
+  };
+  return m[t] ?? "bg-slate-100 text-slate-800";
+}
+
 function InfoCard({
   title,
   children,
@@ -86,11 +129,19 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 export default function EmpresaPerfilPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [tab, setTab] = useState<"dados" | "alvaras">("dados");
+  const [tab, setTab] = useState<"dados" | "alvaras" | "historico">("dados");
+  const [historyRows, setHistoryRows] = useState<CompanyHistoryEvent[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
+  /** Intervalo de datas (`YYYY-MM-DD`); vazio = sem limite nesse extremo. */
+  const [historyDateFrom, setHistoryDateFrom] = useState("");
+  const [historyDateTo, setHistoryDateTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [company, setCompany] = useState<Company | null>(null);
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [codigoEmpresaDraft, setCodigoEmpresaDraft] = useState("");
+  const [codigoEmpresaSaving, setCodigoEmpresaSaving] = useState(false);
   const [vinc, setVinc] = useState({
     open: false,
     groupIds: [] as string[],
@@ -107,6 +158,11 @@ export default function EmpresaPerfilPage() {
   >({});
   const [groupAlvaraSelected, setGroupAlvaraSelected] = useState<Record<string, string[]>>({});
   const [editing, setEditing] = useState<LinkRow | null>(null);
+  /** Seleção na tabela de vínculos (aba Alvarás) — mesmo padrão da lista de empresas. */
+  const [selectedLinkIds, setSelectedLinkIds] = useState<Record<string, true>>({});
+  const [bulkUnlinking, setBulkUnlinking] = useState(false);
+  const [bulkBarLeftPx, setBulkBarLeftPx] = useState<number | undefined>(undefined);
+  const linkHeaderSelectRef = useRef<HTMLInputElement>(null);
   const groupIdsRef = useRef(vinc.groupIds);
   groupIdsRef.current = vinc.groupIds;
 
@@ -134,6 +190,135 @@ export default function EmpresaPerfilPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setSelectedLinkIds({});
+    setHistorySearch("");
+    setHistoryDateFrom("");
+    setHistoryDateTo("");
+  }, [id]);
+
+  useEffect(() => {
+    if (tab !== "alvaras") setSelectedLinkIds({});
+  }, [tab]);
+
+  useEffect(() => {
+    setSelectedLinkIds((prev) => {
+      const next: Record<string, true> = {};
+      for (const lid of Object.keys(prev)) {
+        if (links.some((l) => l.id === lid)) next[lid] = true;
+      }
+      return next;
+    });
+  }, [links]);
+
+  useEffect(() => {
+    const el = linkHeaderSelectRef.current;
+    if (!el) return;
+    const all = links.length > 0 && links.every((l) => !!selectedLinkIds[l.id]);
+    const some = links.some((l) => !!selectedLinkIds[l.id]);
+    el.indeterminate = some && !all;
+  }, [links, selectedLinkIds]);
+
+  useEffect(() => {
+    const aside = document.getElementById("portal-sidebar");
+    if (!aside || typeof ResizeObserver === "undefined") {
+      setBulkBarLeftPx(undefined);
+      return;
+    }
+    const mq = window.matchMedia("(min-width: 768px)");
+    const apply = () => {
+      if (!mq.matches) {
+        setBulkBarLeftPx(undefined);
+        return;
+      }
+      setBulkBarLeftPx(Math.round(aside.getBoundingClientRect().width));
+    };
+    const ro = new ResizeObserver(apply);
+    ro.observe(aside);
+    mq.addEventListener("change", apply);
+    apply();
+    return () => {
+      ro.disconnect();
+      mq.removeEventListener("change", apply);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (company) setCodigoEmpresaDraft((company.codigo_empresa ?? "").trim());
+  }, [company?.id, company?.codigo_empresa]);
+
+  useEffect(() => {
+    if (tab !== "historico" || !id) return;
+    let cancelled = false;
+    (async () => {
+      setHistoryLoading(true);
+      try {
+        const d = await apiJson<{ events: CompanyHistoryEvent[] }>(
+          "/api/companies/" + id + "/historico"
+        );
+        if (!cancelled) setHistoryRows(d.events ?? []);
+      } catch {
+        if (!cancelled) {
+          setHistoryRows([]);
+          toast.error("Não foi possível carregar o histórico.");
+        }
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, id]);
+
+  const historyFiltered = useMemo(() => {
+    const q = historySearch.trim().toLowerCase();
+
+    let fromDay = historyDateFrom.trim();
+    let toDay = historyDateTo.trim();
+    if (fromDay && toDay && fromDay > toDay) {
+      [fromDay, toDay] = [toDay, fromDay];
+    }
+
+    let fromMs: number | null = null;
+    let toMs: number | null = null;
+    if (fromDay) {
+      const [y, m, d] = fromDay.split("-").map(Number);
+      if (y && m && d) {
+        fromMs = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+      }
+    }
+    if (toDay) {
+      const [y, m, d] = toDay.split("-").map(Number);
+      if (y && m && d) {
+        toMs = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+      }
+    }
+
+    return historyRows.filter((ev) => {
+      const t = new Date(ev.created_at).getTime();
+      if (fromMs != null && !Number.isNaN(t) && t < fromMs) return false;
+      if (toMs != null && !Number.isNaN(t) && t > toMs) return false;
+
+      if (!q) return true;
+      const meta =
+        ev.metadata && typeof ev.metadata === "object"
+          ? JSON.stringify(ev.metadata as Record<string, unknown>)
+          : "";
+      const haystack = [
+        ev.summary,
+        COMPANY_HISTORY_EVENT_LABEL[ev.event_type],
+        ev.actor_display_name ?? "",
+        formatHistoryDt(ev.created_at),
+        ev.created_at,
+        meta,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [historyRows, historySearch, historyDateFrom, historyDateTo]);
 
   useEffect(() => {
     (async () => {
@@ -170,7 +355,7 @@ export default function EmpresaPerfilPage() {
   }, [vinc.open, editing]);
 
   async function refreshSync() {
-    if (!company) return;
+    if (!company || company.archived_at) return;
     const cnpj14 =
       company.cnpj ??
       (company.numero_documento?.length === 14 ? company.numero_documento : null);
@@ -198,20 +383,65 @@ export default function EmpresaPerfilPage() {
     }
   }
 
-  async function removeCompany() {
+  async function archiveCompany() {
     if (!id) return;
-    if (!confirm("Excluir esta empresa? Os vínculos de alvarás serão removidos.")) return;
+    if (
+      !confirm(
+        "Arquivar esta empresa? Ela sai da lista principal; o histórico de vínculos e alvarás é mantido."
+      )
+    )
+      return;
     try {
-      await apiFetch("/api/companies/" + id, { method: "DELETE" });
-      toast.success("Empresa removida");
+      await apiJson("/api/companies/" + id, {
+        method: "PATCH",
+        body: JSON.stringify({ archived: true }),
+      });
+      toast.success("Empresa arquivada");
       router.push("/portal/empresas");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     }
   }
 
-  async function saveVinc() {
+  async function restoreCompany() {
     if (!id) return;
+    try {
+      await apiJson("/api/companies/" + id, {
+        method: "PATCH",
+        body: JSON.stringify({ archived: false }),
+      });
+      toast.success("Empresa restaurada à lista principal");
+      void load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    }
+  }
+
+  async function saveCodigoEmpresa() {
+    if (!id || !company || company.archived_at) return;
+    const next = codigoEmpresaDraft.trim().slice(0, 80);
+    const cur = (company.codigo_empresa ?? "").trim();
+    if (next === cur) return;
+    setCodigoEmpresaSaving(true);
+    try {
+      await apiJson("/api/companies/" + id, {
+        method: "PATCH",
+        body: JSON.stringify({ codigo_empresa: next || null }),
+      });
+      toast.success("Código da empresa atualizado");
+      void load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setCodigoEmpresaSaving(false);
+    }
+  }
+
+  async function saveVinc() {
+    if (!id || company?.archived_at) {
+      if (company?.archived_at) toast.error("Restaure a empresa para alterar vínculos.");
+      return;
+    }
     const obs = vinc.observacoes.trim() || null;
     try {
       if (editing) {
@@ -370,13 +600,90 @@ export default function EmpresaPerfilPage() {
   }
 
   async function unlink(row: LinkRow) {
+    if (company?.archived_at) {
+      toast.error("Restaure a empresa para alterar vínculos.");
+      return;
+    }
     if (!confirm("Desvincular este alvará?")) return;
     try {
       await apiFetch("/api/company-alvaras/" + row.id, { method: "DELETE" });
       toast.success("Desvinculado");
+      setSelectedLinkIds((p) => {
+        const n = { ...p };
+        delete n[row.id];
+        return n;
+      });
       void load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
+    }
+  }
+
+  const linkSelectCount = Object.keys(selectedLinkIds).length;
+  const allLinksSelected = links.length > 0 && links.every((l) => !!selectedLinkIds[l.id]);
+
+  function toggleLinkRowSelect(linkId: string) {
+    setSelectedLinkIds((p) => {
+      const n = { ...p };
+      if (n[linkId]) delete n[linkId];
+      else n[linkId] = true;
+      return n;
+    });
+  }
+
+  function toggleSelectAllLinksOnPage() {
+    if (allLinksSelected) {
+      setSelectedLinkIds({});
+      return;
+    }
+    setSelectedLinkIds(
+      Object.fromEntries(links.map((l) => [l.id, true])) as Record<string, true>
+    );
+  }
+
+  async function bulkUnlinkSelected() {
+    if (company?.archived_at) {
+      toast.error("Restaure a empresa para alterar vínculos.");
+      return;
+    }
+    const ids = Object.keys(selectedLinkIds);
+    if (ids.length === 0) return;
+    if (
+      !confirm(
+        ids.length === 1
+          ? "Desvincular o alvará selecionado?"
+          : `Desvincular ${ids.length} alvarás selecionados?`
+      )
+    ) {
+      return;
+    }
+    setBulkUnlinking(true);
+    let ok = 0;
+    let fail = 0;
+    let firstErr = "";
+    try {
+      for (const linkId of ids) {
+        try {
+          await apiFetch("/api/company-alvaras/" + linkId, { method: "DELETE" });
+          ok++;
+        } catch (e) {
+          fail++;
+          if (!firstErr) {
+            firstErr = e instanceof Error ? e.message : "Erro";
+          }
+        }
+      }
+      if (firstErr) toast.error(firstErr);
+      if (ok > 0) {
+        toast.success(
+          (ok === 1 ? "Desvinculado." : `${ok} vínculos removidos.`) +
+            (fail > 0 ? ` ${fail} falha(s).` : "")
+        );
+      }
+      setSelectedLinkIds({});
+      void load();
+    } finally {
+      setBulkUnlinking(false);
     }
   }
 
@@ -409,7 +716,12 @@ export default function EmpresaPerfilPage() {
     vinc.groupIds.some((gid) => groupAlvaraLists[gid] === undefined);
 
   return (
-    <div className="space-y-6 text-slate-900 [color-scheme:light]">
+    <div
+      className={cn(
+        "space-y-6 text-slate-900 [color-scheme:light]",
+        tab === "alvaras" && linkSelectCount > 0 && "pb-28"
+      )}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <Link href="/portal/empresas" className="text-sm font-medium text-blue-600 hover:text-blue-700">
@@ -428,28 +740,47 @@ export default function EmpresaPerfilPage() {
           <p className="text-xs text-slate-500">{cadastroTipoLabel(tipoCad)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={refreshSync}
-            disabled={syncing || !podeSincronizarReceita}
-            className="btn-secondary disabled:opacity-50"
-            title={
-              !podeSincronizarReceita
-                ? "Disponível apenas para CNPJ ou MEI com 14 dígitos"
-                : undefined
-            }
-          >
-            {syncing ? "Atualizando…" : "Atualizar dados (Receita)"}
-          </button>
-          <button
-            type="button"
-            onClick={removeCompany}
-            className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-800 shadow-sm transition hover:bg-red-100"
-          >
-            Excluir
-          </button>
+          {company.archived_at ? (
+            <button type="button" onClick={() => void restoreCompany()} className="btn-primary">
+              Restaurar empresa
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={refreshSync}
+                disabled={syncing || !podeSincronizarReceita}
+                className="btn-secondary disabled:opacity-50"
+                title={
+                  !podeSincronizarReceita
+                    ? "Disponível apenas para CNPJ ou MEI com 14 dígitos"
+                    : undefined
+                }
+              >
+                {syncing ? "Atualizando…" : "Atualizar dados (Receita)"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void archiveCompany()}
+                className="inline-flex items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-950 shadow-sm transition hover:bg-amber-100"
+              >
+                Arquivar
+              </button>
+            </>
+          )}
         </div>
       </div>
+      {company.archived_at ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-medium">Empresa arquivada.</p>
+          <p className="mt-1 text-amber-900/85">
+            Não aparece na lista principal. O histórico de alvarás é mantido.{" "}
+            <Link href="/portal/empresas/arquivadas" className="font-medium text-amber-900 underline">
+              Lista de arquivadas
+            </Link>
+          </p>
+        </div>
+      ) : null}
       <div className="flex gap-1 border-b border-slate-200">
         <button
           type="button"
@@ -475,6 +806,18 @@ export default function EmpresaPerfilPage() {
         >
           Alvarás
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("historico")}
+          className={
+            "border-b-2 px-3 py-2.5 text-sm transition-colors " +
+            (tab === "historico"
+              ? "border-blue-600 font-medium text-slate-900"
+              : "border-transparent text-slate-500 hover:text-slate-700")
+          }
+        >
+          Histórico
+        </button>
       </div>
       {tab === "dados" && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -488,6 +831,33 @@ export default function EmpresaPerfilPage() {
                   company.cnpj
                 )}
               </span>
+            </InfoRow>
+            <InfoRow label="Código da empresa (interno)">
+              {company.archived_at ? (
+                <span className="font-mono text-slate-900">
+                  {company.codigo_empresa?.trim() ? company.codigo_empresa.trim() : "—"}
+                </span>
+              ) : (
+                <div className="flex max-w-md flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    type="text"
+                    className="input-field min-w-0 flex-1 font-mono"
+                    value={codigoEmpresaDraft}
+                    onChange={(e) => setCodigoEmpresaDraft(e.target.value.slice(0, 80))}
+                    placeholder="Opcional — referência interna"
+                    maxLength={80}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary shrink-0"
+                    disabled={codigoEmpresaSaving}
+                    onClick={() => void saveCodigoEmpresa()}
+                  >
+                    {codigoEmpresaSaving ? "A guardar…" : "Guardar código"}
+                  </button>
+                </div>
+              )}
             </InfoRow>
             <InfoRow label="Razão social">{company.razao_social ?? "—"}</InfoRow>
             <InfoRow label="Nome fantasia">{company.nome_fantasia ?? "—"}</InfoRow>
@@ -585,6 +955,10 @@ export default function EmpresaPerfilPage() {
           <button
             type="button"
             onClick={() => {
+              if (company.archived_at) {
+                toast.error("Restaure a empresa para vincular alvarás.");
+                return;
+              }
               setEditing(null);
               resetVincModalFields();
               setVinc({
@@ -594,7 +968,8 @@ export default function EmpresaPerfilPage() {
                 observacoes: "",
               });
             }}
-            className="btn-primary"
+            className="btn-primary disabled:opacity-50"
+            disabled={!!company.archived_at}
           >
             Vincular alvará
           </button>
@@ -603,6 +978,17 @@ export default function EmpresaPerfilPage() {
               <table className="table-portal min-w-[800px]">
                 <thead>
                   <tr>
+                    <th className="w-10 px-2 py-2.5 align-middle" aria-label="Selecionar">
+                      <input
+                        ref={linkHeaderSelectRef}
+                        type="checkbox"
+                        className="mx-auto block h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30 disabled:opacity-40"
+                        checked={allLinksSelected && links.length > 0}
+                        disabled={!!company.archived_at || links.length === 0}
+                        onChange={toggleSelectAllLinksOnPage}
+                        title="Selecionar todos na lista"
+                      />
+                    </th>
                     <th>Alvará / Grupo</th>
                     <th>Nº</th>
                     <th>Emissão</th>
@@ -624,6 +1010,16 @@ export default function EmpresaPerfilPage() {
                           : "";
                     return (
                       <tr key={row.id} className={warn || undefined}>
+                        <td className="w-10 px-2 py-2.5 align-middle">
+                          <input
+                            type="checkbox"
+                            className="mx-auto block h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30 disabled:opacity-40"
+                            checked={!!selectedLinkIds[row.id]}
+                            disabled={!!company.archived_at}
+                            onChange={() => toggleLinkRowSelect(row.id)}
+                            aria-label={"Selecionar " + row.alvaras.name}
+                          />
+                        </td>
                         <td className="font-medium text-slate-900">
                           {row.alvaras.name}
                           <br />
@@ -643,8 +1039,13 @@ export default function EmpresaPerfilPage() {
                         <td className="space-x-2">
                           <button
                             type="button"
-                            className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                            className="text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40"
+                            disabled={!!company.archived_at}
                           onClick={() => {
+                              if (company.archived_at) {
+                                toast.error("Restaure a empresa para editar vínculos.");
+                                return;
+                              }
                             setEditing(row);
                             setVinc({
                               open: true,
@@ -658,7 +1059,8 @@ export default function EmpresaPerfilPage() {
                           </button>
                           <button
                             type="button"
-                            className="text-sm font-medium text-red-600 hover:text-red-700"
+                            className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-40"
+                            disabled={!!company.archived_at}
                             onClick={() => void unlink(row)}
                           >
                             Desvincular
@@ -669,7 +1071,7 @@ export default function EmpresaPerfilPage() {
                   })}
                   {links.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-10 text-center text-slate-500">
+                      <td colSpan={8} className="py-10 text-center text-slate-500">
                         Nenhum alvará vinculado
                       </td>
                     </tr>
@@ -678,6 +1080,181 @@ export default function EmpresaPerfilPage() {
               </table>
             </div>
           </div>
+        </div>
+      )}
+      {tab === "historico" && (
+        <div className="card-portal p-4 sm:p-5">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Registo de alterações
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Sincronização do cadastro com a Receita, arquivamento, restauração e alterações aos
+            vínculos de tarefas (incluir, editar ou remover).
+          </p>
+          {!historyLoading && historyRows.length > 0 ? (
+            <div className="mt-4 space-y-4">
+              <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label htmlFor="historico-search" className="form-label mb-1.5 block">
+                    Texto
+                  </label>
+                  <input
+                    id="historico-search"
+                    type="search"
+                    value={historySearch}
+                    onChange={(e) => setHistorySearch(e.target.value)}
+                    placeholder="Resumo, tipo de evento, utilizador, CNPJ em metadados…"
+                    className="input-field w-full"
+                    autoComplete="off"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="historico-de" className="form-label mb-1.5 block">
+                    Data inicial
+                  </label>
+                  <input
+                    id="historico-de"
+                    type="date"
+                    value={historyDateFrom}
+                    max={historyDateTo || undefined}
+                    onChange={(e) => setHistoryDateFrom(e.target.value)}
+                    className="input-field w-full font-mono text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="historico-ate" className="form-label mb-1.5 block">
+                    Data final
+                  </label>
+                  <input
+                    id="historico-ate"
+                    type="date"
+                    value={historyDateTo}
+                    min={historyDateFrom || undefined}
+                    onChange={(e) => setHistoryDateTo(e.target.value)}
+                    className="input-field w-full font-mono text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex max-w-3xl flex-wrap items-center gap-x-3 gap-y-2">
+                <p className="text-xs text-slate-500">
+                  {(() => {
+                    const hasF =
+                      historySearch.trim() !== "" ||
+                      historyDateFrom.trim() !== "" ||
+                      historyDateTo.trim() !== "";
+                    if (!hasF) {
+                      return `${historyRows.length} evento(s).`;
+                    }
+                    if (historyFiltered.length === historyRows.length) {
+                      return `${historyRows.length} evento(s) correspondem aos filtros.`;
+                    }
+                    return `${historyFiltered.length} de ${historyRows.length} evento(s) com os filtros atuais.`;
+                  })()}
+                </p>
+                {(historySearch.trim() !== "" ||
+                  historyDateFrom.trim() !== "" ||
+                  historyDateTo.trim() !== "") && (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-blue-600 underline decoration-blue-200 underline-offset-2 hover:text-blue-800"
+                    onClick={() => {
+                      setHistorySearch("");
+                      setHistoryDateFrom("");
+                      setHistoryDateTo("");
+                    }}
+                  >
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
+              {historyDateFrom.trim() !== "" &&
+              historyDateTo.trim() !== "" &&
+              historyDateFrom.trim() > historyDateTo.trim() ? (
+                <p className="max-w-3xl text-xs text-amber-800">
+                  A data inicial é posterior à final: o intervalo foi invertido automaticamente na
+                  filtragem.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {historyLoading ? (
+            <p className="mt-6 text-sm text-slate-500">A carregar…</p>
+          ) : historyRows.length === 0 ? (
+            <p className="mt-6 text-sm text-slate-500">Nenhum evento registado ainda.</p>
+          ) : historyFiltered.length === 0 ? (
+            <p className="mt-6 text-sm text-slate-500">
+              Nenhum evento corresponde aos filtros
+              {historySearch.trim() !== "" ? (
+                <>
+                  {" "}
+                  (texto «{historySearch.trim()}»
+                  {historyDateFrom.trim() !== "" || historyDateTo.trim() !== ""
+                    ? "; datas aplicadas"
+                    : ""}
+                  )
+                </>
+              ) : historyDateFrom.trim() !== "" || historyDateTo.trim() !== "" ? (
+                <> (intervalo de datas)</>
+              ) : null}
+              .{" "}
+              <button
+                type="button"
+                className="font-medium text-blue-600 hover:text-blue-700"
+                onClick={() => {
+                  setHistorySearch("");
+                  setHistoryDateFrom("");
+                  setHistoryDateTo("");
+                }}
+              >
+                Limpar filtros
+              </button>
+            </p>
+          ) : (
+            <ul className="mt-6 divide-y divide-slate-100">
+              {historyFiltered.map((ev) => (
+                <li key={ev.id} className="py-4 first:pt-0">
+                  <div className="flex flex-wrap items-center gap-2 gap-y-1">
+                    <span
+                      className={
+                        "inline-flex rounded-md px-2 py-0.5 text-xs font-medium " +
+                        companyHistoryEventBadgeClass(ev.event_type)
+                      }
+                    >
+                      {COMPANY_HISTORY_EVENT_LABEL[ev.event_type]}
+                    </span>
+                    <time
+                      className="text-xs tabular-nums text-slate-500"
+                      dateTime={ev.created_at}
+                    >
+                      {formatHistoryDt(ev.created_at)}
+                    </time>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-800">{ev.summary}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {ev.actor_user_id ? (
+                      <>
+                        Alterado por:{" "}
+                        <span className="font-medium text-slate-700">
+                          {ev.actor_display_name &&
+                          ev.actor_display_name.trim() &&
+                          ev.actor_display_name !== "—"
+                            ? ev.actor_display_name
+                            : "Nome indisponível"}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        Alterado por:{" "}
+                        <span className="font-medium text-slate-600">
+                          sistema ou conta de serviço (sem utilizador associado)
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       {vinc.open && (
@@ -865,6 +1442,45 @@ export default function EmpresaPerfilPage() {
           </div>
         </div>
       )}
+
+      {tab === "alvaras" && linkSelectCount > 0 ? (
+        <div
+          className={cn(
+            "fixed bottom-0 right-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur supports-[backdrop-filter]:bg-white/80",
+            bulkBarLeftPx === undefined && "left-0"
+          )}
+          style={bulkBarLeftPx != null ? { left: bulkBarLeftPx } : undefined}
+        >
+          <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="min-w-0 text-sm font-medium text-slate-800">
+                <span className="break-words">
+                  {linkSelectCount}{" "}
+                  {linkSelectCount === 1 ? "vínculo selecionado" : "vínculos selecionados"}
+                </span>
+              </span>
+              <button
+                type="button"
+                className="text-sm font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+                disabled={bulkUnlinking}
+                onClick={() => setSelectedLinkIds({})}
+              >
+                Limpar seleção
+              </button>
+            </div>
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-900 shadow-sm hover:bg-red-100 disabled:opacity-50"
+                disabled={bulkUnlinking || !!company.archived_at}
+                onClick={() => void bulkUnlinkSelected()}
+              >
+                {bulkUnlinking ? "A desvincular…" : "Desvincular selecionados"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

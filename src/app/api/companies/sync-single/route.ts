@@ -1,5 +1,7 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { logCompanyHistory } from "@/lib/company-history";
 import { upsertCompanyByCNPJ } from "@/lib/sync-helpers";
+import { onlyDigits } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -25,6 +27,17 @@ export async function POST(request: NextRequest) {
       { error, notFound, company: null },
       { status: notFound ? 404 : 502 }
     );
+  }
+
+  if (company?.id) {
+    const actorUserId = auth.isServiceRole ? null : auth.userId;
+    await logCompanyHistory(supabase, {
+      companyId: company.id,
+      eventType: "cadastro_sync",
+      summary: "Dados do cadastro atualizados a partir da Receita Federal (BrasilAPI).",
+      metadata: { cnpj: onlyDigits(cnpj) },
+      actorUserId,
+    });
   }
 
   return NextResponse.json({ company, error: null, notFound: false });

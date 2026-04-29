@@ -1,13 +1,18 @@
 "use client";
 
 import { apiFetch } from "@/lib/api-client";
-import { extractCnpjFromRow, parseCsvBestScore, scoreRowsWithValidCnpj } from "@/lib/csv-import";
+import {
+  extractCnpjFromRow,
+  extractCodigoEmpresaFromRow,
+  parseCsvBestScore,
+  scoreRowsWithValidCnpj,
+} from "@/lib/csv-import";
 import { cleanCNPJ } from "@/lib/utils";
 import Link from "next/link";
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 
-type Preview = { valid: string[]; invalid: string[]; rows: number };
+type Preview = { valid: string[]; invalid: string[]; rows: number; comCodigo: number };
 
 export default function ImportarPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -32,6 +37,7 @@ export default function ImportarPage() {
       const valid: string[] = [];
       const invalid: string[] = [];
       const seen = new Set<string>();
+      let comCodigo = 0;
       for (const row of p.data) {
         const raw = extractCnpjFromRow(row);
         if (!raw) continue;
@@ -40,12 +46,15 @@ export default function ImportarPage() {
           if (!seen.has(c)) {
             seen.add(c);
             valid.push(c);
+            if (extractCodigoEmpresaFromRow(row).trim() !== "") {
+              comCodigo += 1;
+            }
           }
         } else {
           invalid.push(raw);
         }
       }
-      setPreview({ valid, invalid, rows: p.data.length });
+      setPreview({ valid, invalid, rows: p.data.length, comCodigo });
     };
     reader.readAsText(f);
   }, []);
@@ -145,19 +154,22 @@ export default function ImportarPage() {
         </Link>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900">Importar empresas (CSV)</h1>
         <p className="mt-0.5 text-sm text-slate-500">
-          Coluna obrigatória: <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">cnpj</code>
+          Coluna obrigatória:{" "}
+          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">cnpj</code>. Opcional:{" "}
+          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">codigo_empresa</code> (pode
+          ficar vazio para preencher depois no perfil).
         </p>
       </div>
 
       <div className="card-portal p-4 sm:p-5">
         <p className="form-label mb-2">Formato esperado</p>
         <pre className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 font-mono text-xs text-slate-800">
-          {`cnpj
-12.345.678/0001-90
-98.765.432/0001-10`}
+          {`cnpj,codigo_empresa
+12.345.678/0001-90,LOJA-01
+98.765.432/0001-10,`}
         </pre>
         <a
-          href="data:text/csv;charset=utf-8,cnpj%0A00.000.000%2F0001-91%0A"
+          href="data:text/csv;charset=utf-8,cnpj%2Ccodigo_empresa%0A00.000.000%2F0001-91%2C%0A"
           download="exemplo-empresas.csv"
           className="mt-3 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
         >
@@ -192,7 +204,8 @@ export default function ImportarPage() {
       {preview && (
         <div className="card-portal p-4 text-sm text-slate-700 sm:p-5">
           <p>
-            Linhas: {preview.rows} · Válidos: {preview.valid.length} · Inválidos: {preview.invalid.length}
+            Linhas: {preview.rows} · CNPJs únicos válidos: {preview.valid.length} · Com código no
+            ficheiro: {preview.comCodigo} · Inválidos: {preview.invalid.length}
           </p>
           {preview.invalid.length > 0 && (
             <p className="mt-2 text-amber-800">

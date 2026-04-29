@@ -70,6 +70,40 @@ export function extractCnpjFromRow(row: CsvImportRow): string {
   return firstCellLookingLikeCnpj(row);
 }
 
+/**
+ * Código interno da empresa (opcional no CSV).
+ * Aceita colunas comuns (com ou sem acento no cabeçalho após trim/toLowerCase do Papa).
+ */
+export function extractCodigoEmpresaFromRow(row: CsvImportRow): string {
+  const directKeys = [
+    "codigo_empresa",
+    "código_empresa",
+    "codigo da empresa",
+    "código da empresa",
+    "codigo",
+    "código",
+    "empresa_codigo",
+    "code",
+  ];
+  for (const k of directKeys) {
+    const v = row[k]?.toString().trim();
+    if (v) return v.slice(0, 80);
+  }
+  for (const [key, val] of Object.entries(row)) {
+    const lk = String(key).trim().toLowerCase().replace(/\s+/g, " ");
+    if (
+      lk === "codigo empresa" ||
+      lk === "código empresa" ||
+      lk === "codigo interno" ||
+      lk === "código interno"
+    ) {
+      const t = String(val ?? "").trim();
+      if (t) return t.slice(0, 80);
+    }
+  }
+  return "";
+}
+
 export function scoreRowsWithValidCnpj(data: CsvImportRow[]): number {
   let n = 0;
   for (const row of data) {

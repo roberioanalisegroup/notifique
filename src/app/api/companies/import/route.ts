@@ -2,16 +2,16 @@ import { getSupabaseForRequest } from "@/lib/api-auth";
 import { CNPJ_BATCH_DELAY_MS, sleep } from "@/lib/cnpj-service";
 import {
   extractCnpjFromRow,
+  extractCodigoEmpresaFromRow,
   parseCsvBestScore,
   scoreRowsWithValidCnpj,
   stripBomAndNormalizeNewlines,
-  type CsvImportRow,
 } from "@/lib/csv-import";
 import { upsertCompanyByCNPJ } from "@/lib/sync-helpers";
 import { cleanCNPJ } from "@/lib/utils";
 import { NextRequest } from "next/server";
 
-type ImportRow = CsvImportRow;
+type ImportPair = { cnpj: string; codigo_empresa: string | null };
 
 export async function POST(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   const parsed = parseCsvBestScore(text, scoreRowsWithValidCnpj);
 
   const seen = new Set<string>();
-  const cnpjList: string[] = [];
+  const pairs: ImportPair[] = [];
   const invalid: string[] = [];
 
   for (const row of parsed.data) {
@@ -44,11 +44,13 @@ export async function POST(request: NextRequest) {
     }
     if (seen.has(c)) continue;
     seen.add(c);
-    cnpjList.push(c);
+    const codRaw = extractCodigoEmpresaFromRow(row);
+    const codigo_empresa = codRaw.trim() === "" ? null : codRaw.trim().slice(0, 80);
+    pairs.push({ cnpj: c, codigo_empresa });
   }
 
   const trimmed = stripBomAndNormalizeNewlines(text).trim();
-  if (cnpjList.length === 0 && trimmed.length > 0) {
+  if (pairs.length === 0 && trimmed.length > 0) {
     return new Response(
       JSON.stringify({
         error:
@@ -75,7 +77,7 @@ export async function POST(request: NextRequest) {
       let duplicates = 0;
       const errors: string[] = [];
 
-      for (const cnpj of cnpjList) {
+      for (const { cnpj, codigo_empresa } of pairs) {
         const { data: existing } = await supabase
           .from("companies")
           .select("id, numero_documento")
@@ -85,14 +87,19 @@ export async function POST(request: NextRequest) {
         if (existing) {
           duplicates += 1;
         } else {
+          const insertRow: Record<string, unknown> = {
+            cadastro_tipo: "cnpj",
+            numero_documento: cnpj,
+            cnpj,
+            sync_status: "pending",
+          };
+          if (codigo_empresa != null) {
+            insertRow.codigo_empresa = codigo_empresa;
+          }
+
           const { data: ins, error: insErr } = await supabase
             .from("companies")
-            .insert({
-              cadastro_tipo: "cnpj",
-              numero_documento: cnpj,
-              cnpj,
-              sync_status: "pending",
-            })
+            .insert(insertRow)
             .select("id, cnpj")
             .single();
 
@@ -109,7 +116,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const toSync = cnpjList;
+      const toSync = pairs.map((p) => p.cnpj);
       for (let i = 0; i < toSync.length; i++) {
         if (i > 0) await sleep(CNPJ_BATCH_DELAY_MS);
         const cnpj = toSync[i];

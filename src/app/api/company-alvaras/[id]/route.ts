@@ -1,4 +1,5 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { logCompanyHistory } from "@/lib/company-history";
 import {
   computeDataVencimentoISO,
   isAlvaraFrequencia,
@@ -20,6 +21,17 @@ export async function PATCH(
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
+
+  const { data: beforeRow } = await supabase
+    .from("company_alvaras")
+    .select(
+      `
+      company_id,
+      alvaras ( name )
+    `
+    )
+    .eq("id", params.id)
+    .single();
 
   const patch: Record<string, unknown> = { ...body, updated_at: new Date().toISOString() };
 
@@ -101,6 +113,30 @@ export async function PATCH(
       .eq("status", "pendente");
   }
 
+  const companyId = (beforeRow as { company_id?: string } | null)?.company_id;
+  const alvaraNome =
+    (beforeRow as { alvaras?: { name?: string | null } } | null)?.alvaras?.name?.trim() ||
+    "Tarefa";
+  const touched = Object.keys(body).filter(
+    (k) => !["updated_at"].includes(k) && Object.prototype.hasOwnProperty.call(body, k)
+  );
+  if (companyId) {
+    const actorUserId = auth.isServiceRole ? null : auth.userId;
+    await logCompanyHistory(supabase, {
+      companyId,
+      eventType: "tarefa_atualizada",
+      summary:
+        touched.length > 0
+          ? `Vínculo atualizado (${alvaraNome}): ${touched.join(", ")}.`
+          : `Vínculo atualizado (${alvaraNome}).`,
+      metadata: {
+        company_alvara_id: params.id,
+        campos: touched,
+      },
+      actorUserId,
+    });
+  }
+
   return NextResponse.json({ company_alvara: data });
 }
 
@@ -112,12 +148,42 @@ export async function DELETE(
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
 
-  const { error } = await supabase
+  const { data: row, error: selErr } = await supabase
     .from("company_alvaras")
-    .delete()
-    .eq("id", params.id);
+    .select(
+      `
+      company_id,
+      alvaras ( name )
+    `
+    )
+    .eq("id", params.id)
+    .maybeSingle();
+
+  if (selErr) {
+    return NextResponse.json({ error: selErr.message }, { status: 500 });
+  }
+
+  const { error } = await supabase.from("company_alvaras").delete().eq("id", params.id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  if (row) {
+    const companyId = (row as { company_id: string }).company_id;
+    const alvaraNome =
+      (row as { alvaras?: { name?: string | null } }).alvaras?.name?.trim() || "Tarefa";
+    const actorUserId = auth.isServiceRole ? null : auth.userId;
+    await logCompanyHistory(supabase, {
+      companyId,
+      eventType: "tarefa_desvinculada",
+      summary: `Tarefa desvinculada: ${alvaraNome}.`,
+      metadata: {
+        company_alvara_id: params.id,
+        alvara_name: alvaraNome,
+      },
+      actorUserId,
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }
