@@ -37,7 +37,7 @@ export function SessionCta() {
           <ChevronRight className="h-4 w-4" />
         </Link>
         <p className="text-center text-sm text-slate-500 dark:text-slate-400 sm:text-left">
-          Sessão ativa. Pode continuar a gestão de empresas e alvarás.
+          Sessão ativa. Pode continuar na gestão de alvarás.
         </p>
       </div>
     );

@@ -123,7 +123,7 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Visão geral das empresas e alvarás cadastrados no portal.
+          Visão geral da gestão de alvarás e empresas no portal.
         </p>
       </div>
 

@@ -4,9 +4,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Início | Portal de Empresas e Alvarás",
+  title: "Início | Analise Alvará - Gestão de Alvarás",
   description:
-    "Gestão de empresas, CNPJ, alvarás e sincronização com a Receita Federal.",
+    "Análise e gestão de alvarás, empresas, CNPJ e sincronização com a Receita Federal.",
 };
 
 const features = [
@@ -36,7 +36,7 @@ export default function HomePage() {
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white">
               <Users className="h-5 w-5" />
             </span>
-            Portal Alvarás
+            Analise Alvará
           </Link>
           <div className="flex items-center gap-2 text-sm">
             <Link
@@ -59,7 +59,7 @@ export default function HomePage() {
         <div className="max-w-2xl">
           <HomeBrandIcon />
           <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
-            Gestão de empresas e alvarás
+            Analise Alvará - Gestão de Alvarás
           </h1>
           <p className="mt-4 text-lg leading-relaxed text-slate-600 dark:text-slate-400">
             Centralize o cadastro de CNPJ, acompanhe situação na Receita, organize
@@ -92,7 +92,7 @@ export default function HomePage() {
       </main>
 
       <footer className="border-t border-slate-200 py-8 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-500">
-        Portal de gestão · dados consultados via BrasilAPI
+        Gestão de alvarás · dados consultados via BrasilAPI
       </footer>
     </div>
   );

@@ -16,8 +16,9 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Portal de Empresas e Alvarás",
-  description: "Gestão de empresas, alvarás e sincronização com Receita (BrasilAPI)",
+  title: "Analise Alvará - Gestão de Alvarás",
+  description:
+    "Análise e gestão de alvarás, empresas e sincronização com a Receita Federal (BrasilAPI).",
 };
 
 export default function RootLayout({

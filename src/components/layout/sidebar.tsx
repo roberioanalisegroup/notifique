@@ -477,9 +477,9 @@ export function Sidebar() {
             {!effectiveCollapsed && (
               <div className="min-w-0 pr-1">
                 <p className="truncate text-sm font-semibold leading-tight text-slate-900">
-                  Portal de Gestão
+                  Analise Alvará
                 </p>
-                <p className="truncate text-xs text-slate-500">Empresas e alvarás</p>
+                <p className="truncate text-xs text-slate-500">Gestão de Alvarás</p>
               </div>
             )}
           </div>

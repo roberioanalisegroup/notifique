@@ -51,7 +51,7 @@ export async function buildEmpresasExportXlsx(
   linksByCompany: Map<string, CompanyAlvaraExportRow[]>
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Portal Notifique";
+  wb.creator = "Analise Alvará";
   wb.created = new Date();
 
   const ws1 = wb.addWorksheet("Empresas", {
