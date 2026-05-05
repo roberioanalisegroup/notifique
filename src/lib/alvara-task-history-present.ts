@@ -71,7 +71,7 @@ export function linhasHistoricoTarefa(h: AlvaraTaskHistory): string[] {
       const completedAt = meta.completed_at != null ? String(meta.completed_at).trim() : "";
       const linhas: string[] = [];
       if (completed) {
-        linhas.push(`✅ Etapa «${label}» concluída${completedAt ? ` em ${formatDate(completedAt, { empty: "" })}` : ""}.`);
+        linhas.push(`✅ Etapa «${label}» concluída${completedAt ? ` em ${formatDate(completedAt, { empty: "", includeTime: true })}` : ""}.`);
       } else {
         linhas.push(`↩️ Etapa «${label}» reaberta.`);
       }

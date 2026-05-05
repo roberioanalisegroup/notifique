@@ -517,7 +517,7 @@ export function TaskEditModal({
                             aria-hidden
                           />
                           <time className="block text-[0.7rem] font-medium tabular-nums text-slate-500">
-                            {formatDate(h.created_at, { empty: "—" })}
+                            {formatDate(h.created_at, { empty: "—", includeTime: true })}
                           </time>
                           <div className="mt-1.5 space-y-1 text-[0.8125rem] leading-snug text-slate-700">
                             {linhasHistoricoTarefa(h).map((line, i) => (

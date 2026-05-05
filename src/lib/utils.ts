@@ -100,16 +100,24 @@ export function cadastroTipoLabel(tipo: CompanyCadastroTipo): string {
 
 export function formatDate(
   date: string | Date | null | undefined,
-  options?: { empty?: string }
+  options?: { empty?: string; includeTime?: boolean }
 ): string {
   if (date == null) return options?.empty ?? "—";
   const d = typeof date === "string" ? new Date(date) : date;
   if (Number.isNaN(d.getTime())) return options?.empty ?? "—";
-  return d.toLocaleDateString("pt-BR", {
+  const dt = d.toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
+  if (options?.includeTime) {
+    const tm = d.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${dt} às ${tm}`;
+  }
+  return dt;
 }
 
 /** Converte ISO `yyyy-mm-dd` para texto **dd/mm/aaaa** (entrada manual pt-BR). */
