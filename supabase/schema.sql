@@ -161,6 +161,28 @@ create table public.alvara_task_history (
 create index idx_alvara_task_history_task
   on public.alvara_task_history (task_id, created_at desc);
 
+create table public.alvara_checklist_items (
+  id uuid primary key default gen_random_uuid(),
+  alvara_id uuid not null references public.alvaras(id) on delete cascade,
+  label text not null,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index idx_alvara_checklist_items_alvara on public.alvara_checklist_items (alvara_id, sort_order);
+
+create table public.alvara_task_checklist_progress (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.alvara_tasks(id) on delete cascade,
+  item_id uuid not null references public.alvara_checklist_items(id) on delete cascade,
+  completed boolean not null default false,
+  updated_at timestamptz not null default now(),
+  unique (task_id, item_id)
+);
+
+create index idx_alvara_task_checklist_task on public.alvara_task_checklist_progress (task_id);
+
 create index idx_alvara_tasks_due
   on public.alvara_tasks (due_date) where status = 'pendente';
 create index idx_alvara_tasks_ca
@@ -182,6 +204,8 @@ create trigger trg_alv_groups_upd   before update on public.alvara_groups for ea
 create trigger trg_alvaras_upd      before update on public.alvaras       for each row execute function public.set_updated_at();
 create trigger trg_co_alvaras_upd   before update on public.company_alvaras for each row execute function public.set_updated_at();
 create trigger trg_alvara_tasks_upd before update on public.alvara_tasks  for each row execute function public.set_updated_at();
+create trigger trg_alvara_checklist_items_upd before update on public.alvara_checklist_items for each row execute function public.set_updated_at();
+create trigger trg_alvara_task_checklist_progress_upd before update on public.alvara_task_checklist_progress for each row execute function public.set_updated_at();
 create trigger trg_sync_config_upd  before update on public.sync_config   for each row execute function public.set_updated_at();
 create trigger trg_profiles_upd     before update on public.profiles     for each row execute function public.set_updated_at();
 
@@ -259,6 +283,8 @@ alter table public.sync_logs        enable row level security;
 alter table public.profiles         enable row level security;
 alter table public.alvara_tasks     enable row level security;
 alter table public.alvara_task_history enable row level security;
+alter table public.alvara_checklist_items enable row level security;
+alter table public.alvara_task_checklist_progress enable row level security;
 
 -- Sem policy: utilizadores acedem via rotas /api/users (service role). Evita leitura direta (RLS deny).
 
@@ -268,6 +294,8 @@ create policy "auth_full" on public.alvaras          for all using (auth.role() 
 create policy "auth_full" on public.company_alvaras  for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.alvara_tasks     for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.alvara_task_history for all using (auth.role() = 'authenticated');
+create policy "auth_full" on public.alvara_checklist_items for all using (auth.role() = 'authenticated');
+create policy "auth_full" on public.alvara_task_checklist_progress for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.sync_config      for all using (auth.role() = 'authenticated');
 create policy "auth_full" on public.sync_logs        for all using (auth.role() = 'authenticated');
 

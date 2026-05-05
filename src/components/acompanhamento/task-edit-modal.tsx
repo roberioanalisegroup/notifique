@@ -5,7 +5,15 @@ import { FREQUENCIA_LABELS } from "@/lib/alvara-frequency";
 import { prazoInicioPrimeiroCiclo } from "@/lib/alvara-task-generation";
 import { linhasHistoricoTarefa } from "@/lib/alvara-task-history-present";
 import { cn, formatDate, formatIsoDateParaBR, maskDataBRInput, parseDataBRParaIso } from "@/lib/utils";
-import type { Alvara, AlvaraGroup, AlvaraTask, AlvaraTaskHistory, Company, CompanyAlvara } from "@/types";
+import type {
+  Alvara,
+  AlvaraGroup,
+  AlvaraTask,
+  AlvaraTaskChecklistRow,
+  AlvaraTaskHistory,
+  Company,
+  CompanyAlvara,
+} from "@/types";
 import {
   Building2,
   CalendarDays,
@@ -18,6 +26,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { TaskCardChecklist } from "@/components/acompanhamento/task-card-checklist";
 
 type TaskDetail = AlvaraTask & {
   company_alvaras:
@@ -83,6 +92,7 @@ export function TaskEditModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [emissaoDraft, setEmissaoDraft] = useState("");
+  const [checklistRows, setChecklistRows] = useState<AlvaraTaskChecklistRow[]>([]);
   const emissaoDatePickerRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -120,6 +130,42 @@ export function TaskEditModal({
     }
     setEmissaoDraft(formatIsoDateParaBR(task.company_alvaras.data_emissao ?? null));
   }, [task]);
+
+  useEffect(() => {
+    if (!open || !taskId) {
+      setChecklistRows([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const d = await apiJson<{ by_task: Record<string, AlvaraTaskChecklistRow[]> }>(
+          "/api/alvara-tasks/checklist-batch",
+          { method: "POST", body: JSON.stringify({ task_ids: [taskId] }) }
+        );
+        if (!cancelled) setChecklistRows(d.by_task?.[taskId] ?? []);
+      } catch {
+        if (!cancelled) setChecklistRows([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, taskId]);
+
+  async function patchChecklistModal(itemId: string, completed: boolean) {
+    if (!taskId) return;
+    setChecklistRows((prev) => prev.map((r) => (r.item_id === itemId ? { ...r, completed } : r)));
+    try {
+      await apiJson("/api/alvara-tasks/" + taskId + "/checklist", {
+        method: "PATCH",
+        body: JSON.stringify({ item_id: itemId, completed }),
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao atualizar etapa");
+      void load();
+    }
+  }
 
   async function saveVinculo() {
     const caId = task?.company_alvaras?.id;
@@ -296,6 +342,13 @@ export function TaskEditModal({
                 <span className="font-semibold text-violet-900">Data de criação da tarefa:</span>{" "}
                 <span className="tabular-nums">{formatDate(task.created_at, { empty: "—" })}</span>
               </div>
+
+              <TaskCardChecklist
+                idPrefix={"modal-" + task.id}
+                items={checklistRows}
+                readOnly={task.status !== "pendente"}
+                onToggle={(itemId, completed) => void patchChecklistModal(itemId, completed)}
+              />
 
               <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
                 <p className="mb-2 font-semibold text-slate-800">Datas do vínculo</p>

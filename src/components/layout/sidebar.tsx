@@ -79,6 +79,7 @@ const items: Item[] = [
     parentNavigates: true,
     children: [
       { href: "/portal/alvaras/grupos", label: "Grupos" },
+      { href: "/portal/alvaras/etapas", label: "Etapas" },
       { href: "/portal/alvaras/importar", label: "Importar" },
     ],
   },

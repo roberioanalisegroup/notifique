@@ -161,6 +161,24 @@ export interface Alvara {
 }
 
 /** Tarefas de acompanhamento por vínculo empresa–alvará (vencimento preenchido após emissão no vínculo). */
+/** Etapa configurável por tipo de alvará (portal → Alvarás → Etapas). */
+export interface AlvaraChecklistItem {
+  id: string;
+  alvara_id: string;
+  label: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Linha da checklist num cartão / tarefa (template + estado). */
+export interface AlvaraTaskChecklistRow {
+  item_id: string;
+  label: string;
+  sort_order: number;
+  completed: boolean;
+}
+
 export interface AlvaraTask {
   id: string;
   company_alvara_id: string;

@@ -30,7 +30,9 @@ import {
 import { AcompanhamentoCalendarView } from "@/components/acompanhamento/acompanhamento-calendar-view";
 import { AcompanhamentoListView } from "@/components/acompanhamento/acompanhamento-list-view";
 import type { AcompanhamentoTaskRow as TaskRow } from "@/components/acompanhamento/acompanhamento-task-type";
+import { TaskCardChecklist } from "@/components/acompanhamento/task-card-checklist";
 import { TaskEditModal } from "@/components/acompanhamento/task-edit-modal";
+import type { AlvaraTaskChecklistRow } from "@/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -199,6 +201,7 @@ function taskAtrasoVencimento(t: TaskRow, hoje: string): boolean {
 
 export default function AcompanhamentoPage() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [checklistByTaskId, setChecklistByTaskId] = useState<Record<string, AlvaraTaskChecklistRow[]>>({});
   const [loading, setLoading] = useState(true);
   const [selectedYears, setSelectedYears] = useState<number[]>([]);
   const [companyQuery, setCompanyQuery] = useState("");
@@ -292,6 +295,48 @@ export default function AcompanhamentoPage() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const ids = tasks.map((t) => t.id);
+    if (ids.length === 0) {
+      setChecklistByTaskId({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const d = await apiJson<{ by_task: Record<string, AlvaraTaskChecklistRow[]> }>(
+          "/api/alvara-tasks/checklist-batch",
+          { method: "POST", body: JSON.stringify({ task_ids: ids }) }
+        );
+        if (!cancelled) setChecklistByTaskId(d.by_task ?? {});
+      } catch {
+        if (!cancelled) setChecklistByTaskId({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tasks]);
+
+  const patchChecklist = useCallback(async (taskId: string, itemId: string, completed: boolean) => {
+    setChecklistByTaskId((prev) => {
+      const rows = prev[taskId] ?? [];
+      return {
+        ...prev,
+        [taskId]: rows.map((r) => (r.item_id === itemId ? { ...r, completed } : r)),
+      };
+    });
+    try {
+      await apiJson("/api/alvara-tasks/" + taskId + "/checklist", {
+        method: "PATCH",
+        body: JSON.stringify({ item_id: itemId, completed }),
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao atualizar etapa");
+      void load({ silent: true });
+    }
   }, [load]);
 
   /** Atualização em segundo plano: outra sessão, vínculo novo ou mesmo separador. */
@@ -1046,6 +1091,10 @@ export default function AcompanhamentoPage() {
                           task={t}
                           uiColumn={col.id}
                           hoje={hoje}
+                          checklistRows={checklistByTaskId[t.id] ?? []}
+                          onChecklistToggle={(itemId, completed) =>
+                            void patchChecklist(t.id, itemId, completed)
+                          }
                           onOpenDetail={() => onOpenTaskDetail(t.id, col.id)}
                           onBaixa={() => void darBaixaNoVinculo(t)}
                           onConcluir={() => void soConcluir(t)}
@@ -1092,6 +1141,8 @@ function TaskCard({
   task,
   uiColumn,
   hoje,
+  checklistRows,
+  onChecklistToggle,
   onOpenDetail,
   onBaixa,
   onConcluir,
@@ -1101,6 +1152,8 @@ function TaskCard({
   task: TaskRow;
   uiColumn: ColumnId;
   hoje: string;
+  checklistRows: AlvaraTaskChecklistRow[];
+  onChecklistToggle: (itemId: string, completed: boolean) => void;
   onOpenDetail: () => void;
   onBaixa: () => void;
   onConcluir: () => void;
@@ -1250,6 +1303,13 @@ function TaskCard({
           Adicionar anexo
         </button>
       </div>
+
+      <TaskCardChecklist
+        idPrefix={task.id}
+        items={checklistRows}
+        readOnly={task.status !== "pendente"}
+        onToggle={onChecklistToggle}
+      />
 
       {task.status === "pendente" ? (
         <>
