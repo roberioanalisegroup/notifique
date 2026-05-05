@@ -23,7 +23,7 @@ export async function PATCH(
     return NextResponse.json({ error: "ID da tarefa inválido" }, { status: 400 });
   }
 
-  let body: { item_id?: string; completed?: boolean };
+  let body: { item_id?: string; completed?: boolean; comment?: string | null; attachment_url?: string | null };
   try {
     body = await request.json();
   } catch {
@@ -67,7 +67,7 @@ export async function PATCH(
 
   const { data: item, error: e3 } = await supabase
     .from("alvara_checklist_items")
-    .select("id")
+    .select("id, label")
     .eq("id", itemId)
     .eq("alvara_id", alvaraId)
     .maybeSingle();
@@ -80,13 +80,29 @@ export async function PATCH(
   }
 
   const now = new Date().toISOString();
+  const comment = typeof body.comment === "string" ? body.comment.trim() || null : null;
+  const attachmentUrl = typeof body.attachment_url === "string" ? body.attachment_url.trim() || null : null;
+
+  const upsertData: Record<string, unknown> = {
+    task_id: taskId,
+    item_id: itemId,
+    completed: body.completed,
+    updated_at: now,
+    comment,
+    attachment_url: attachmentUrl,
+  };
+
+  if (body.completed) {
+    upsertData.completed_at = now;
+  } else {
+    upsertData.completed_at = null;
+    // Clear comment/attachment when unchecking
+    upsertData.comment = null;
+    upsertData.attachment_url = null;
+  }
+
   const { error: e4 } = await supabase.from("alvara_task_checklist_progress").upsert(
-    {
-      task_id: taskId,
-      item_id: itemId,
-      completed: body.completed,
-      updated_at: now,
-    },
+    upsertData,
     { onConflict: "task_id,item_id" }
   );
 
@@ -94,5 +110,38 @@ export async function PATCH(
     return NextResponse.json({ error: e4.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, item_id: itemId, completed: body.completed });
+  // Insert history entry
+  const itemLabel = (item.label as string) ?? "Etapa";
+  const action = body.completed ? "concluída" : "reaberta";
+  const summaryParts = [`Etapa «${itemLabel}» ${action}.`];
+  if (comment && body.completed) {
+    summaryParts.push(`Comentário: ${comment}`);
+  }
+  if (attachmentUrl && body.completed) {
+    summaryParts.push("Anexo adicionado à etapa.");
+  }
+
+  const metadata: Record<string, unknown> = {
+    item_id: itemId,
+    label: itemLabel,
+    completed: body.completed,
+  };
+  if (comment) metadata.comment = comment;
+  if (attachmentUrl) metadata.attachment_url = attachmentUrl;
+  if (body.completed) metadata.completed_at = now;
+
+  await supabase.from("alvara_task_history").insert({
+    task_id: taskId,
+    event_type: "checklist",
+    summary: summaryParts.join(" "),
+    metadata,
+  });
+
+  return NextResponse.json({
+    ok: true,
+    item_id: itemId,
+    completed: body.completed,
+    comment,
+    attachment_url: attachmentUrl,
+  });
 }

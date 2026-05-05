@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { apiJson } from "@/lib/api-client";
 import { FREQUENCIA_LABELS } from "@/lib/alvara-frequency";
@@ -320,18 +320,18 @@ export default function AcompanhamentoPage() {
     };
   }, [tasks]);
 
-  const patchChecklist = useCallback(async (taskId: string, itemId: string, completed: boolean) => {
+  const patchChecklist = useCallback(async (taskId: string, itemId: string, completed: boolean, comment?: string, attachmentUrl?: string) => {
     setChecklistByTaskId((prev) => {
       const rows = prev[taskId] ?? [];
       return {
         ...prev,
-        [taskId]: rows.map((r) => (r.item_id === itemId ? { ...r, completed } : r)),
+        [taskId]: rows.map((r) => (r.item_id === itemId ? { ...r, completed, comment: comment ?? null, attachment_url: attachmentUrl ?? null, completed_at: completed ? new Date().toISOString() : null } : r)),
       };
     });
     try {
       await apiJson("/api/alvara-tasks/" + taskId + "/checklist", {
         method: "PATCH",
-        body: JSON.stringify({ item_id: itemId, completed }),
+        body: JSON.stringify({ item_id: itemId, completed, comment: comment ?? null, attachment_url: attachmentUrl ?? null }),
       });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao atualizar etapa");
@@ -1092,8 +1092,8 @@ export default function AcompanhamentoPage() {
                           uiColumn={col.id}
                           hoje={hoje}
                           checklistRows={checklistByTaskId[t.id] ?? []}
-                          onChecklistToggle={(itemId, completed) =>
-                            void patchChecklist(t.id, itemId, completed)
+                          onChecklistToggle={(itemId, completed, comment, attachmentUrl) =>
+                            void patchChecklist(t.id, itemId, completed, comment, attachmentUrl)
                           }
                           onOpenDetail={() => onOpenTaskDetail(t.id, col.id)}
                           onBaixa={() => void darBaixaNoVinculo(t)}
@@ -1153,7 +1153,7 @@ function TaskCard({
   uiColumn: ColumnId;
   hoje: string;
   checklistRows: AlvaraTaskChecklistRow[];
-  onChecklistToggle: (itemId: string, completed: boolean) => void;
+  onChecklistToggle: (itemId: string, completed: boolean, comment?: string, attachmentUrl?: string) => void;
   onOpenDetail: () => void;
   onBaixa: () => void;
   onConcluir: () => void;

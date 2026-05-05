@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 
   const { data: progress, error: e4 } = await supabase
     .from("alvara_task_checklist_progress")
-    .select("task_id, item_id, completed")
+    .select("task_id, item_id, completed, comment, attachment_url, completed_at")
     .in("task_id", taskIds);
 
   if (e4) {
@@ -116,9 +116,15 @@ export async function POST(request: NextRequest) {
   }
 
   const completedByTaskItem = new Map<string, boolean>();
+  const commentByTaskItem = new Map<string, string | null>();
+  const attachmentByTaskItem = new Map<string, string | null>();
+  const completedAtByTaskItem = new Map<string, string | null>();
   for (const p of progress ?? []) {
     const key = `${p.task_id as string}:${p.item_id as string}`;
     completedByTaskItem.set(key, p.completed === true);
+    commentByTaskItem.set(key, (p.comment as string | null) ?? null);
+    attachmentByTaskItem.set(key, (p.attachment_url as string | null) ?? null);
+    completedAtByTaskItem.set(key, (p.completed_at as string | null) ?? null);
   }
 
   const by_task: ByTask = {};
@@ -139,6 +145,9 @@ export async function POST(request: NextRequest) {
       label: it.label,
       sort_order: it.sort_order,
       completed: completedByTaskItem.get(`${tid}:${it.id}`) ?? false,
+      comment: commentByTaskItem.get(`${tid}:${it.id}`) ?? null,
+      attachment_url: attachmentByTaskItem.get(`${tid}:${it.id}`) ?? null,
+      completed_at: completedAtByTaskItem.get(`${tid}:${it.id}`) ?? null,
     }));
   }
 

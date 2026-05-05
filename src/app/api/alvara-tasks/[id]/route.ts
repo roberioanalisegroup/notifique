@@ -33,7 +33,7 @@ function isPgUniqueViolation(err: { code?: string; message?: string } | null) {
 async function insertHistory(
   supabase: SupabaseClient,
   taskId: string,
-  event_type: "created" | "status" | "notes" | "attachment" | "due_date" | "system",
+  event_type: "created" | "status" | "notes" | "attachment" | "due_date" | "system" | "checklist",
   summary: string,
   metadata: Record<string, unknown> = {}
 ) {

@@ -153,14 +153,16 @@ export function TaskEditModal({
     };
   }, [open, taskId]);
 
-  async function patchChecklistModal(itemId: string, completed: boolean) {
+  async function patchChecklistModal(itemId: string, completed: boolean, comment?: string, attachmentUrl?: string) {
     if (!taskId) return;
-    setChecklistRows((prev) => prev.map((r) => (r.item_id === itemId ? { ...r, completed } : r)));
+    setChecklistRows((prev) => prev.map((r) => (r.item_id === itemId ? { ...r, completed, comment: comment ?? null, attachment_url: attachmentUrl ?? null, completed_at: completed ? new Date().toISOString() : null } : r)));
     try {
       await apiJson("/api/alvara-tasks/" + taskId + "/checklist", {
         method: "PATCH",
-        body: JSON.stringify({ item_id: itemId, completed }),
+        body: JSON.stringify({ item_id: itemId, completed, comment: comment ?? null, attachment_url: attachmentUrl ?? null }),
       });
+      // Reload history since checklist events now appear there
+      await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao atualizar etapa");
       void load();
@@ -347,7 +349,7 @@ export function TaskEditModal({
                 idPrefix={"modal-" + task.id}
                 items={checklistRows}
                 readOnly={task.status !== "pendente"}
-                onToggle={(itemId, completed) => void patchChecklistModal(itemId, completed)}
+                onToggle={(itemId, completed, comment, attachmentUrl) => void patchChecklistModal(itemId, completed, comment, attachmentUrl)}
               />
 
               <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs">

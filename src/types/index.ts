@@ -177,6 +177,9 @@ export interface AlvaraTaskChecklistRow {
   label: string;
   sort_order: number;
   completed: boolean;
+  comment: string | null;
+  attachment_url: string | null;
+  completed_at: string | null;
 }
 
 export interface AlvaraTask {
@@ -242,7 +245,7 @@ export interface CompanyAlvaraSummary {
 export interface AlvaraTaskHistory {
   id: string;
   task_id: string;
-  event_type: "created" | "status" | "notes" | "attachment" | "due_date" | "system";
+  event_type: "created" | "status" | "notes" | "attachment" | "due_date" | "system" | "checklist";
   summary: string | null;
   metadata: Record<string, unknown>;
   created_at: string;

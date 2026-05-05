@@ -63,6 +63,26 @@ export function linhasHistoricoTarefa(h: AlvaraTaskHistory): string[] {
       }
       return [h.summary?.trim() ? h.summary : "Operação automática registada no sistema."];
     }
+    case "checklist": {
+      const label = meta.label != null ? String(meta.label) : "Etapa";
+      const completed = meta.completed === true;
+      const comment = meta.comment != null ? String(meta.comment).trim() : "";
+      const attachUrl = meta.attachment_url != null ? String(meta.attachment_url).trim() : "";
+      const completedAt = meta.completed_at != null ? String(meta.completed_at).trim() : "";
+      const linhas: string[] = [];
+      if (completed) {
+        linhas.push(`✅ Etapa «${label}» concluída${completedAt ? ` em ${formatDate(completedAt, { empty: "" })}` : ""}.`);
+      } else {
+        linhas.push(`↩️ Etapa «${label}» reaberta.`);
+      }
+      if (comment) {
+        linhas.push(`💬 ${comment}`);
+      }
+      if (attachUrl) {
+        linhas.push("📎 Anexo adicionado à etapa.");
+      }
+      return linhas;
+    }
     default:
       return [h.summary?.trim() ? h.summary : "Registo no histórico."];
   }
