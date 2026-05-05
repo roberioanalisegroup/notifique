@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type { AcompanhamentoTaskRow } from "@/components/acompanhamento/acompanhamento-task-type";
 import { cn } from "@/lib/utils";
@@ -36,16 +36,8 @@ function labelFromCa(ca: AcompanhamentoTaskRow["company_alvaras"]) {
 function eventClass(t: AcompanhamentoTaskRow, getUiColumn: (t: AcompanhamentoTaskRow) => UiColumn): string {
   if (t.status === "concluida") return "bg-emerald-100 text-emerald-900 line-through decoration-emerald-700/60";
   const col = getUiColumn(t);
-  if (col === "andamento") return "bg-sky-100 text-sky-900";
-  const anchor = taskAnchorDateIso(t);
-  if (anchor) {
-    const exp = new Date(anchor + "T12:00:00");
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    exp.setHours(0, 0, 0, 0);
-    if (exp < today) return "bg-red-100 text-red-900";
-  }
-  return "bg-slate-100 text-slate-800";
+  if (col === "andamento") return "bg-amber-100 text-amber-900";
+  return "bg-red-100 text-red-900";
 }
 
 export function AcompanhamentoCalendarView({

@@ -19,8 +19,8 @@ function colLabel(col: UiColumn): string {
 }
 
 function colBadgeClass(col: UiColumn): string {
-  if (col === "pendente") return "bg-amber-100 text-amber-900";
-  if (col === "andamento") return "bg-sky-100 text-sky-900";
+  if (col === "pendente") return "bg-red-100 text-red-900";
+  if (col === "andamento") return "bg-amber-100 text-amber-900";
   return "bg-emerald-100 text-emerald-900";
 }
 

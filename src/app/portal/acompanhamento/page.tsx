@@ -1059,13 +1059,27 @@ export default function AcompanhamentoPage() {
               >
                 <header className="mb-3 flex items-baseline justify-between gap-2 px-1">
                   <div>
-                    <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                    <h2
+                      className={cn(
+                        "flex items-center gap-2 text-base font-semibold",
+                        col.id === "concluido" && "text-emerald-800",
+                        col.id === "andamento" && "text-amber-800",
+                        col.id === "pendente" && "text-red-800"
+                      )}
+                    >
                       {col.icon}
                       {col.label}
                     </h2>
                     <p className="mt-0.5 text-xs text-slate-500">{col.description}</p>
                   </div>
-                  <span className="rounded-full bg-slate-200/80 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-slate-700">
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
+                      col.id === "concluido" && "bg-emerald-100 text-emerald-800",
+                      col.id === "andamento" && "bg-amber-100 text-amber-800",
+                      col.id === "pendente" && "bg-red-100 text-red-800"
+                    )}
+                  >
                     {list.length}
                   </span>
                 </header>
@@ -1083,7 +1097,10 @@ export default function AcompanhamentoPage() {
                         onDragStart={(e) => onDragStart(e, t.id)}
                         onDragEnd={onDragEnd}
                         className={cn(
-                          "group cursor-grab rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm transition active:cursor-grabbing",
+                          "group cursor-grab rounded-2xl border bg-white p-4 shadow-sm transition active:cursor-grabbing",
+                          col.id === "concluido" && "border-emerald-500/60 shadow-emerald-50",
+                          col.id === "andamento" && "border-amber-500/60 shadow-amber-50",
+                          col.id === "pendente" && "border-red-500/60 shadow-red-50",
                           dragTaskId === t.id && "opacity-60"
                         )}
                       >
