@@ -6,6 +6,7 @@ create table public.companies (
     check (cadastro_tipo in ('cnpj', 'mei', 'caepf', 'cpf', 'outros')),
   numero_documento    text not null,
   cnpj                text,
+  codigo_empresa      text,
   razao_social        text,
   nome_fantasia       text,
   situacao_cadastral  text,
@@ -278,6 +279,7 @@ select
   c.id,
   c.archived_at,
   c.cadastro_tipo,
+  c.codigo_empresa,
   c.numero_documento,
   c.cnpj,
   c.razao_social,
@@ -285,6 +287,24 @@ select
   c.situacao_cadastral,
   c.municipio,
   c.uf,
+  c.atividade_principal,
+  c.atividades_secundarias,
+  trim(
+    both ' ' from concat_ws(
+      ' ',
+      nullif(regexp_replace(coalesce(c.atividade_principal, ''), '\D', '', 'g'), ''),
+      nullif(
+        (
+          select string_agg(
+            nullif(regexp_replace(coalesce(elem->>'codigo', ''), '\D', '', 'g'), ''),
+            ' '
+          )
+          from jsonb_array_elements(coalesce(c.atividades_secundarias, '[]'::jsonb)) as elem
+        ),
+        ''
+      )
+    )
+  ) as cnaes_busca,
   c.last_sync_at,
   c.sync_status,
   c.updated_at,

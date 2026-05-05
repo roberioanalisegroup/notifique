@@ -4,6 +4,7 @@ import { EmpresasMassaVincularModal } from "@/components/empresas/empresas-massa
 import { NovaEmpresaModal } from "@/components/empresas/nova-empresa-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch, apiJson } from "@/lib/api-client";
+import { normalizeCnaeTokenList } from "@/lib/companies-cnae-filter";
 import type { CompaniesSortKey } from "@/lib/companies-list-sort";
 import {
   cn,
@@ -100,6 +101,8 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [cnaeInput, setCnaeInput] = useState("");
+  const [debouncedCnaeInput, setDebouncedCnaeInput] = useState("");
   const [situacao, setSituacao] = useState("");
   const [uf, setUf] = useState("");
   const [sortKey, setSortKey] = useState<CompaniesSortKey>("razao");
@@ -119,8 +122,10 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
   const headerSelectRef = useRef<HTMLInputElement>(null);
   const limit = 20;
   const debouncedSearchRef = useRef(debouncedSearch);
+  const debouncedCnaeRef = useRef(debouncedCnaeInput);
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
   debouncedSearchRef.current = debouncedSearch;
+  debouncedCnaeRef.current = debouncedCnaeInput;
   const selectedCount = Object.keys(selectedRowsById).length;
   /** Evita que a barra fique por baixo da sidebar (z-50): alinha ao eixo do conteúdo principal. */
   const [bulkBarLeftPx, setBulkBarLeftPx] = useState<number | undefined>(undefined);
@@ -129,6 +134,11 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
     if (!uf || !filterOptions) return [];
     return filterOptions.citiesByUf[uf] ?? [];
   }, [uf, filterOptions]);
+
+  const cnaeQueryCodes = useMemo(
+    () => normalizeCnaeTokenList(debouncedCnaeInput.split(/[\s,;]+/).filter(Boolean)),
+    [debouncedCnaeInput]
+  );
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -139,6 +149,16 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
     }, 350);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const next = cnaeInput.trim();
+      if (next === debouncedCnaeRef.current) return;
+      setPage(1);
+      setDebouncedCnaeInput(next);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [cnaeInput]);
 
   useEffect(() => {
     (async () => {
@@ -169,11 +189,14 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
       for (const m of selectedCities) {
         params.append("municipio", m);
       }
+      for (const c of cnaeQueryCodes) {
+        params.append("cnae", c);
+      }
       params.set("sort", sortKey);
       params.set("order", sortDir);
       return params.toString();
     },
-    [arquivadas, debouncedSearch, situacao, uf, selectedCities, sortKey, sortDir]
+    [arquivadas, debouncedSearch, situacao, uf, selectedCities, sortKey, sortDir, cnaeQueryCodes]
   );
 
   const load = useCallback(async () => {
@@ -197,7 +220,7 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
 
   useEffect(() => {
     setSelectedRowsById({});
-  }, [page, debouncedSearch, situacao, uf, selectedCities, arquivadas, sortKey, sortDir]);
+  }, [page, debouncedSearch, situacao, uf, selectedCities, arquivadas, sortKey, sortDir, debouncedCnaeInput]);
 
   function onSortColumn(next: CompaniesSortKey) {
     if (sortKey === next) {
@@ -267,6 +290,9 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
       if (uf) params.set("uf", uf);
       for (const m of selectedCities) {
         params.append("municipio", m);
+      }
+      for (const c of cnaeQueryCodes) {
+        params.append("cnae", c);
       }
       params.set("sort", sortKey);
       params.set("order", sortDir);
@@ -651,6 +677,8 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
             onClick={() => {
               setSearchInput("");
               setDebouncedSearch("");
+              setCnaeInput("");
+              setDebouncedCnaeInput("");
               setSituacao("");
               setUf("");
               setSelectedCities([]);
@@ -660,6 +688,26 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
           >
             Limpar filtros
           </button>
+        </div>
+
+        <div>
+          <label htmlFor="empresas-cnae" className="form-label mb-1.5 block">
+            CNAE (atividade principal ou secundárias)
+          </label>
+          <input
+            id="empresas-cnae"
+            type="text"
+            inputMode="numeric"
+            placeholder="Ex.: 6201500 4711302 ou 62.01-5-00 (vários: espaço, vírgula ou ponto e vírgula)"
+            className="input-field"
+            value={cnaeInput}
+            onChange={(e) => setCnaeInput(e.target.value)}
+            autoComplete="off"
+          />
+          <p className="mt-1.5 text-xs text-slate-500">
+            Mostra empresas que tenham <span className="font-medium text-slate-600">qualquer um</span> dos
+            códigos indicados na atividade principal ou nas secundárias (até 30 códigos, mínimo 4 dígitos cada).
+          </p>
         </div>
 
         <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2 lg:grid-cols-3">

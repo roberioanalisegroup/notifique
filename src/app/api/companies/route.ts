@@ -1,5 +1,10 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import {
+  applyCnaeBuscaOrFilter,
+  escapeIlikePattern,
+  normalizeCnaeTokensFromSearchParams,
+} from "@/lib/companies-cnae-filter";
+import {
   applyCompaniesAlvaraSummarySort,
   parseCompaniesSortParams,
 } from "@/lib/companies-list-sort";
@@ -12,10 +17,6 @@ function parseParam(sp: string | null, def: number, min: number, max: number) {
   const n = sp ? parseInt(sp, 10) : def;
   if (Number.isNaN(n)) return def;
   return Math.max(min, Math.min(max, n));
-}
-
-function escapeIlikePattern(raw: string): string {
-  return raw.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
 export async function GET(request: NextRequest) {
@@ -37,6 +38,8 @@ export async function GET(request: NextRequest) {
 
   const arquivadasOnly =
     searchParams.get("arquivadas") === "1" || searchParams.get("arquivadas") === "true";
+
+  const cnaeCodes = normalizeCnaeTokensFromSearchParams(searchParams);
 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
@@ -70,6 +73,9 @@ export async function GET(request: NextRequest) {
   if (municipios.length > 0) q = q.in("municipio", municipios);
   if (sync_status) q = q.eq("sync_status", sync_status);
   if (uf) q = q.eq("uf", uf);
+  if (cnaeCodes.length > 0) {
+    q = applyCnaeBuscaOrFilter(q, cnaeCodes);
+  }
 
   const { sort, order } = parseCompaniesSortParams(
     searchParams.get("sort"),

@@ -204,6 +204,12 @@ export interface CompanyAlvaraSummary {
   situacao_cadastral: string | null;
   municipio: string | null;
   uf: string | null;
+  /** CNAE principal (texto Receita) — coluna da view após migração `companies_alvara_summary_cnae_busca`. */
+  atividade_principal?: string | null;
+  /** Lista JSON de `{ codigo, descricao }` — coluna da view após a mesma migração. */
+  atividades_secundarias?: unknown;
+  /** Dígitos dos CNAEs concatenados (uso interno / filtros). */
+  cnaes_busca?: string | null;
   last_sync_at: string | null;
   sync_status: string | null;
   updated_at: string;

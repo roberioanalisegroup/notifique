@@ -1,5 +1,10 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import {
+  applyCnaeBuscaOrFilter,
+  escapeIlikePattern,
+  normalizeCnaeTokensFromSearchParams,
+} from "@/lib/companies-cnae-filter";
+import {
   applyCompaniesAlvaraSummarySort,
   parseCompaniesSortParams,
 } from "@/lib/companies-list-sort";
@@ -16,10 +21,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
-
-function escapeIlikePattern(raw: string): string {
-  return raw.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
-}
 
 async function fetchLinksForCompanies(
   supabase: SupabaseClient,
@@ -101,6 +102,8 @@ export async function GET(request: NextRequest) {
     const arquivadasOnly =
       params.get("arquivadas") === "1" || params.get("arquivadas") === "true";
 
+    const cnaeCodes = normalizeCnaeTokensFromSearchParams(params);
+
     let q = supabase.from("companies_alvara_summary").select("*");
 
     q = arquivadasOnly ? q.not("archived_at", "is", null) : q.is("archived_at", null);
@@ -128,6 +131,9 @@ export async function GET(request: NextRequest) {
     if (municipios.length > 0) q = q.in("municipio", municipios);
     if (sync_status) q = q.eq("sync_status", sync_status);
     if (uf) q = q.eq("uf", uf);
+    if (cnaeCodes.length > 0) {
+      q = applyCnaeBuscaOrFilter(q, cnaeCodes);
+    }
 
     const { sort, order } = parseCompaniesSortParams(
       params.get("sort"),
