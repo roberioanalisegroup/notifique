@@ -218,9 +218,10 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
     void load();
   }, [load]);
 
-  useEffect(() => {
-    setSelectedRowsById({});
-  }, [page, debouncedSearch, situacao, uf, selectedCities, arquivadas, sortKey, sortDir, debouncedCnaeInput]);
+  const selectedVisibleOnPage = useMemo(
+    () => rows.reduce((n, r) => n + (selectedRowsById[r.id] ? 1 : 0), 0),
+    [rows, selectedRowsById]
+  );
 
   function onSortColumn(next: CompaniesSortKey) {
     if (sortKey === next) {
@@ -1178,6 +1179,12 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
               <span className="min-w-0 text-sm font-medium text-slate-800">
                 <span className="break-words">
                   {selectedCount} empresa(s) selecionada(s)
+                  {selectedCount > selectedVisibleOnPage ? (
+                    <span className="mt-0.5 block text-xs font-normal text-slate-500">
+                      {selectedVisibleOnPage} nesta página; as restantes mantêm-se ao mudar de página, pesquisar ou
+                      filtrar. Use «Limpar seleção» para recomeçar.
+                    </span>
+                  ) : null}
                 </span>
               </span>
               <button
