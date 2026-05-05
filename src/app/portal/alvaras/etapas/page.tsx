@@ -2,7 +2,7 @@
 
 import { apiJson } from "@/lib/api-client";
 import type { Alvara, AlvaraChecklistItem, AlvaraGroup } from "@/types";
-import { ChevronDown, ChevronUp, ListChecks, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ListChecks, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -18,6 +18,31 @@ export default function AlvarasEtapasPage() {
   const [novaEtapa, setNovaEtapa] = useState("");
   const [savingNova, setSavingNova] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [tipoBusca, setTipoBusca] = useState("");
+
+  const filteredAlvaras = useMemo(() => {
+    const q = tipoBusca.trim().toLowerCase();
+    if (!q) return alvaras;
+    return alvaras.filter((a) => {
+      const name = (a.name ?? "").toLowerCase();
+      const group = (a.alvara_groups?.name ?? "").toLowerCase();
+      const desc = (a.description ?? "").toLowerCase();
+      return name.includes(q) || group.includes(q) || desc.includes(q);
+    });
+  }, [alvaras, tipoBusca]);
+
+  /** Mantém o tipo atual no `<select>` mesmo que o filtro o esconda. */
+  const selectOptions = useMemo(() => {
+    if (alvaras.length === 0) return [];
+    const sel = alvaras.find((a) => a.id === alvaraId);
+    if (filteredAlvaras.length === 0) {
+      return sel ? [sel] : [];
+    }
+    if (!sel || filteredAlvaras.some((a) => a.id === alvaraId)) {
+      return filteredAlvaras;
+    }
+    return [sel, ...filteredAlvaras];
+  }, [alvaras, filteredAlvaras, alvaraId]);
 
   useEffect(() => {
     (async () => {
@@ -142,6 +167,30 @@ export default function AlvarasEtapasPage() {
 
       <div className="card-portal space-y-4 p-4 sm:p-5">
         <div>
+          <label htmlFor="etapas-tipo-busca" className="form-label mb-1.5 block">
+            Buscar tipo de alvará
+          </label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              id="etapas-tipo-busca"
+              type="search"
+              className="input-field w-full pl-9"
+              placeholder="Nome, grupo ou descrição…"
+              value={tipoBusca}
+              onChange={(e) => setTipoBusca(e.target.value)}
+              disabled={loadingList || alvaras.length === 0}
+              autoComplete="off"
+            />
+          </div>
+          {tipoBusca.trim() && alvaras.length > 0 ? (
+            <p className="mt-1 text-xs text-slate-500">
+              {filteredAlvaras.length} de {alvaras.length} tipo(s) com este filtro
+            </p>
+          ) : null}
+        </div>
+
+        <div>
           <label htmlFor="etapas-alvara" className="form-label mb-1.5 block">
             Tipo de alvará
           </label>
@@ -155,7 +204,7 @@ export default function AlvarasEtapasPage() {
             {alvaras.length === 0 ? (
               <option value="">— Nenhum tipo cadastrado —</option>
             ) : (
-              alvaras.map((a) => (
+              selectOptions.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                   {a.alvara_groups?.name ? ` · ${a.alvara_groups.name}` : ""}
