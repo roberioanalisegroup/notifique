@@ -21,7 +21,7 @@ export default function MaintenancePage() {
         color: '#fff',
         borderRadius: '5px'
       }}>
-        Previsão de regresso: Hoje às 18:00
+        Previsão de regresso: Amanhã as 14:00
       </div>
     </div>
   );
