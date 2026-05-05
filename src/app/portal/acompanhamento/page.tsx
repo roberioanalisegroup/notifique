@@ -1097,10 +1097,10 @@ export default function AcompanhamentoPage() {
                         onDragStart={(e) => onDragStart(e, t.id)}
                         onDragEnd={onDragEnd}
                         className={cn(
-                          "group cursor-grab rounded-2xl border bg-white p-4 shadow-sm transition active:cursor-grabbing",
-                          col.id === "concluido" && "border-emerald-500/60 shadow-emerald-50",
-                          col.id === "andamento" && "border-amber-500/60 shadow-amber-50",
-                          col.id === "pendente" && "border-red-500/60 shadow-red-50",
+                          "group cursor-grab rounded-2xl bg-white p-4 shadow-sm transition active:cursor-grabbing",
+                          col.id === "concluido" && "border-4 border-emerald-500/60 shadow-emerald-50",
+                          col.id === "andamento" && "border-2 border-amber-500/60 shadow-amber-50",
+                          col.id === "pendente" && "border-0 border-transparent shadow-sm",
                           dragTaskId === t.id && "opacity-60"
                         )}
                       >

@@ -67,7 +67,10 @@ export function AcompanhamentoListView({
               const nome = ca?.alvaras?.name?.trim() || t.title?.trim() || "—";
               const col = getUiColumn(t);
               return (
-                <tr key={t.id} className="hover:bg-slate-50/80">
+                <tr
+                  key={t.id}
+                  className="hover:bg-slate-50/80 transition-colors"
+                >
                   <td className="max-w-[220px] font-medium text-slate-900">
                     <span className="line-clamp-2">{nome}</span>
                   </td>
