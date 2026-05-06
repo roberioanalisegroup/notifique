@@ -1,5 +1,7 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { escapeIlikePattern } from "@/lib/companies-cnae-filter";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
+import { onlyDigits } from "@/lib/utils";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -25,14 +27,76 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  let body: { assignments?: { company_id: unknown; responsible_user_id: unknown }[] };
+  let body:
+    | { assignments?: { company_id: unknown; responsible_user_id: unknown }[] }
+    | { apply_all: true; responsible_user_id: unknown; search?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  const raw = body.assignments;
+  // Modo 1: aplicar a todos (útil para "selecionar todas as empresas" no portal).
+  if ("apply_all" in body && body.apply_all === true) {
+    const ridRaw = body.responsible_user_id;
+    let rid: string | null = null;
+    if (ridRaw !== null && ridRaw !== undefined && `${ridRaw}`.trim() !== "") {
+      const s = typeof ridRaw === "string" ? ridRaw.trim() : String(ridRaw);
+      if (!UUID_RE.test(s)) {
+        return NextResponse.json({ error: "responsible_user_id inválido." }, { status: 400 });
+      }
+      rid = s;
+    }
+
+    if (rid) {
+      const { data: rp, error: rErr } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("id", rid)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (rErr) return NextResponse.json({ error: rErr.message }, { status: 500 });
+      if (!rp) return NextResponse.json({ error: "Responsável inválido ou inativo." }, { status: 400 });
+    }
+
+    const search =
+      typeof body.search === "string" ? body.search.trim() : String(body.search ?? "").trim();
+    let q = supabase
+      .from("companies")
+      .update({ responsible_user_id: rid, updated_at: new Date().toISOString() })
+      .is("archived_at", null);
+
+    if (!isAdmin) {
+      q = q.eq("user_id", userId);
+    }
+
+    if (search) {
+      const digits = onlyDigits(search);
+      if (digits.length === 14 || digits.length === 11) {
+        q = q.eq("numero_documento", digits);
+      } else {
+        const esc = escapeIlikePattern(search);
+        const parts = [
+          `razao_social.ilike.%${esc}%`,
+          `nome_fantasia.ilike.%${esc}%`,
+          `codigo_empresa.ilike.%${esc}%`,
+        ];
+        const partial = onlyDigits(search);
+        if (partial.length > 0) {
+          parts.push(`numero_documento.ilike.%${partial}%`);
+          parts.push(`cnpj.ilike.%${partial}%`);
+        }
+        q = q.or(parts.join(","));
+      }
+    }
+
+    const { error: uErr } = await q;
+    if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
+    return NextResponse.json({ ok: true, applied_all: true });
+  }
+
+  // Modo 2: lista explícita (até 200 ids por request).
+  const raw = "assignments" in body ? body.assignments : undefined;
   if (!Array.isArray(raw) || raw.length === 0) {
     return NextResponse.json({ error: "Envie assignments: [...] não vazio" }, { status: 400 });
   }

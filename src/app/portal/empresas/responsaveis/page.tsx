@@ -27,10 +27,14 @@ export default function EmpresasResponsaveisPage() {
   const [searchDebounced, setSearchDebounced] = useState("");
   const [rows, setRows] = useState<CompanyRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [count, setCount] = useState(0);
+  const limit = 20;
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [baseline, setBaseline] = useState<Record<string, string | null>>({});
   const [draft, setDraft] = useState<Record<string, string | null>>({});
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [allMatchingSelected, setAllMatchingSelected] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bulkChoice, setBulkChoice] = useState<string>("");
   const bulkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,6 +46,11 @@ export default function EmpresasResponsaveisPage() {
       if (bulkTimer.current) clearTimeout(bulkTimer.current);
     };
   }, [searchInput]);
+
+  useEffect(() => {
+    // sempre que o filtro muda, volta para a página 1
+    setPage(1);
+  }, [searchDebounced]);
 
   const loadCollaborators = useCallback(async () => {
     try {
@@ -56,13 +65,16 @@ export default function EmpresasResponsaveisPage() {
     setLoading(true);
     try {
       const qs = new URLSearchParams({
-        limit: "100",
-        page: "1",
+        limit: String(limit),
+        page: String(page),
       });
       if (searchDebounced) qs.set("search", searchDebounced);
-      const d = await apiJson<{ companies: CompanyRow[] }>("/api/companies?" + qs.toString());
+      const d = await apiJson<{ companies: CompanyRow[]; count?: number; page?: number; limit?: number }>(
+        "/api/companies?" + qs.toString()
+      );
       const list = d.companies;
       setRows(list);
+      setCount(typeof d.count === "number" ? d.count : list.length);
       const nextBase: Record<string, string | null> = {};
       const nextDraft: Record<string, string | null> = {};
       for (const r of list) {
@@ -73,13 +85,15 @@ export default function EmpresasResponsaveisPage() {
       setBaseline(nextBase);
       setDraft(nextDraft);
       setSelected(new Set());
+      setAllMatchingSelected(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao listar empresas");
       setRows([]);
+      setCount(0);
     } finally {
       setLoading(false);
     }
-  }, [searchDebounced]);
+  }, [searchDebounced, page]);
 
   useEffect(() => {
     void loadCollaborators();
@@ -113,19 +127,52 @@ export default function EmpresasResponsaveisPage() {
   function selectAllShown() {
     if (rows.length === 0) return;
     setSelected(new Set(rows.map((r) => r.id)));
+    setAllMatchingSelected(false);
+  }
+
+  function selectAllMatching() {
+    if (count === 0) return;
+    setSelected(new Set());
+    setAllMatchingSelected(true);
+    toast.success(`Selecionadas todas as ${count} empresas desta pesquisa.`, {
+      description: "Ao aplicar em massa, a alteração será feita para todas (todas as páginas).",
+    });
   }
 
   function clearSelection() {
     setSelected(new Set());
     setBulkChoice("");
+    setAllMatchingSelected(false);
   }
 
-  function aplicarBulk() {
+  async function aplicarBulk() {
     const rid = bulkChoice === "" ? null : bulkChoice;
-    if (selected.size === 0) {
+    if (!allMatchingSelected && selected.size === 0) {
       toast.error("Selecione pelo menos uma empresa.");
       return;
     }
+
+    if (allMatchingSelected) {
+      setSaving(true);
+      try {
+        await apiJson("/api/companies/responsible-batch", {
+          method: "PATCH",
+          body: JSON.stringify({
+            apply_all: true,
+            responsible_user_id: rid,
+            search: searchDebounced || "",
+          }),
+        });
+        toast.success("Responsável aplicado a todas as empresas da pesquisa.");
+        await loadCompanies();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Erro ao aplicar em massa");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     setDraft((prev) => {
       const n = { ...prev };
       for (const id of Array.from(selected)) {
@@ -133,7 +180,7 @@ export default function EmpresasResponsaveisPage() {
       }
       return n;
     });
-    toast.success("Alterações aplicadas na grelha. Use «Guardar alterações» para persistir.");
+    toast.success("Alterações aplicadas na página. Use «Guardar alterações» para persistir.");
   }
 
   async function save() {
@@ -273,18 +320,58 @@ export default function EmpresasResponsaveisPage() {
         </div>
       )}
 
+      {allMatchingSelected && (
+        <div className="flex flex-col gap-3 rounded-xl border border-violet-200 bg-violet-50/70 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
+          <p className="text-sm font-medium text-violet-950">
+            Todas as {count} empresas desta pesquisa estão selecionadas
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="input-field min-w-[12rem]"
+              value={bulkChoice}
+              onChange={(e) => setBulkChoice(e.target.value)}
+              aria-label="Responsável para atribuir em massa"
+              disabled={saving}
+            >
+              <option value="">Sem responsável</option>
+              {collaborators.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn-primary bg-violet-700 hover:bg-violet-600 disabled:opacity-50"
+              onClick={() => void aplicarBulk()}
+              disabled={saving}
+            >
+              {saving ? "Aplicando…" : "Aplicar a todas"}
+            </button>
+            <button type="button" className="btn-secondary" onClick={clearSelection} disabled={saving}>
+              Limpar seleção
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         tableSkeleton
       ) : (
         <div className="card-portal overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2 text-xs text-slate-600">
             <span>
-              Mostrando {rows.length} empresas
+              Mostrando {(page - 1) * limit + 1}-{Math.min(page * limit, count)} de {count} empresas
               {searchDebounced ? ` · filtro «${searchDebounced}»` : ""}.
             </span>
-            <button type="button" className="font-medium text-blue-600 hover:underline" onClick={selectAllShown}>
-              Selecionar todas na lista
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" className="font-medium text-blue-600 hover:underline" onClick={selectAllShown}>
+                Selecionar todas desta página
+              </button>
+              <button type="button" className="font-medium text-blue-600 hover:underline" onClick={selectAllMatching}>
+                Selecionar todas as empresas
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="table-portal min-w-[900px]">
@@ -354,6 +441,29 @@ export default function EmpresasResponsaveisPage() {
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-slate-600">
+              Página {page} de {Math.max(1, Math.ceil(count / limit))}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1 || loading}
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setPage((p) => Math.min(Math.max(1, Math.ceil(count / limit)), p + 1))}
+                disabled={page >= Math.max(1, Math.ceil(count / limit)) || loading}
+              >
+                Próxima
+              </button>
+            </div>
           </div>
         </div>
       )}

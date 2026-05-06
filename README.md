@@ -20,7 +20,8 @@ Aplicação web (single-tenant) para cadastrar empresas por CNPJ, sincronizar da
 1. Copie `.env.example` para `.env.local` (ou `.env`):
 
    - `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` (painel: Settings → API)
-   - `SUPABASE_SERVICE_ROLE_KEY` (apenas no servidor; **nunca** no cliente) — usada em `POST /api/companies/sync-all` com `Authorization: Bearer` para o cron/Edge
+   - `CRON_HMAC_SECRET` (recomendado) — segredo usado para assinar pedidos do cron para `POST /api/companies/sync-all` (não envia service role)
+   - `SUPABASE_SERVICE_ROLE_KEY` (fallback/compatibilidade; apenas no servidor; **nunca** no cliente)
    - `NEXT_PUBLIC_APP_URL` — URL pública (ex.: `http://localhost:3000` ou a URL na Vercel)
    - `CSRF_ALLOWED_ORIGINS` (opcional) — lista separada por vírgulas se usares mais do que uma origin válida para o mesmo site
 
@@ -38,8 +39,8 @@ npm run dev
 ## Sincronização agendada (Supabase)
 
 - Função: `supabase/functions/daily-sync` (ver `README.md` na pasta da função).
-- Variáveis na Edge: `NEXT_PUBLIC_APP_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
-- A rota `POST /api/companies/sync-all` com Bearer da service role respeita `sync_config.sync_enabled` (se desativada, o cron não processa nada).
+- Variáveis na Edge: `NEXT_PUBLIC_APP_URL` e `CRON_HMAC_SECRET` (recomendado). `SUPABASE_SERVICE_ROLE_KEY` é fallback.
+- A rota `POST /api/companies/sync-all` com assinatura (ou Bearer fallback) respeita `sync_config.sync_enabled` (se desativada, o cron não processa nada).
 - Exemplo de expressão de cron: `0 3 * * *` (3h) — ajuste no agendador do Supabase.
 
 ## Formato do CSV (importação)
