@@ -1,23 +1,12 @@
+import { mapAuthUserToPortalUser, type ProfileRow } from "@/app/api/users/map-portal-user";
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { countActiveAdmins } from "@/lib/portal-user-admin-guards";
 import { requirePortalAdmin } from "@/lib/require-portal-admin";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
+import { syncAuthBanWithActiveFlag } from "@/lib/user-auth-ban";
 import type { PortalUser } from "@/types";
 import { NextRequest, NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
-
-function mapUser(
-  u: User,
-  profile: { display_name: string | null; phone: string | null; created_at: string; updated_at: string } | undefined
-): PortalUser {
-  return {
-    id: u.id,
-    email: u.email ?? null,
-    display_name: profile?.display_name ?? (u.user_metadata?.display_name as string | undefined) ?? null,
-    phone: profile?.phone ?? (u.user_metadata?.phone as string | undefined) ?? null,
-    last_sign_in_at: u.last_sign_in_at ?? null,
-    created_at: u.created_at,
-  };
-}
 
 export async function GET(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
@@ -63,11 +52,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: perr.message, users: [] as PortalUser[] }, { status: 500 });
   }
 
-  const byId = new Map(
-    (profiles ?? []).map((p) => [p.id as string, p as { id: string; display_name: string | null; phone: string | null; created_at: string; updated_at: string }])
-  );
+  const byId = new Map((profiles ?? []).map((p) => [p.id as string, p as ProfileRow]));
 
-  const users: PortalUser[] = all.map((u) => mapUser(u, byId.get(u.id)));
+  const users: PortalUser[] = all.map((u) => mapAuthUserToPortalUser(u, byId.get(u.id)));
   users.sort(
     (a, b) => new Date(b.last_sign_in_at ?? b.created_at).getTime() - new Date(a.last_sign_in_at ?? a.created_at).getTime()
   );
@@ -84,7 +71,14 @@ export async function POST(request: NextRequest) {
   const forbidden = await requirePortalAdmin(auth.supabase, auth.userId);
   if (forbidden) return forbidden;
 
-  let body: { email?: string; password?: string; display_name?: string | null; phone?: string | null };
+  let body: {
+    email?: string;
+    password?: string;
+    display_name?: string | null;
+    phone?: string | null;
+    role?: string;
+    is_active?: boolean;
+  };
   try {
     body = await request.json();
   } catch {
@@ -108,6 +102,28 @@ export async function POST(request: NextRequest) {
       { error: "Service role do Supabase não configurada (SUPABASE_SERVICE_ROLE_KEY)." },
       { status: 500 }
     );
+  }
+
+  const wantedRole =
+    typeof body.role === "string" && body.role.trim().toLowerCase() === "admin" ? "admin" : "user";
+  const is_active =
+    typeof body.is_active === "boolean" ? body.is_active : true;
+
+  if (wantedRole === "admin" && !is_active) {
+    return NextResponse.json(
+      { error: "Um administrador não pode ser criado já como inativo. Crie como ativo e inative depois se necessário." },
+      { status: 400 }
+    );
+  }
+
+  if (!is_active) {
+    const n = await countActiveAdmins(admin);
+    if (n < 1) {
+      return NextResponse.json(
+        { error: "É necessário existir pelo menos um administrador ativo no portal antes de criar utilizadores inativos." },
+        { status: 400 }
+      );
+    }
   }
 
   const display_name = (body.display_name ?? "").trim() || null;
@@ -134,6 +150,8 @@ export async function POST(request: NextRequest) {
       id: u.id,
       display_name,
       phone,
+      role: wantedRole,
+      is_active,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" }
@@ -143,6 +161,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: pErr.message }, { status: 500 });
   }
 
+  if (!is_active) {
+    const sync = await syncAuthBanWithActiveFlag(admin, u.id, false);
+    if (sync.error) {
+      return NextResponse.json(
+        {
+          error: `Perfil criado, mas falhou ao aplicar inativação no Auth: ${sync.error}. Corrija no painel Supabase se necessário.`,
+        },
+        { status: 500 }
+      );
+    }
+  }
+
+  const { data: freshAuth } = await admin.auth.admin.getUserById(u.id);
+  const freshUser = freshAuth?.user ?? u;
   const { data: prof } = await admin.from("profiles").select("*").eq("id", u.id).single();
-  return NextResponse.json({ user: mapUser(u, prof ?? undefined) });
+  return NextResponse.json({ user: mapAuthUserToPortalUser(freshUser, (prof ?? undefined) as ProfileRow | undefined) });
 }

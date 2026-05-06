@@ -2,6 +2,7 @@
 
 import { apiJson } from "@/lib/api-client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { createClient } from "@/lib/supabase/client";
 import type { PortalUser } from "@/types";
 import { formatDate } from "@/lib/utils";
 import { useCallback, useEffect, useState } from "react";
@@ -22,7 +23,7 @@ function UsuariosSkeleton() {
           <table className="table-portal min-w-[700px]">
             <thead>
               <tr>
-                {["E-mail", "Nome", "Telefone", "Último acesso", "Ações"].map((h) => (
+                {["E-mail", "Nome", "Telefone", "Cargo", "Estado", "Último acesso", "Ações"].map((h) => (
                   <th key={h}>{h}</th>
                 ))}
               </tr>
@@ -40,6 +41,12 @@ function UsuariosSkeleton() {
                     <Skeleton className="h-4 w-24" />
                   </td>
                   <td>
+                    <Skeleton className="h-4 w-20" />
+                  </td>
+                  <td>
+                    <Skeleton className="h-4 w-16" />
+                  </td>
+                  <td>
                     <Skeleton className="h-4 w-28" />
                   </td>
                   <td>
@@ -55,9 +62,14 @@ function UsuariosSkeleton() {
   );
 }
 
+function roleLabel(r: PortalUser["role"]) {
+  return r === "admin" ? "Administrador" : "Utilizador";
+}
+
 export default function UsuariosPage() {
   const [rows, setRows] = useState<PortalUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [meId, setMeId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [edit, setEdit] = useState<PortalUser | null>(null);
   const [saving, setSaving] = useState(false);
@@ -66,13 +78,29 @@ export default function UsuariosPage() {
     password: "",
     display_name: "",
     phone: "",
+    role: "user" as PortalUser["role"],
+    is_active: true,
   });
   const [formEdit, setFormEdit] = useState({
     email: "",
     password: "",
     display_name: "",
     phone: "",
+    role: "user" as PortalUser["role"],
+    is_active: true,
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getUser();
+      if (!cancelled) setMeId(data.user?.id ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,6 +125,8 @@ export default function UsuariosPage() {
       password: "",
       display_name: r.display_name ?? "",
       phone: r.phone ?? "",
+      role: r.role,
+      is_active: r.is_active,
     });
   }
 
@@ -110,11 +140,20 @@ export default function UsuariosPage() {
           password: formCreate.password,
           display_name: formCreate.display_name || null,
           phone: formCreate.phone || null,
+          role: formCreate.role,
+          is_active: formCreate.is_active,
         }),
       });
       toast.success("Utilizador criado");
       setCreateOpen(false);
-      setFormCreate({ email: "", password: "", display_name: "", phone: "" });
+      setFormCreate({
+        email: "",
+        password: "",
+        display_name: "",
+        phone: "",
+        role: "user",
+        is_active: true,
+      });
       void load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
@@ -127,10 +166,12 @@ export default function UsuariosPage() {
     if (!edit) return;
     setSaving(true);
     try {
-      const body: Record<string, string | null> = {
+      const body: Record<string, string | null | boolean> = {
         email: formEdit.email,
         display_name: formEdit.display_name || null,
         phone: formEdit.phone || null,
+        role: formEdit.role,
+        is_active: formEdit.is_active,
       };
       if (formEdit.password.length > 0) {
         body.password = formEdit.password;
@@ -159,18 +200,22 @@ export default function UsuariosPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Usuários</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            E-mail e autenticação vêm do{" "}
-            <span className="font-medium text-slate-700">Supabase Auth</span>; nome e telefone em{" "}
-            <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-800">
-              public.profiles
-            </code>{" "}
-            (a API usa service role).
+            Cargo e estado ficam em{" "}
+            <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-800">profiles</code>
+            ; inativos ficam também bloqueados no Auth (login impossível).
           </p>
         </div>
         <button
           type="button"
           onClick={() => {
-            setFormCreate({ email: "", password: "", display_name: "", phone: "" });
+            setFormCreate({
+              email: "",
+              password: "",
+              display_name: "",
+              phone: "",
+              role: "user",
+              is_active: true,
+            });
             setCreateOpen(true);
           }}
           className="btn-primary shrink-0"
@@ -187,16 +232,41 @@ export default function UsuariosPage() {
                 <th>E-mail</th>
                 <th>Nome</th>
                 <th>Telefone</th>
+                <th>Cargo</th>
+                <th>Estado</th>
                 <th>Último acesso</th>
                 <th>Ações</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id}>
+                <tr
+                  key={r.id}
+                  className={
+                    !r.is_active ? "bg-slate-50 text-slate-500 dark:bg-slate-900/40 dark:text-slate-400" : ""
+                  }
+                >
                   <td className="font-medium text-slate-900">{r.email ?? "—"}</td>
                   <td>{r.display_name ?? "—"}</td>
                   <td>{r.phone ?? "—"}</td>
+                  <td>
+                    <span
+                      className={
+                        r.role === "admin"
+                          ? "rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800"
+                          : "rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700"
+                      }
+                    >
+                      {roleLabel(r.role)}
+                    </span>
+                  </td>
+                  <td>
+                    {r.is_active ? (
+                      <span className="text-emerald-700">Ativo</span>
+                    ) : (
+                      <span className="text-rose-700">Inativo</span>
+                    )}
+                  </td>
                   <td className="text-slate-600">
                     {r.last_sign_in_at ? formatDate(r.last_sign_in_at) : "—"}
                   </td>
@@ -213,7 +283,7 @@ export default function UsuariosPage() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-10 text-center text-slate-500">
+                  <td colSpan={7} className="py-10 text-center text-slate-500">
                     Nenhum utilizador. Crie o primeiro com &quot;Novo utilizador&quot; ou /auth/register.
                   </td>
                 </tr>
@@ -282,6 +352,40 @@ export default function UsuariosPage() {
                   onChange={(e) => setFormCreate({ ...formCreate, phone: e.target.value })}
                 />
               </div>
+              <div>
+                <label className="form-label" htmlFor="create-role">
+                  Cargo
+                </label>
+                <select
+                  id="create-role"
+                  className="input-field mt-1.5"
+                  value={formCreate.role}
+                  onChange={(e) => {
+                    const role = e.target.value === "admin" ? "admin" : "user";
+                    setFormCreate((f) => ({
+                      ...f,
+                      role,
+                      is_active: role === "admin" ? true : f.is_active,
+                    }));
+                  }}
+                >
+                  <option value="user">Utilizador</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-slate-700">
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  checked={formCreate.is_active}
+                  disabled={formCreate.role === "admin"}
+                  onChange={(e) => setFormCreate({ ...formCreate, is_active: e.target.checked })}
+                />
+                Conta ativa (pode iniciar sessão)
+              </label>
+              {formCreate.role === "admin" && (
+                <p className="text-xs text-slate-500">Administradores são sempre criados ativos.</p>
+              )}
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>
@@ -308,7 +412,10 @@ export default function UsuariosPage() {
         >
           <div className="modal-panel">
             <h3 className="text-lg font-semibold text-slate-900">Editar utilizador</h3>
-            <p className="mt-1 text-sm text-slate-500">Campos com * são obrigatórios quando aplicável.</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Campos com * são obrigatórios quando aplicável. Não pode inativar-se nem remover o seu próprio
+              administrador.
+            </p>
             <div className="mt-5 space-y-4 text-sm">
               <div>
                 <label className="form-label" htmlFor="edit-email">
@@ -357,6 +464,49 @@ export default function UsuariosPage() {
                   onChange={(e) => setFormEdit({ ...formEdit, phone: e.target.value })}
                 />
               </div>
+              <div>
+                <label className="form-label" htmlFor="edit-role">
+                  Cargo
+                </label>
+                <select
+                  id="edit-role"
+                  className="input-field mt-1.5"
+                  value={formEdit.role}
+                  disabled={edit?.id === meId && edit?.role === "admin"}
+                  onChange={(e) => {
+                    const role = e.target.value === "admin" ? "admin" : "user";
+                    setFormEdit({
+                      ...formEdit,
+                      role,
+                      is_active: role === "admin" ? true : formEdit.is_active,
+                    });
+                  }}
+                >
+                  <option value="user">Utilizador</option>
+                  <option value="admin">Administrador</option>
+                </select>
+                {edit?.id === meId && edit.role === "admin" && (
+                  <p className="mt-1 text-xs text-amber-700">Para mudar cargo de administrador na sua conta peça outro administrador ou use SQL no Supabase.</p>
+                )}
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-slate-700">
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  checked={formEdit.is_active}
+                  disabled={edit?.id === meId || formEdit.role === "admin"}
+                  onChange={(e) => setFormEdit({ ...formEdit, is_active: e.target.checked })}
+                />
+                Conta ativa
+              </label>
+              {formEdit.role === "admin" && (
+                <p className="text-xs text-slate-500">Administradores têm de estar ativos.</p>
+              )}
+              {edit && !edit.is_active && edit.banned_until && (
+                <p className="text-xs text-slate-500">
+                  Banimento Auth até {formatDate(edit.banned_until)} (informação sincronizada com inativo).
+                </p>
+              )}
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => setEdit(null)}>

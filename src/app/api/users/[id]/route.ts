@@ -1,7 +1,9 @@
+import { mapAuthUserToPortalUser, type ProfileRow } from "@/app/api/users/map-portal-user";
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { countActiveAdmins } from "@/lib/portal-user-admin-guards";
 import { requirePortalAdmin } from "@/lib/require-portal-admin";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
-import type { PortalUser } from "@/types";
+import { syncAuthBanWithActiveFlag } from "@/lib/user-auth-ban";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -27,11 +29,20 @@ export async function PATCH(
     password?: string | null;
     display_name?: string | null;
     phone?: string | null;
+    role?: string | null;
+    is_active?: boolean;
   };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+
+  if (body.role != null && body.role !== "admin" && body.role !== "user") {
+    return NextResponse.json({ error: 'role deve ser "admin" ou "user"' }, { status: 400 });
+  }
+  if (body.is_active !== undefined && typeof body.is_active !== "boolean") {
+    return NextResponse.json({ error: "is_active deve ser booleano" }, { status: 400 });
   }
 
   let admin;
@@ -49,6 +60,45 @@ export async function PATCH(
     return NextResponse.json({ error: "Utilizador não encontrado" }, { status: 404 });
   }
   const u = existing.user;
+
+  const { data: currentProf } = await admin.from("profiles").select("*").eq("id", params.id).maybeSingle();
+  const pr = currentProf as ProfileRow | null;
+  const currRole = pr?.role === "admin" ? "admin" : "user";
+  const currActive = pr?.is_active ?? true;
+
+  const nextRole = body.role != null ? (body.role === "admin" ? "admin" : "user") : currRole;
+  const nextActive = body.is_active !== undefined ? body.is_active : currActive;
+
+  if (nextRole === "admin" && !nextActive) {
+    return NextResponse.json(
+      { error: "Administrador tem de permanecer ativo. Inative primeiro como utilizador ou use outro administrador." },
+      { status: 400 }
+    );
+  }
+
+  if (params.id === auth.userId) {
+    if (!nextActive) {
+      return NextResponse.json({ error: "Não pode inativar a própria conta." }, { status: 400 });
+    }
+    if (currRole === "admin" && nextRole === "user") {
+      return NextResponse.json({ error: "Não pode remover o próprio perfil de administrador." }, { status: 400 });
+    }
+  }
+
+  const wasEligibleAdmin = currRole === "admin" && currActive;
+  const willBeEligibleAdmin = nextRole === "admin" && nextActive;
+  if (wasEligibleAdmin && !willBeEligibleAdmin) {
+    const n = await countActiveAdmins(admin);
+    if (n < 2) {
+      return NextResponse.json(
+        {
+          error:
+            "Tem de existir pelo menos dois administradores ativos para remover ou inativar um deles.",
+        },
+        { status: 400 }
+      );
+    }
+  }
 
   const email = body.email != null ? String(body.email).trim().toLowerCase() : null;
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -72,33 +122,49 @@ export async function PATCH(
     }
   }
 
-  const display_name = body.display_name !== undefined ? (String(body.display_name).trim() || null) : undefined;
+  const display_name =
+    body.display_name !== undefined ? (String(body.display_name).trim() || null) : undefined;
   const phone = body.phone !== undefined ? (String(body.phone).trim() || null) : undefined;
 
-  if (display_name !== undefined || phone !== undefined) {
-    const { data: currentProf } = await admin.from("profiles").select("*").eq("id", params.id).maybeSingle();
-    const nextDisplay = display_name !== undefined ? display_name : (currentProf?.display_name as string | null) ?? null;
-    const nextPhone = phone !== undefined ? phone : (currentProf?.phone as string | null) ?? null;
+  const nextDisplay = display_name !== undefined ? display_name : (pr?.display_name ?? null);
+  const nextPhone = phone !== undefined ? phone : (pr?.phone ?? null);
 
-    const { error: upErr } = await admin.from("profiles").upsert(
-      {
-        id: params.id,
-        display_name: nextDisplay,
-        phone: nextPhone,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    );
-    if (upErr) {
-      return NextResponse.json({ error: upErr.message }, { status: 500 });
+  if (currActive !== nextActive) {
+    const sync = await syncAuthBanWithActiveFlag(admin, params.id, nextActive);
+    if (sync.error) {
+      return NextResponse.json({ error: `Auth: ${sync.error}` }, { status: 500 });
     }
+  }
 
-    if (display_name !== undefined) {
-      const meta = { ...(u.user_metadata ?? {}), display_name: nextDisplay };
-      const { error: mErr } = await admin.auth.admin.updateUserById(params.id, { user_metadata: meta });
-      if (mErr) {
-        return NextResponse.json({ error: mErr.message }, { status: 400 });
+  const { error: upErr } = await admin.from("profiles").upsert(
+    {
+      id: params.id,
+      display_name: nextDisplay,
+      phone: nextPhone,
+      role: nextRole,
+      is_active: nextActive,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" }
+  );
+  if (upErr) {
+    try {
+      if (currActive !== nextActive) {
+        await syncAuthBanWithActiveFlag(admin, params.id, currActive);
       }
+    } catch {
+      /* best effort revert */
+    }
+    return NextResponse.json({ error: upErr.message }, { status: 500 });
+  }
+
+  if (display_name !== undefined) {
+    const { data: uAfterProf } = await admin.auth.admin.getUserById(params.id);
+    const uu = uAfterProf?.user ?? u;
+    const meta = { ...(uu.user_metadata ?? {}), display_name: nextDisplay };
+    const { error: mErr } = await admin.auth.admin.updateUserById(params.id, { user_metadata: meta });
+    if (mErr) {
+      return NextResponse.json({ error: mErr.message }, { status: 400 });
     }
   }
 
@@ -108,13 +174,6 @@ export async function PATCH(
   }
   const { data: prof } = await admin.from("profiles").select("*").eq("id", params.id).maybeSingle();
 
-  const out: PortalUser = {
-    id: fresh.user.id,
-    email: fresh.user.email ?? null,
-    display_name: (prof?.display_name as string | null) ?? (fresh.user.user_metadata?.display_name as string | undefined) ?? null,
-    phone: (prof?.phone as string | null) ?? null,
-    last_sign_in_at: fresh.user.last_sign_in_at ?? null,
-    created_at: fresh.user.created_at,
-  };
+  const out = mapAuthUserToPortalUser(fresh.user, (prof ?? undefined) as ProfileRow | undefined);
   return NextResponse.json({ user: out });
 }

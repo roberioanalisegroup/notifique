@@ -95,6 +95,12 @@ export interface PortalUser {
   phone: string | null;
   last_sign_in_at: string | null;
   created_at: string;
+  /** `public.profiles.role` */
+  role: "admin" | "user";
+  /** `public.profiles.is_active` — sincronizado com banimento no Auth quando inativo. */
+  is_active: boolean;
+  /** Data de fim de banimento no Auth (informativo). */
+  banned_until?: string | null;
 }
 
 export interface SyncLog {
