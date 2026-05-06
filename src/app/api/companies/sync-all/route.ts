@@ -23,8 +23,25 @@ export async function POST(request: NextRequest) {
   const auth = await getSupabaseForRequest(request, { allowServiceRole: true });
   if ("error" in auth) return auth.error;
   const { supabase, isServiceRole, userId } = auth;
-  if (!isServiceRole && !userId) {
-    return NextResponse.json({ error: "Acesso negado" }, { status: 401 });
+  
+  if (!isServiceRole) {
+    if (!userId) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+    
+    // Verificar se o utilizador é administrador
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
+      
+    if (profile?.role !== "admin") {
+      return NextResponse.json(
+        { error: "Acesso negado. Apenas administradores podem disparar a sincronização global." },
+        { status: 403 }
+      );
+    }
   }
 
   const { data: configRow, error: configErr } = await supabase
