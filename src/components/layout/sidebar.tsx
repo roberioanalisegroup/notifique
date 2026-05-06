@@ -69,7 +69,10 @@ const items: Item[] = [
     label: "Empresas",
     icon: <Building2 className="h-5 w-5 shrink-0" />,
     parentNavigates: true,
-    children: [{ href: "/portal/empresas/importar", label: "Importar" }],
+    children: [
+      { href: "/portal/empresas/importar", label: "Importar" },
+      { href: "/portal/empresas/responsaveis", label: "Responsáveis" },
+    ],
   },
   {
     id: "alvaras",

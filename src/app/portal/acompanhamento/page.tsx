@@ -1296,9 +1296,14 @@ function TaskCard({
 
       <p className="mt-1 text-[0.7rem] text-slate-600">Periodicidade: {freq}</p>
 
-      <div className="mt-2 flex items-center gap-1 text-[0.75rem] text-slate-600">
+      <div className="mt-2 text-[0.7rem] text-slate-600">
+        <span className="font-medium text-slate-500">Responsável (empresa):</span>{" "}
+        {(c?.responsible?.display_name ?? "").trim() || "—"}
+      </div>
+
+      <div className="mt-1 flex items-center gap-1 text-[0.75rem] text-slate-600">
         <UserCircle className="h-4 w-4 shrink-0 text-slate-400" />
-        <span className="truncate">{task.notes?.slice(0, 80) || "Sem responsável / notas"}</span>
+        <span className="truncate">{task.notes?.slice(0, 80) || "Sem notas na tarefa"}</span>
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-2 text-[0.72rem]">

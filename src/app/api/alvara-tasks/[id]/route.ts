@@ -1,3 +1,4 @@
+import { COMPANY_IN_TASK_SELECT } from "@/lib/alvara-task-company-select";
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import {
   computeDataVencimentoISO,
@@ -15,7 +16,7 @@ const TASK_SELECT = `
   *,
   company_alvaras (
     *,
-    companies ( id, cnpj, razao_social, nome_fantasia ),
+    companies ( ${COMPANY_IN_TASK_SELECT} ),
     alvaras ( *, alvara_groups ( id, name, color ) )
   )
 `;

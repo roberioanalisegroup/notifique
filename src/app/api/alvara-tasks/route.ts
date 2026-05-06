@@ -1,3 +1,4 @@
+import { COMPANY_IN_TASK_SELECT } from "@/lib/alvara-task-company-select";
 import { resetCompanyAlvaraIfNoActiveTasks } from "@/lib/alvara-task-vinculo-reset";
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { inicioObrigatorioAteFromCriacao } from "@/lib/alvara-task-generation";
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
       *,
       company_alvaras (
         *,
-        companies ( id, cnpj, razao_social, nome_fantasia, situacao_cadastral, municipio, uf ),
+        companies ( ${COMPANY_IN_TASK_SELECT} ),
         alvaras ( *, alvara_groups ( id, name, color ) )
       )
     `

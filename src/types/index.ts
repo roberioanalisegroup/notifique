@@ -39,6 +39,10 @@ export interface Company {
   updated_at: string;
   /** Preenchido quando a empresa foi arquivada (soft-delete). Null = lista principal. */
   archived_at?: string | null;
+  /** Perfil (`profiles.id`) do colaborador responsável pela empresa no portal. */
+  responsible_user_id?: string | null;
+  /** Preenchido em joins PostgREST (tarefas / vínculos). */
+  responsible?: { id: string; display_name: string | null } | null;
 }
 
 export type CompanyHistoryEventType =
@@ -231,6 +235,8 @@ export interface CompanyAlvaraSummary {
   situacao_cadastral: string | null;
   municipio: string | null;
   uf: string | null;
+  /** Colaborador responsável pela empresa (`profiles.id`). */
+  responsible_user_id?: string | null;
   /** CNAE principal (texto Receita) — coluna da view após migração `companies_alvara_summary_cnae_busca`. */
   atividade_principal?: string | null;
   /** Lista JSON de `{ codigo, descricao }` — coluna da view após a mesma migração. */

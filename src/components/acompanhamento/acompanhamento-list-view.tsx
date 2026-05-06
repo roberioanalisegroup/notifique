@@ -1,6 +1,7 @@
 "use client";
 
 import type { AcompanhamentoTaskRow } from "@/components/acompanhamento/acompanhamento-task-type";
+import type { Company } from "@/types";
 import { cn, formatDate } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 
@@ -10,6 +11,11 @@ function labelFromCa(ca: AcompanhamentoTaskRow["company_alvaras"]) {
   if (!ca?.companies) return "—";
   const c = ca.companies;
   return (c.razao_social ?? c.nome_fantasia ?? "—").trim() || "—";
+}
+
+function responsibleFromCompany(c: Company | null | undefined) {
+  const name = c?.responsible?.display_name?.trim();
+  return name && name.length > 0 ? name : "—";
 }
 
 function colLabel(col: UiColumn): string {
@@ -55,6 +61,7 @@ export function AcompanhamentoListView({
             <tr>
               <th>Alvará</th>
               <th>Empresa</th>
+              <th>Responsável</th>
               <th>Vencimento (tarefa)</th>
               <th>Emissão (vínculo)</th>
               <th>Coluna</th>
@@ -76,6 +83,9 @@ export function AcompanhamentoListView({
                   </td>
                   <td className="max-w-[200px] text-slate-700">
                     <span className="line-clamp-2">{labelFromCa(ca)}</span>
+                  </td>
+                  <td className="max-w-[160px] text-slate-600">
+                    <span className="line-clamp-2">{responsibleFromCompany(ca?.companies)}</span>
                   </td>
                   <td className="whitespace-nowrap text-slate-600">
                     {formatDate(t.due_date, { empty: "—" })}

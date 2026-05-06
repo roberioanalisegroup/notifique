@@ -334,6 +334,12 @@ export function TaskEditModal({
                     companyLabel(c)
                   )}
                 </p>
+                <p className="mt-0.5 text-sm text-slate-600">
+                  Responsável:{" "}
+                  <span className="font-medium text-slate-800">
+                    {(c?.responsible?.display_name ?? "").trim() || "—"}
+                  </span>
+                </p>
               </div>
 
               <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs text-slate-700">

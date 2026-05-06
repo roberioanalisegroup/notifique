@@ -1,6 +1,7 @@
 "use client";
 
 import type { AcompanhamentoTaskRow } from "@/components/acompanhamento/acompanhamento-task-type";
+import type { Company } from "@/types";
 import { cn } from "@/lib/utils";
 import {
   addMonths,
@@ -31,6 +32,11 @@ function labelFromCa(ca: AcompanhamentoTaskRow["company_alvaras"]) {
   if (!ca?.companies) return "—";
   const c = ca.companies;
   return (c.razao_social ?? c.nome_fantasia ?? "—").trim() || "—";
+}
+
+function responsibleFromCompany(c: Company | null | undefined) {
+  const name = c?.responsible?.display_name?.trim();
+  return name && name.length > 0 ? name : "—";
 }
 
 function eventClass(t: AcompanhamentoTaskRow, getUiColumn: (t: AcompanhamentoTaskRow) => UiColumn): string {
@@ -168,7 +174,7 @@ export function AcompanhamentoCalendarView({
                     <button
                       key={t.id}
                       type="button"
-                      title={`${title} — ${labelFromCa(t.company_alvaras)}`}
+                      title={`${title} — ${labelFromCa(t.company_alvaras)} · Responsável: ${responsibleFromCompany(t.company_alvaras?.companies)}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         onOpen(t);
