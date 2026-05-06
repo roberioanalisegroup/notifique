@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
           duplicates += 1;
         } else {
           const insertRow: Record<string, unknown> = {
+            user_id: auth.userId,
             cadastro_tipo: "cnpj",
             numero_documento: cnpj,
             cnpj,
@@ -120,7 +121,9 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < toSync.length; i++) {
         if (i > 0) await sleep(CNPJ_BATCH_DELAY_MS);
         const cnpj = toSync[i];
-        const { company, error } = await upsertCompanyByCNPJ(supabase, cnpj);
+        const { company, error } = await upsertCompanyByCNPJ(supabase, cnpj, {
+          userId: auth.userId,
+        });
         send({
           type: "progress",
           index: i + 1,

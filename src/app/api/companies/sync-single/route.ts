@@ -21,7 +21,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "cnpj é obrigatório" }, { status: 400 });
   }
 
-  const { company, error, notFound } = await upsertCompanyByCNPJ(supabase, cnpj);
+  const { company, error, notFound } = await upsertCompanyByCNPJ(supabase, cnpj, {
+    userId: auth.userId,
+  });
   if (error && !company) {
     return NextResponse.json(
       { error, notFound, company: null },

@@ -8,7 +8,7 @@ export const SYNC_CONFIG_ID = "00000000-0000-0000-0000-000000000001";
 export async function upsertCompanyByCNPJ(
   supabase: SupabaseClient,
   cnpj: string,
-  options?: { cadastroTipo?: CompanyCadastroTipo }
+  options?: { cadastroTipo?: CompanyCadastroTipo; userId?: string | null }
 ): Promise<{
   company: Company | null;
   error: string | null;
@@ -26,18 +26,19 @@ export async function upsertCompanyByCNPJ(
   if (apiError && !apiData) {
     const notFound = apiError === "CNPJ não encontrado";
     const sync_status = notFound ? "not_found" : "error";
-    await supabase.from("companies").upsert(
-      {
-        cadastro_tipo: cadastroTipo,
-        numero_documento: clean,
-        cnpj: clean,
-        sync_status,
-        sync_error: apiError,
-        last_sync_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "numero_documento" }
-    );
+    
+    const payload: Record<string, any> = {
+      cadastro_tipo: cadastroTipo,
+      numero_documento: clean,
+      cnpj: clean,
+      sync_status,
+      sync_error: apiError,
+      last_sync_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (options?.userId) payload.user_id = options.userId;
+
+    await supabase.from("companies").upsert(payload, { onConflict: "numero_documento" });
     return { company: null, error: apiError, notFound };
   }
 
@@ -46,18 +47,18 @@ export async function upsertCompanyByCNPJ(
   }
 
   const mapped = mapBrasilAPIToCompany(apiData);
+  const payload: Record<string, any> = {
+    ...mapped,
+    cadastro_tipo: cadastroTipo,
+    numero_documento: clean,
+    cnpj: clean,
+    updated_at: new Date().toISOString(),
+  };
+  if (options?.userId) payload.user_id = options.userId;
+
   const { data, error } = await supabase
     .from("companies")
-    .upsert(
-      {
-        ...mapped,
-        cadastro_tipo: cadastroTipo,
-        numero_documento: clean,
-        cnpj: clean,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "numero_documento" }
-    )
+    .upsert(payload, { onConflict: "numero_documento" })
     .select()
     .single();
 

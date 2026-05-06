@@ -170,6 +170,7 @@ export async function POST(request: NextRequest) {
               : null,
         }
       : {}),
+    user_id: auth.userId,
     sync_status: sincronizar ? "pending" : "manual",
     sync_error: null,
     updated_at: new Date().toISOString(),
@@ -193,6 +194,7 @@ export async function POST(request: NextRequest) {
   if (sincronizar && cnpjCol) {
     const { company: synced, error: syncErr } = await upsertCompanyByCNPJ(supabase, cnpjCol, {
       cadastroTipo: tipo === "mei" ? "mei" : "cnpj",
+      userId: auth.userId,
     });
     if (synced) company = synced;
     else if (syncErr) syncWarning = syncErr;
