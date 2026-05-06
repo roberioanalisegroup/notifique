@@ -1,19 +1,37 @@
-import { Sidebar } from "@/components/layout/sidebar";
+import { PortalLayoutClient } from "@/app/portal/portal-layout-client";
+import { parsePortalPermissionsFromDb } from "@/lib/sanitize-portal-permissions";
+import { createClient } from "@/lib/supabase/server";
+import type { PortalPermissionsMap } from "@/types";
 
-export default function PortalLayout({
+export default async function PortalLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div
-      className="flex min-h-screen w-full max-w-full flex-col bg-[#f8fafc] text-slate-900 [color-scheme:light] md:min-h-0 md:h-screen md:flex-row"
-      style={{ colorScheme: "light" }}
-    >
-      <Sidebar />
-      <main className="relative z-0 min-h-0 w-full min-w-0 flex-1 overflow-y-auto border-l border-slate-200/80 bg-[#f8fafc] pt-16 md:pt-0">
-        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</div>
-      </main>
-    </div>
-  );
+  let profile: {
+    role: string | null;
+    portal_permissions: PortalPermissionsMap | null;
+  } = { role: "user", portal_permissions: null };
+
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user?.id) {
+      const { data } = await supabase
+        .from("profiles")
+        .select("role, portal_permissions")
+        .eq("id", user.id)
+        .maybeSingle();
+      profile = {
+        role: (data?.role as string | undefined) ?? "user",
+        portal_permissions: parsePortalPermissionsFromDb(data?.portal_permissions),
+      };
+    }
+  } catch {
+    /* placeholders / env incompleta no build */
+  }
+
+  return <PortalLayoutClient profile={profile}>{children}</PortalLayoutClient>;
 }

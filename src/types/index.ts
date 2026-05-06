@@ -92,6 +92,9 @@ export interface Profile {
   updated_at: string;
 }
 
+/** Permissões finas ({ area: "read" | "edit" }); `null` no perfil = acesso total (legado). */
+export type PortalPermissionsMap = Partial<Record<string, "read" | "edit">>;
+
 export interface PortalUser {
   id: string;
   email: string | null;
@@ -105,6 +108,8 @@ export interface PortalUser {
   is_active: boolean;
   /** Data de fim de banimento no Auth (informativo). */
   banned_until?: string | null;
+  /** Mapa de telas apenas para role `user`. `null` = todas as áreas como edição (comportamento antigo). */
+  portal_permissions: PortalPermissionsMap | null;
 }
 
 export interface SyncLog {

@@ -1,12 +1,122 @@
 "use client";
 
-import { apiJson } from "@/lib/api-client";
+import { PORTAL_SCREEN_DEFS } from "@/config/portal-screens";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiJson } from "@/lib/api-client";
+import { sanitizePortalPermissions } from "@/lib/sanitize-portal-permissions";
 import { createClient } from "@/lib/supabase/client";
-import type { PortalUser } from "@/types";
+import type { PortalPermissionsMap, PortalUser } from "@/types";
 import { formatDate } from "@/lib/utils";
+import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+
+const CONFIGURABLE_SCREENS = PORTAL_SCREEN_DEFS.filter((s) => !s.adminOnly);
+
+type PermLevel = "none" | "read" | "edit";
+
+function fullEditSelections(): Record<string, PermLevel> {
+  return Object.fromEntries(CONFIGURABLE_SCREENS.map((s) => [s.key, "edit" as const])) as Record<
+    string,
+    PermLevel
+  >;
+}
+
+function selectionsFromStored(
+  p: PortalPermissionsMap | null | undefined,
+  role: PortalUser["role"]
+): Record<string, PermLevel> {
+  return Object.fromEntries(
+    CONFIGURABLE_SCREENS.map((s) => {
+      const v = role === "user" && p != null ? p[s.key] : undefined;
+      return [s.key, v === "read" || v === "edit" ? v : ("none" as PermLevel)];
+    })
+  ) as Record<string, PermLevel>;
+}
+
+function shouldRestrictStored(p: PortalPermissionsMap | null | undefined, role: PortalUser["role"]): boolean {
+  return role === "user" && p != null;
+}
+
+/** Converte níveis UI → mapa gravado (`none` omitido); passa sanitize. */
+function serializePermSelections(sel: Record<string, PermLevel>): PortalPermissionsMap {
+  const out: PortalPermissionsMap = {};
+  for (const s of CONFIGURABLE_SCREENS) {
+    const v = sel[s.key];
+    if (v === "read" || v === "edit") out[s.key] = v;
+  }
+  return sanitizePortalPermissions(out);
+}
+
+function TelasAcessoUsuario({
+  enabled,
+  restrict,
+  setRestrict,
+  perm,
+  setPerm,
+}: {
+  enabled: boolean;
+  restrict: boolean;
+  setRestrict: (v: boolean) => void;
+  perm: Record<string, PermLevel>;
+  setPerm: Dispatch<SetStateAction<Record<string, PermLevel>>>;
+}) {
+  if (!enabled) {
+    return (
+      <p className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        Administradores têm acesso total a todas as áreas configuráveis. A gestão de utilizadores continua reservada a
+        administradores.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200/80 bg-slate-50/80 p-3">
+      <label className="flex cursor-pointer items-start gap-2 text-slate-800">
+        <input
+          type="checkbox"
+          className="mt-1 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          checked={restrict}
+          onChange={(e) => {
+            const on = e.target.checked;
+            setRestrict(on);
+            if (on) setPerm(fullEditSelections());
+          }}
+        />
+        <span>
+          <span className="font-medium">Restringir telas do portal</span>
+          <span className="mt-0.5 block text-xs font-normal text-slate-600">
+            Desligado: igual ao comportamento anterior (todas as telas configuráveis, com edição). Ligado: só entram no
+            mapa as telas que definir; &quot;Sem acesso&quot; bloqueia a rota ao guardar.
+          </span>
+        </span>
+      </label>
+      {restrict && (
+        <div className="max-h-56 space-y-2 overflow-y-auto border-t border-slate-200/80 pt-3">
+          {CONFIGURABLE_SCREENS.map((s) => (
+            <div
+              key={s.key}
+              className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+            >
+              <span className="min-w-0 flex-1 text-xs text-slate-700">{s.label}</span>
+              <select
+                className="input-field h-9 max-w-full flex-none text-xs sm:w-44"
+                value={perm[s.key] ?? "none"}
+                onChange={(e) => {
+                  const v = e.target.value as PermLevel;
+                  setPerm((prev) => ({ ...prev, [s.key]: v }));
+                }}
+              >
+                <option value="none">Sem acesso</option>
+                <option value="read">Só visualização</option>
+                <option value="edit">Edição</option>
+              </select>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function UsuariosSkeleton() {
   return (
@@ -81,6 +191,8 @@ export default function UsuariosPage() {
     role: "user" as PortalUser["role"],
     is_active: true,
   });
+  const [portalRestrictCreate, setPortalRestrictCreate] = useState(false);
+  const [permCreate, setPermCreate] = useState<Record<string, PermLevel>>(() => fullEditSelections());
   const [formEdit, setFormEdit] = useState({
     email: "",
     password: "",
@@ -89,6 +201,8 @@ export default function UsuariosPage() {
     role: "user" as PortalUser["role"],
     is_active: true,
   });
+  const [portalRestrictEdit, setPortalRestrictEdit] = useState(false);
+  const [permEdit, setPermEdit] = useState<Record<string, PermLevel>>(() => fullEditSelections());
 
   useEffect(() => {
     let cancelled = false;
@@ -128,6 +242,9 @@ export default function UsuariosPage() {
       role: r.role,
       is_active: r.is_active,
     });
+    const restrict = shouldRestrictStored(r.portal_permissions, r.role);
+    setPortalRestrictEdit(restrict);
+    setPermEdit(selectionsFromStored(r.portal_permissions, r.role));
   }
 
   async function saveCreate() {
@@ -142,6 +259,11 @@ export default function UsuariosPage() {
           phone: formCreate.phone || null,
           role: formCreate.role,
           is_active: formCreate.is_active,
+          ...(formCreate.role === "admin"
+            ? {}
+            : {
+                portal_permissions: portalRestrictCreate ? serializePermSelections(permCreate) : null,
+              }),
         }),
       });
       toast.success("Utilizador criado");
@@ -154,6 +276,8 @@ export default function UsuariosPage() {
         role: "user",
         is_active: true,
       });
+      setPortalRestrictCreate(false);
+      setPermCreate(fullEditSelections());
       void load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
@@ -166,12 +290,18 @@ export default function UsuariosPage() {
     if (!edit) return;
     setSaving(true);
     try {
-      const body: Record<string, string | null | boolean> = {
+      const body: Record<string, string | null | boolean | PortalPermissionsMap | null> = {
         email: formEdit.email,
         display_name: formEdit.display_name || null,
         phone: formEdit.phone || null,
         role: formEdit.role,
         is_active: formEdit.is_active,
+        portal_permissions:
+          formEdit.role === "admin"
+            ? null
+            : portalRestrictEdit
+              ? serializePermSelections(permEdit)
+              : null,
       };
       if (formEdit.password.length > 0) {
         body.password = formEdit.password;
@@ -216,6 +346,8 @@ export default function UsuariosPage() {
               role: "user",
               is_active: true,
             });
+            setPortalRestrictCreate(false);
+            setPermCreate(fullEditSelections());
             setCreateOpen(true);
           }}
           className="btn-primary shrink-0"
@@ -367,6 +499,7 @@ export default function UsuariosPage() {
                       role,
                       is_active: role === "admin" ? true : f.is_active,
                     }));
+                    if (role === "admin") setPortalRestrictCreate(false);
                   }}
                 >
                   <option value="user">Utilizador</option>
@@ -386,6 +519,16 @@ export default function UsuariosPage() {
               {formCreate.role === "admin" && (
                 <p className="text-xs text-slate-500">Administradores são sempre criados ativos.</p>
               )}
+              <div>
+                <p className="form-label mb-2">Telas do portal</p>
+                <TelasAcessoUsuario
+                  enabled={formCreate.role === "user"}
+                  restrict={portalRestrictCreate}
+                  setRestrict={setPortalRestrictCreate}
+                  perm={permCreate}
+                  setPerm={setPermCreate}
+                />
+              </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>
@@ -480,6 +623,12 @@ export default function UsuariosPage() {
                       role,
                       is_active: role === "admin" ? true : formEdit.is_active,
                     });
+                    if (role === "admin") {
+                      setPortalRestrictEdit(false);
+                    } else if (role === "user" && edit) {
+                      setPortalRestrictEdit(shouldRestrictStored(edit.portal_permissions, "user"));
+                      setPermEdit(selectionsFromStored(edit.portal_permissions, "user"));
+                    }
                   }}
                 >
                   <option value="user">Utilizador</option>
@@ -507,6 +656,16 @@ export default function UsuariosPage() {
                   Banimento Auth até {formatDate(edit.banned_until)} (informação sincronizada com inativo).
                 </p>
               )}
+              <div>
+                <p className="form-label mb-2">Telas do portal</p>
+                <TelasAcessoUsuario
+                  enabled={formEdit.role === "user"}
+                  restrict={portalRestrictEdit}
+                  setRestrict={setPortalRestrictEdit}
+                  perm={permEdit}
+                  setPerm={setPermEdit}
+                />
+              </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => setEdit(null)}>

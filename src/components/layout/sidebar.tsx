@@ -1,6 +1,8 @@
 "use client";
 
+import { usePortalProfile } from "@/components/portal/portal-access-context";
 import { UserMenu } from "@/components/layout/user-menu";
+import { accessForPortalPath } from "@/lib/portal-access";
 import { cn } from "@/lib/utils";
 import {
   Building2,
@@ -17,7 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Item = {
   id: string;
@@ -113,6 +115,18 @@ function NavItem({
   setOpenFlyout: (id: string | null) => void;
 }) {
   const pathname = usePathname();
+  const profile = usePortalProfile();
+  const allow = useCallback(
+    (href: string) => accessForPortalPath(profile, href) !== "none",
+    [profile]
+  );
+  const childFiltered = useMemo(
+    () => item.children?.filter((c) => allow(c.href)) ?? [],
+    [item.children, allow]
+  );
+  const sectionVisible =
+    !!item.children && item.children.length > 0 ? allow(item.href) || childFiltered.length > 0 : allow(item.href);
+
   const [accordionOpen, setAccordionOpen] = useState(() =>
     accordionInitialOpen(item, pathname)
   );
@@ -138,6 +152,8 @@ function NavItem({
 
   const parentLinkExactActive = item.parentNavigates && pathname === item.href;
 
+  if (!sectionVisible) return null;
+
   if (item.children && item.parentNavigates && collapsed) {
     return (
       <div className="relative">
@@ -159,22 +175,28 @@ function NavItem({
             className="absolute left-full top-0 z-[70] ml-2 min-w-[11rem] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1.5 shadow-portal-md ring-1 ring-slate-900/5"
             role="menu"
           >
-            <Link
-              href={item.href}
-              onClick={() => {
-                setOpenFlyout(null);
-                mobileClose?.();
-              }}
-              className={cn(
-                "block border-b border-slate-100 px-3 py-2 text-sm font-medium transition-colors",
-                parentLinkExactActive
-                  ? "bg-blue-50 text-blue-800"
-                  : "text-slate-800 hover:bg-slate-50"
-              )}
-            >
-              {item.label}
-            </Link>
-            {item.children.map((c) => {
+            {allow(item.href) ? (
+              <Link
+                href={item.href}
+                onClick={() => {
+                  setOpenFlyout(null);
+                  mobileClose?.();
+                }}
+                className={cn(
+                  "block border-b border-slate-100 px-3 py-2 text-sm font-medium transition-colors",
+                  parentLinkExactActive
+                    ? "bg-blue-50 text-blue-800"
+                    : "text-slate-800 hover:bg-slate-50"
+                )}
+              >
+                {item.label}
+              </Link>
+            ) : (
+              <p className="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                {item.label}
+              </p>
+            )}
+            {childFiltered.map((c) => {
               const cActive =
                 pathname === c.href || pathname?.startsWith(c.href + "/");
               return (
@@ -206,19 +228,30 @@ function NavItem({
     return (
       <div>
         <div className="flex w-full items-center gap-0.5 rounded-xl">
-          <Link
-            href={item.href}
-            onClick={mobileClose}
-            className={cn(
-              "flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-              parentLinkExactActive
-                ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-600/20"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-            )}
-          >
-            {item.icon}
-            <span className="truncate">{item.label}</span>
-          </Link>
+          {allow(item.href) ? (
+            <Link
+              href={item.href}
+              onClick={mobileClose}
+              className={cn(
+                "flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                parentLinkExactActive
+                  ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-600/20"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              )}
+            >
+              {item.icon}
+              <span className="truncate">{item.label}</span>
+            </Link>
+          ) : (
+            <div
+              className={cn(
+                "flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500"
+              )}
+            >
+              {item.icon}
+              <span className="truncate">{item.label}</span>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setAccordionOpen(!accordionOpen)}
@@ -238,7 +271,7 @@ function NavItem({
         </div>
         {accordionOpen && (
           <div className="mt-1 space-y-0.5 border-l-2 border-slate-200/80 pl-3 ml-1.5">
-            {item.children.map((c) => {
+            {childFiltered.map((c) => {
               const cActive =
                 pathname === c.href || pathname?.startsWith(c.href + "/");
               return (
@@ -286,7 +319,7 @@ function NavItem({
             <p className="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               {item.label}
             </p>
-            {item.children.map((c) => {
+            {childFiltered.map((c) => {
               const cActive = pathname === c.href;
               return (
                 <Link
@@ -355,7 +388,7 @@ function NavItem({
       </button>
       {accordionOpen && (
         <div className="mt-1 space-y-0.5 border-l-2 border-slate-200/80 pl-3 ml-1.5">
-          {item.children.map((c) => {
+          {childFiltered.map((c) => {
             const cActive = pathname === c.href;
             return (
               <Link

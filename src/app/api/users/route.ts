@@ -2,9 +2,10 @@ import { mapAuthUserToPortalUser, type ProfileRow } from "@/app/api/users/map-po
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { countActiveAdmins } from "@/lib/portal-user-admin-guards";
 import { requirePortalAdmin } from "@/lib/require-portal-admin";
+import { sanitizePortalPermissions } from "@/lib/sanitize-portal-permissions";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { syncAuthBanWithActiveFlag } from "@/lib/user-auth-ban";
-import type { PortalUser } from "@/types";
+import type { PortalPermissionsMap, PortalUser } from "@/types";
 import { NextRequest, NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
     phone?: string | null;
     role?: string;
     is_active?: boolean;
+    portal_permissions?: unknown | null;
   };
   try {
     body = await request.json();
@@ -129,6 +131,16 @@ export async function POST(request: NextRequest) {
   const display_name = (body.display_name ?? "").trim() || null;
   const phone = (body.phone ?? "").trim() || null;
 
+  const portal_permissions: PortalPermissionsMap | null =
+    wantedRole === "admin"
+      ? null
+      : body.portal_permissions === undefined || body.portal_permissions === null
+        ? null
+        : (() => {
+            const cleaned = sanitizePortalPermissions(body.portal_permissions);
+            return Object.keys(cleaned).length === 0 ? {} : cleaned;
+          })();
+
   const { data: created, error: cErr } = await admin.auth.admin.createUser({
     email,
     password,
@@ -152,6 +164,7 @@ export async function POST(request: NextRequest) {
       phone,
       role: wantedRole,
       is_active,
+      portal_permissions,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" }

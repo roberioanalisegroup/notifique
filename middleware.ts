@@ -1,4 +1,8 @@
+import { PORTAL_SCREEN_DEFS } from "@/config/portal-screens";
+import { portalScreenRequiredForMutation } from "@/lib/api-mutation-portal-screen";
+import { accessForPortalPath, effectivePortalAccess } from "@/lib/portal-access";
 import { isAllowedBrowserOrigin } from "@/lib/request-origin";
+import { parsePortalPermissionsFromDb } from "@/lib/sanitize-portal-permissions";
 import { canAccessSyncAll } from "@/lib/service-role-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
@@ -33,7 +37,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  const { user, supabaseResponse } = await updateSession(request);
+  const { user, supabaseResponse, supabase } = await updateSession(request);
 
   if (isSyncAllPost(request)) {
     if (!canAccessSyncAll(request, !!user)) {
@@ -52,6 +56,29 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
+    if (["POST", "PATCH", "PUT", "DELETE"].includes(method)) {
+      const screenKey = portalScreenRequiredForMutation(pathname);
+      if (screenKey) {
+        const def = PORTAL_SCREEN_DEFS.find((d) => d.key === screenKey);
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("role, portal_permissions")
+          .eq("id", user.id)
+          .maybeSingle();
+        const access = effectivePortalAccess({
+          role: typeof prof?.role === "string" ? prof.role : "user",
+          portal_permissions: parsePortalPermissionsFromDb(prof?.portal_permissions),
+          screenKey,
+          adminOnlyScreen: def?.adminOnly === true,
+        });
+        if (access !== "edit") {
+          return NextResponse.json(
+            { error: "Sem permissão para esta operação nesta área do portal." },
+            { status: 403 }
+          );
+        }
+      }
+    }
     return supabaseResponse;
   }
 
@@ -61,6 +88,27 @@ export async function middleware(request: NextRequest) {
       url.pathname = "/auth/login";
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
+    }
+    if (pathname === "/portal" || pathname === "/portal/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/portal/dashboard";
+      return NextResponse.redirect(url);
+    }
+    if (!pathname.startsWith("/portal/sem-acesso")) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("role, portal_permissions")
+        .eq("id", user.id)
+        .maybeSingle();
+      const profile = {
+        role: typeof prof?.role === "string" ? prof.role : "user",
+        portal_permissions: parsePortalPermissionsFromDb(prof?.portal_permissions),
+      };
+      if (accessForPortalPath(profile, pathname) === "none") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/portal/sem-acesso";
+        return NextResponse.redirect(url);
+      }
     }
     return supabaseResponse;
   }

@@ -2,6 +2,11 @@ import { mapAuthUserToPortalUser, type ProfileRow } from "@/app/api/users/map-po
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { countActiveAdmins } from "@/lib/portal-user-admin-guards";
 import { requirePortalAdmin } from "@/lib/require-portal-admin";
+import {
+  parsePortalPermissionsFromDb,
+  sanitizePortalPermissions,
+} from "@/lib/sanitize-portal-permissions";
+import type { PortalPermissionsMap } from "@/types";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { syncAuthBanWithActiveFlag } from "@/lib/user-auth-ban";
 import { NextRequest, NextResponse } from "next/server";
@@ -31,6 +36,7 @@ export async function PATCH(
     phone?: string | null;
     role?: string | null;
     is_active?: boolean;
+    portal_permissions?: unknown | null;
   };
   try {
     body = await request.json();
@@ -129,6 +135,21 @@ export async function PATCH(
   const nextDisplay = display_name !== undefined ? display_name : (pr?.display_name ?? null);
   const nextPhone = phone !== undefined ? phone : (pr?.phone ?? null);
 
+  let nextPortalPerms: PortalPermissionsMap | null;
+  if (nextRole === "admin") {
+    nextPortalPerms = null;
+  } else if (body.portal_permissions !== undefined) {
+    nextPortalPerms =
+      body.portal_permissions === null
+        ? null
+        : (() => {
+            const cleaned = sanitizePortalPermissions(body.portal_permissions);
+            return Object.keys(cleaned).length === 0 ? {} : cleaned;
+          })();
+  } else {
+    nextPortalPerms = parsePortalPermissionsFromDb(pr?.portal_permissions);
+  }
+
   if (currActive !== nextActive) {
     const sync = await syncAuthBanWithActiveFlag(admin, params.id, nextActive);
     if (sync.error) {
@@ -143,6 +164,7 @@ export async function PATCH(
       phone: nextPhone,
       role: nextRole,
       is_active: nextActive,
+      portal_permissions: nextPortalPerms,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" }
