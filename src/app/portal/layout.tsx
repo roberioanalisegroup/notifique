@@ -14,7 +14,7 @@ export default async function PortalLayout({
   } = { role: "user", portal_permissions: null };
 
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

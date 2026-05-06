@@ -1,4 +1,5 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { requirePortalAdmin } from "@/lib/require-portal-admin";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
@@ -7,6 +8,11 @@ import type { User } from "@supabase/supabase-js";
 export async function GET(_request: NextRequest) {
   const auth = await getSupabaseForRequest(_request);
   if ("error" in auth) return auth.error;
+  if (auth.isServiceRole || !auth.userId) {
+    return NextResponse.json({ error: "Operação não permitida." }, { status: 403 });
+  }
+  const forbidden = await requirePortalAdmin(auth.supabase, auth.userId);
+  if (forbidden) return forbidden;
 
   let admin;
   try {

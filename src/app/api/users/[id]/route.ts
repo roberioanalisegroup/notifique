@@ -15,8 +15,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
   if (auth.isServiceRole || !auth.userId) {
@@ -25,7 +26,7 @@ export async function PATCH(
   const forbidden = await requirePortalAdmin(auth.supabase, auth.userId);
   if (forbidden) return forbidden;
 
-  if (!UUID_RE.test(params.id)) {
+  if (!UUID_RE.test(id)) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
 
@@ -61,13 +62,13 @@ export async function PATCH(
     );
   }
 
-  const { data: existing, error: gErr } = await admin.auth.admin.getUserById(params.id);
+  const { data: existing, error: gErr } = await admin.auth.admin.getUserById(id);
   if (gErr || !existing?.user) {
     return NextResponse.json({ error: "Utilizador não encontrado" }, { status: 404 });
   }
   const u = existing.user;
 
-  const { data: currentProf } = await admin.from("profiles").select("*").eq("id", params.id).maybeSingle();
+  const { data: currentProf } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
   const pr = currentProf as ProfileRow | null;
   const currRole = pr?.role === "admin" ? "admin" : "user";
   const currActive = pr?.is_active ?? true;
@@ -82,7 +83,7 @@ export async function PATCH(
     );
   }
 
-  if (params.id === auth.userId) {
+  if (id === auth.userId) {
     if (!nextActive) {
       return NextResponse.json({ error: "Não pode inativar a própria conta." }, { status: 400 });
     }
@@ -115,14 +116,14 @@ export async function PATCH(
   }
 
   if (email && email !== u.email) {
-    const { error: eErr } = await admin.auth.admin.updateUserById(params.id, { email });
+    const { error: eErr } = await admin.auth.admin.updateUserById(id, { email });
     if (eErr) {
       return NextResponse.json({ error: eErr.message }, { status: 400 });
     }
   }
 
   if (body.password != null && body.password.length > 0) {
-    const { error: pErr } = await admin.auth.admin.updateUserById(params.id, { password: body.password });
+    const { error: pErr } = await admin.auth.admin.updateUserById(id, { password: body.password });
     if (pErr) {
       return NextResponse.json({ error: pErr.message }, { status: 400 });
     }
@@ -151,7 +152,7 @@ export async function PATCH(
   }
 
   if (currActive !== nextActive) {
-    const sync = await syncAuthBanWithActiveFlag(admin, params.id, nextActive);
+    const sync = await syncAuthBanWithActiveFlag(admin, id, nextActive);
     if (sync.error) {
       return NextResponse.json({ error: `Auth: ${sync.error}` }, { status: 500 });
     }
@@ -159,7 +160,7 @@ export async function PATCH(
 
   const { error: upErr } = await admin.from("profiles").upsert(
     {
-      id: params.id,
+      id,
       display_name: nextDisplay,
       phone: nextPhone,
       role: nextRole,
@@ -172,7 +173,7 @@ export async function PATCH(
   if (upErr) {
     try {
       if (currActive !== nextActive) {
-        await syncAuthBanWithActiveFlag(admin, params.id, currActive);
+        await syncAuthBanWithActiveFlag(admin, id, currActive);
       }
     } catch {
       /* best effort revert */
@@ -181,20 +182,20 @@ export async function PATCH(
   }
 
   if (display_name !== undefined) {
-    const { data: uAfterProf } = await admin.auth.admin.getUserById(params.id);
+    const { data: uAfterProf } = await admin.auth.admin.getUserById(id);
     const uu = uAfterProf?.user ?? u;
     const meta = { ...(uu.user_metadata ?? {}), display_name: nextDisplay };
-    const { error: mErr } = await admin.auth.admin.updateUserById(params.id, { user_metadata: meta });
+    const { error: mErr } = await admin.auth.admin.updateUserById(id, { user_metadata: meta });
     if (mErr) {
       return NextResponse.json({ error: mErr.message }, { status: 400 });
     }
   }
 
-  const { data: fresh, error: fErr } = await admin.auth.admin.getUserById(params.id);
+  const { data: fresh, error: fErr } = await admin.auth.admin.getUserById(id);
   if (fErr || !fresh?.user) {
     return NextResponse.json({ error: fErr?.message ?? "Erro ao recarregar" }, { status: 500 });
   }
-  const { data: prof } = await admin.from("profiles").select("*").eq("id", params.id).maybeSingle();
+  const { data: prof } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
 
   const out = mapAuthUserToPortalUser(fresh.user, (prof ?? undefined) as ProfileRow | undefined);
   return NextResponse.json({ user: out });

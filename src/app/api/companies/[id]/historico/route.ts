@@ -4,8 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const auth = await getSupabaseForRequest(_request);
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
@@ -13,7 +14,7 @@ export async function GET(
   const { data: company, error: cErr } = await supabase
     .from("companies")
     .select("id")
-    .eq("id", params.id)
+    .eq("id", id)
     .maybeSingle();
 
   if (cErr || !company) {
@@ -23,7 +24,7 @@ export async function GET(
   const { data: rows, error } = await supabase
     .from("company_history")
     .select("id, company_id, event_type, summary, metadata, created_at, actor_user_id")
-    .eq("company_id", params.id)
+    .eq("company_id", id)
     .order("created_at", { ascending: false })
     .limit(300);
 

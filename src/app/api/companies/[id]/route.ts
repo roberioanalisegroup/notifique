@@ -9,8 +9,9 @@ type Row = CompanyAlvara & {
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const auth = await getSupabaseForRequest(_request);
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
@@ -18,7 +19,7 @@ export async function GET(
   const { data: company, error: cErr } = await supabase
     .from("companies")
     .select("*")
-    .eq("id", params.id)
+    .eq("id", id)
     .single();
 
   if (cErr || !company) {
@@ -36,7 +37,7 @@ export async function GET(
       )
     `
     )
-    .eq("company_id", params.id)
+    .eq("company_id", id)
     .order("data_vencimento", { ascending: true, nullsFirst: false });
 
   if (lErr) {
@@ -54,8 +55,9 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
@@ -94,7 +96,7 @@ export async function PATCH(
     const { data: prevRow } = await supabase
       .from("companies")
       .select("codigo_empresa")
-      .eq("id", params.id)
+      .eq("id", id)
       .maybeSingle();
     previousCodigo =
       prevRow?.codigo_empresa != null && String(prevRow.codigo_empresa).trim() !== ""
@@ -119,7 +121,7 @@ export async function PATCH(
   const { data, error } = await supabase
     .from("companies")
     .update(patch)
-    .eq("id", params.id)
+    .eq("id", id)
     .select()
     .single();
 
@@ -132,7 +134,7 @@ export async function PATCH(
 
   if (hasArchived) {
     await logCompanyHistory(supabase, {
-      companyId: params.id,
+      companyId: id,
       eventType: body.archived ? "arquivamento" : "restauracao",
       summary: body.archived
         ? "Empresa arquivada (sai da lista principal)."
@@ -146,7 +148,7 @@ export async function PATCH(
     const changed = previousCodigo !== nextCodigo;
     if (changed) {
       await logCompanyHistory(supabase, {
-        companyId: params.id,
+        companyId: id,
         eventType: "codigo_empresa_atualizado",
         summary: `Código da empresa alterado de «${fmt(previousCodigo)}» para «${fmt(nextCodigo)}».`,
         metadata: { anterior: previousCodigo, novo: nextCodigo },

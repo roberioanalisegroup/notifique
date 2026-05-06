@@ -9,8 +9,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
@@ -30,7 +31,7 @@ export async function PATCH(
       alvaras ( name )
     `
     )
-    .eq("id", params.id)
+    .eq("id", id)
     .single();
 
   const patch: Record<string, unknown> = { ...body, updated_at: new Date().toISOString() };
@@ -40,7 +41,7 @@ export async function PATCH(
     const { data: row, error: rowErr } = await supabase
       .from("company_alvaras")
       .select("alvara_id")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
     if (!rowErr && row?.alvara_id) {
       const { data: av } = await supabase
@@ -74,7 +75,7 @@ export async function PATCH(
   const { data, error } = await supabase
     .from("company_alvaras")
     .update(patch)
-    .eq("id", params.id)
+    .eq("id", id)
     .select(
       `
       *,
@@ -102,14 +103,14 @@ export async function PATCH(
     await supabase
       .from("alvara_tasks")
       .update({ due_date: null, updated_at: new Date().toISOString() })
-      .eq("company_alvara_id", params.id)
+      .eq("company_alvara_id", id)
       .eq("status", "pendente");
   } else if (updated.data_vencimento && typeof updated.data_vencimento === "string") {
     const due = String(updated.data_vencimento).slice(0, 10);
     await supabase
       .from("alvara_tasks")
       .update({ due_date: due, updated_at: new Date().toISOString() })
-      .eq("company_alvara_id", params.id)
+      .eq("company_alvara_id", id)
       .eq("status", "pendente");
   }
 
@@ -130,7 +131,7 @@ export async function PATCH(
           ? `Vínculo atualizado (${alvaraNome}): ${touched.join(", ")}.`
           : `Vínculo atualizado (${alvaraNome}).`,
       metadata: {
-        company_alvara_id: params.id,
+        company_alvara_id: id,
         campos: touched,
       },
       actorUserId,
@@ -142,8 +143,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
@@ -156,14 +158,14 @@ export async function DELETE(
       alvaras ( name )
     `
     )
-    .eq("id", params.id)
+    .eq("id", id)
     .maybeSingle();
 
   if (selErr) {
     return NextResponse.json({ error: selErr.message }, { status: 500 });
   }
 
-  const { error } = await supabase.from("company_alvaras").delete().eq("id", params.id);
+  const { error } = await supabase.from("company_alvaras").delete().eq("id", id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -178,7 +180,7 @@ export async function DELETE(
       eventType: "tarefa_desvinculada",
       summary: `Tarefa desvinculada: ${alvaraNome}.`,
       metadata: {
-        company_alvara_id: params.id,
+        company_alvara_id: id,
         alvara_name: alvaraNome,
       },
       actorUserId,

@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Palavra-passe obrigatória." }, { status: 400 });
   }
 
-  const serverAuth = createClient();
+  const serverAuth = await createClient();
   const {
     data: { user },
     error: uErr,

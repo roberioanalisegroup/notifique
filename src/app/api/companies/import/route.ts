@@ -13,6 +13,14 @@ import { NextRequest } from "next/server";
 
 type ImportPair = { cnpj: string; codigo_empresa: string | null };
 
+const MAX_CSV_BYTES = 5 * 1024 * 1024; // 5MB
+const ALLOWED_MIME = new Set([
+  "text/csv",
+  "application/csv",
+  "text/plain",
+  "application/vnd.ms-excel", // alguns browsers
+]);
+
 export async function POST(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
@@ -25,6 +33,23 @@ export async function POST(request: NextRequest) {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  if (typeof file.size === "number" && file.size > MAX_CSV_BYTES) {
+    return new Response(
+      JSON.stringify({
+        error: `Arquivo muito grande. Máximo permitido: ${Math.floor(MAX_CSV_BYTES / (1024 * 1024))}MB.`,
+      }),
+      { status: 413, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  if (file.type && !ALLOWED_MIME.has(file.type)) {
+    return new Response(
+      JSON.stringify({
+        error: `Tipo de arquivo não permitido (${file.type}). Envie um CSV.`,
+      }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   const text = await file.text();

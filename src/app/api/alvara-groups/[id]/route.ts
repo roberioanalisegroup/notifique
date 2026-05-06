@@ -4,8 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
@@ -20,7 +21,7 @@ export async function PATCH(
   const { data, error } = await supabase
     .from("alvara_groups")
     .update({ ...body, updated_at: new Date().toISOString() })
-    .eq("id", params.id)
+    .eq("id", id)
     .select()
     .single();
 
@@ -32,8 +33,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
@@ -41,7 +43,7 @@ export async function DELETE(
   const { count } = await supabase
     .from("alvaras")
     .select("id", { count: "exact", head: true })
-    .eq("group_id", params.id);
+    .eq("group_id", id);
 
   if ((count ?? 0) > 0) {
     return NextResponse.json(
@@ -50,7 +52,7 @@ export async function DELETE(
     );
   }
 
-  const { error } = await supabase.from("alvara_groups").delete().eq("id", params.id);
+  const { error } = await supabase.from("alvara_groups").delete().eq("id", id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

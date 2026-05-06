@@ -37,7 +37,7 @@ export async function getSupabaseForRequest(
     }
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
     error,
