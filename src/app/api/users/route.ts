@@ -1,5 +1,6 @@
 import { mapAuthUserToPortalUser, type ProfileRow } from "@/app/api/users/map-portal-user";
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { insertAuditLog } from "@/lib/audit-log";
 import { countActiveAdmins } from "@/lib/portal-user-admin-guards";
 import { requirePortalAdmin } from "@/lib/require-portal-admin";
 import { sanitizePortalPermissions } from "@/lib/sanitize-portal-permissions";
@@ -156,6 +157,19 @@ export async function POST(request: NextRequest) {
   if (!u) {
     return NextResponse.json({ error: "Não foi possível criar o utilizador" }, { status: 500 });
   }
+
+  void insertAuditLog(admin, {
+    event_type: "users_created",
+    actor_user_id: auth.userId,
+    ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+    user_agent: request.headers.get("user-agent"),
+    metadata: {
+      created_user_id: u.id,
+      created_email: email,
+      role: wantedRole,
+      is_active,
+    },
+  });
 
   const { error: pErr } = await admin.from("profiles").upsert(
     {

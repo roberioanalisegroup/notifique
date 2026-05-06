@@ -1,13 +1,14 @@
 # daily-sync (Supabase Edge Function)
 
-Dispara a sincronização em lote do portal chamando `POST {NEXT_PUBLIC_APP_URL}/api/companies/sync-all` com o header `Authorization: Bearer {SUPABASE_SERVICE_ROLE_KEY}`.
+Dispara a sincronização em lote do portal chamando `POST {NEXT_PUBLIC_APP_URL}/api/companies/sync-all` com **assinatura** (sem enviar a service role key).
 
 A rota Next verifica a tabela `sync_config`: se `sync_enabled` estiver falso, nada é processado (útil para o cron com service role).
 
 ## Variáveis de ambiente (Supabase)
 
 - `NEXT_PUBLIC_APP_URL` — URL pública do app (Vercel/Render)
-- `SUPABASE_SERVICE_ROLE_KEY` — chave de serviço (nunca expor no cliente)
+- `CRON_HMAC_SECRET` — segredo para assinar chamadas do cron (recomendado)
+- `SUPABASE_SERVICE_ROLE_KEY` — fallback opcional (compatibilidade; não recomendado para cron)
 
 ## Agendamento
 

@@ -1,5 +1,6 @@
 import { mapAuthUserToPortalUser, type ProfileRow } from "@/app/api/users/map-portal-user";
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { insertAuditLog } from "@/lib/audit-log";
 import { countActiveAdmins } from "@/lib/portal-user-admin-guards";
 import { requirePortalAdmin } from "@/lib/require-portal-admin";
 import {
@@ -75,6 +76,26 @@ export async function PATCH(
 
   const nextRole = body.role != null ? (body.role === "admin" ? "admin" : "user") : currRole;
   const nextActive = body.is_active !== undefined ? body.is_active : currActive;
+
+  void insertAuditLog(admin, {
+    event_type: "users_updated",
+    actor_user_id: auth.userId,
+    ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+    user_agent: request.headers.get("user-agent"),
+    metadata: {
+      target_user_id: id,
+      changes: {
+        email: body.email !== undefined ? true : undefined,
+        password: body.password !== undefined ? true : undefined,
+        display_name: body.display_name !== undefined ? true : undefined,
+        phone: body.phone !== undefined ? true : undefined,
+        role: body.role !== undefined ? { from: currRole, to: nextRole } : undefined,
+        is_active:
+          body.is_active !== undefined ? { from: currActive, to: nextActive } : undefined,
+        portal_permissions: body.portal_permissions !== undefined ? true : undefined,
+      },
+    },
+  });
 
   if (nextRole === "admin" && !nextActive) {
     return NextResponse.json(

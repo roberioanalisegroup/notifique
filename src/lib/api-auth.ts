@@ -1,11 +1,19 @@
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { isValidServiceRoleToken, getBearerToken } from "@/lib/service-role-auth";
+import { isValidCronSignature, isValidServiceRoleToken, getBearerToken } from "@/lib/service-role-auth";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
 
 function isServiceRoleRequest(request: Request): boolean {
   return isValidServiceRoleToken(getBearerToken(request));
+}
+
+async function isSignedCronRequest(request: Request): Promise<boolean> {
+  try {
+    return await isValidCronSignature(request, { maxSkewMs: 5 * 60 * 1000 });
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -20,7 +28,7 @@ export async function getSupabaseForRequest(
   | { supabase: SupabaseClient; userId: null; isServiceRole: true }
   | { error: Response }
 > {
-  if (options?.allowServiceRole && isServiceRoleRequest(request)) {
+  if (options?.allowServiceRole && (isServiceRoleRequest(request) || (await isSignedCronRequest(request)))) {
     try {
       return {
         supabase: createServiceRoleClient(),

@@ -1,4 +1,5 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { insertAuditLog } from "@/lib/audit-log";
 import { requirePortalAdmin } from "@/lib/require-portal-admin";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
@@ -23,6 +24,13 @@ export async function GET(_request: NextRequest) {
       { status: 500 }
     );
   }
+
+  void insertAuditLog(admin, {
+    event_type: "collaborators_listed",
+    actor_user_id: auth.userId,
+    ip: _request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+    user_agent: _request.headers.get("user-agent"),
+  });
 
   const { data: profRows, error: pErr } = await admin
     .from("profiles")

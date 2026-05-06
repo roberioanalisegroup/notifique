@@ -1,4 +1,5 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { insertAuditLog } from "@/lib/audit-log";
 import { CNPJ_BATCH_DELAY_MS, sleep } from "@/lib/cnpj-service";
 import {
   extractCnpjFromRow,
@@ -36,6 +37,13 @@ export async function POST(request: NextRequest) {
   }
 
   if (typeof file.size === "number" && file.size > MAX_CSV_BYTES) {
+    void insertAuditLog(supabase, {
+      event_type: "csv_import_rejected",
+      actor_user_id: auth.isServiceRole ? null : auth.userId,
+      ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+      user_agent: request.headers.get("user-agent"),
+      metadata: { reason: "file_too_large", size: file.size, max: MAX_CSV_BYTES },
+    });
     return new Response(
       JSON.stringify({
         error: `Arquivo muito grande. Máximo permitido: ${Math.floor(MAX_CSV_BYTES / (1024 * 1024))}MB.`,
@@ -44,6 +52,13 @@ export async function POST(request: NextRequest) {
     );
   }
   if (file.type && !ALLOWED_MIME.has(file.type)) {
+    void insertAuditLog(supabase, {
+      event_type: "csv_import_rejected",
+      actor_user_id: auth.isServiceRole ? null : auth.userId,
+      ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+      user_agent: request.headers.get("user-agent"),
+      metadata: { reason: "invalid_mime", mime: file.type },
+    });
     return new Response(
       JSON.stringify({
         error: `Tipo de arquivo não permitido (${file.type}). Envie um CSV.`,

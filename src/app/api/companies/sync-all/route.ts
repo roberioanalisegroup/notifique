@@ -1,4 +1,5 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { insertAuditLog } from "@/lib/audit-log";
 import { CNPJ_BATCH_DELAY_MS, sleep } from "@/lib/cnpj-service";
 import {
   fetchCompaniesForSync,
@@ -43,6 +44,16 @@ export async function POST(request: NextRequest) {
       );
     }
   }
+
+  void insertAuditLog(supabase, {
+    event_type: "sync_all_triggered",
+    actor_user_id: isServiceRole ? null : userId,
+    ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+    user_agent: request.headers.get("user-agent"),
+    metadata: {
+      triggered_by: isServiceRole ? "cron" : "manual",
+    },
+  });
 
   const { data: configRow, error: configErr } = await supabase
     .from("sync_config")
