@@ -1,3 +1,4 @@
+import { isAllowedBrowserOrigin } from "@/lib/request-origin";
 import { canAccessSyncAll } from "@/lib/service-role-auth";
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
@@ -22,15 +23,11 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const { method } = request;
 
-  // Proteção CSRF básica para rotas de API (POST, PATCH, DELETE)
+  // Origin estrito para mutações em API (evita substring attacks no Host)
   if (pathname.startsWith("/api/") && ["POST", "PATCH", "DELETE", "PUT"].includes(method)) {
-    const origin = request.headers.get("origin");
-    const host = request.headers.get("host");
-    
-    // Se houver Origin, deve coincidir com o Host (ambiente de produção/local)
-    if (origin && !origin.includes(host ?? "")) {
+    if (!isAllowedBrowserOrigin(request)) {
       return NextResponse.json(
-        { error: "Solicitação bloqueada por segurança (CSRF Origin mismatch)" },
+        { error: "Solicitação bloqueada por segurança (Origin inválido)" },
         { status: 403 }
       );
     }

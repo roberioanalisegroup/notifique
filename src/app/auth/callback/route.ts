@@ -1,3 +1,4 @@
+import { safeAuthCallbackNextPath } from "@/lib/safe-auth-redirect";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
@@ -8,9 +9,7 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next")?.startsWith("/")
-    ? url.searchParams.get("next")!
-    : "/portal/dashboard";
+  const next = safeAuthCallbackNextPath(url.searchParams.get("next"));
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

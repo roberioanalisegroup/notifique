@@ -1,4 +1,5 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { requirePortalAdmin } from "@/lib/require-portal-admin";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import type { PortalUser } from "@/types";
 import { NextRequest, NextResponse } from "next/server";
@@ -11,6 +12,11 @@ export async function PATCH(
 ) {
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
+  if (auth.isServiceRole || !auth.userId) {
+    return NextResponse.json({ error: "Operação não permitida." }, { status: 403 });
+  }
+  const forbidden = await requirePortalAdmin(auth.supabase, auth.userId);
+  if (forbidden) return forbidden;
 
   if (!UUID_RE.test(params.id)) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });

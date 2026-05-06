@@ -1,4 +1,5 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { requirePortalAdmin } from "@/lib/require-portal-admin";
 import { SYNC_CONFIG_ID } from "@/lib/sync-helpers";
 import type { SyncConfig } from "@/types";
 import { NextRequest, NextResponse } from "next/server";
@@ -6,6 +7,11 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
+  if (auth.isServiceRole || !auth.userId) {
+    return NextResponse.json({ error: "Operação não permitida." }, { status: 403 });
+  }
+  const forbidden = await requirePortalAdmin(auth.supabase, auth.userId);
+  if (forbidden) return forbidden;
   const { supabase } = auth;
 
   const { data, error } = await supabase
@@ -23,6 +29,11 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
+  if (auth.isServiceRole || !auth.userId) {
+    return NextResponse.json({ error: "Operação não permitida." }, { status: 403 });
+  }
+  const forbidden = await requirePortalAdmin(auth.supabase, auth.userId);
+  if (forbidden) return forbidden;
   const { supabase } = auth;
 
   let body: Partial<{

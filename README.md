@@ -21,16 +21,19 @@ Aplicação web (single-tenant) para cadastrar empresas por CNPJ, sincronizar da
 
    - `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` (painel: Settings → API)
    - `SUPABASE_SERVICE_ROLE_KEY` (apenas no servidor; **nunca** no cliente) — usada em `POST /api/companies/sync-all` com `Authorization: Bearer` para o cron/Edge
-   - `NEXT_PUBLIC_APP_URL` — URL pública (ex.: `http://localhost:3000` ou a URL de produção)
+   - `NEXT_PUBLIC_APP_URL` — URL pública (ex.: `http://localhost:3000` ou a URL na Vercel)
+   - `CSRF_ALLOWED_ORIGINS` (opcional) — lista separada por vírgulas se usares mais do que uma origin válida para o mesmo site
 
-2. Instale dependências e suba o dev server:
+2. Aplique migrações no Supabase (CLI ou Dashboard), incluindo políticas RLS atualizadas em `supabase/migrations/`.
+
+3. Instale dependências e suba o dev server:
 
 ```bash
 npm install
 npm run dev
 ```
 
-3. Crie o primeiro utilizador em `/auth/register` (setup) ou no painel Supabase → Authentication, e faça login em `/auth/login`.
+4. Crie o primeiro utilizador em `/auth/register` (setup) ou no painel Supabase → Authentication, e faça login em `/auth/login`.
 
 ## Sincronização agendada (Supabase)
 
