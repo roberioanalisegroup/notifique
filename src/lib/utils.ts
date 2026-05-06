@@ -163,6 +163,12 @@ export function formatCurrency(
   });
 }
 
+export function sanitizeText(text: string | null | undefined): string {
+  if (text == null) return "";
+  // Remove tags HTML para evitar XSS básico
+  return text.replace(/<[^>]*>?/gm, "").trim();
+}
+
 export function cn(...classes: ClassValue[]) {
   return clsx(classes);
 }

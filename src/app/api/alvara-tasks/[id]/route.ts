@@ -5,6 +5,7 @@ import {
   isWeekendAdjust,
 } from "@/lib/alvara-frequency";
 import { proximoVencimentoISOFromEmissao } from "@/lib/alvara-task-generation";
+import { sanitizeText } from "@/lib/utils";
 import type { Alvara, AlvaraTask } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { format } from "date-fns";
@@ -322,7 +323,7 @@ export async function PATCH(
     }
   }
   if (hasNotes) {
-    patch.notes = body.notes;
+    patch.notes = sanitizeText(body.notes);
   }
 
   const needsTaskUpdate = newStatus != null || hasNotes;

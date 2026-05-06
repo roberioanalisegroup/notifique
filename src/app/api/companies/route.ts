@@ -9,7 +9,7 @@ import {
   parseCompaniesSortParams,
 } from "@/lib/companies-list-sort";
 import { upsertCompanyByCNPJ } from "@/lib/sync-helpers";
-import { normalizeDocumentoForTipo, onlyDigits } from "@/lib/utils";
+import { normalizeDocumentoForTipo, onlyDigits, sanitizeText } from "@/lib/utils";
 import type { Company, CompanyCadastroTipo } from "@/types";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -150,9 +150,9 @@ export async function POST(request: NextRequest) {
     cadastro_tipo: tipo,
     numero_documento: norm.value,
     cnpj: cnpjCol,
-    razao_social: body.razao_social?.trim() || null,
-    nome_fantasia: body.nome_fantasia?.trim() || null,
-    situacao_cadastral: body.situacao_cadastral?.trim() || null,
+    razao_social: sanitizeText(body.razao_social),
+    nome_fantasia: sanitizeText(body.nome_fantasia),
+    situacao_cadastral: sanitizeText(body.situacao_cadastral),
     logradouro: body.logradouro?.trim() || null,
     numero: body.numero?.trim() || null,
     complemento: body.complemento?.trim() || null,

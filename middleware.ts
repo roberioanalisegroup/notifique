@@ -19,8 +19,24 @@ function isSyncAllPost(request: NextRequest) {
 }
 
 export async function middleware(request: NextRequest) {
-  const { user, supabaseResponse } = await updateSession(request);
   const { pathname } = request.nextUrl;
+  const { method } = request;
+
+  // Proteção CSRF básica para rotas de API (POST, PATCH, DELETE)
+  if (pathname.startsWith("/api/") && ["POST", "PATCH", "DELETE", "PUT"].includes(method)) {
+    const origin = request.headers.get("origin");
+    const host = request.headers.get("host");
+    
+    // Se houver Origin, deve coincidir com o Host (ambiente de produção/local)
+    if (origin && !origin.includes(host ?? "")) {
+      return NextResponse.json(
+        { error: "Solicitação bloqueada por segurança (CSRF Origin mismatch)" },
+        { status: 403 }
+      );
+    }
+  }
+
+  const { user, supabaseResponse } = await updateSession(request);
 
   if (isSyncAllPost(request)) {
     if (!canAccessSyncAll(request, !!user)) {
