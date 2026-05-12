@@ -55,7 +55,8 @@ body {
     @apply rounded-xl border border-slate-200/90 bg-white shadow-portal;
   }
   .modal-panel {
-    @apply w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-portal-md;
+    @apply w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-portal-md;
+    color: rgb(15 23 42);
   }
   .form-label {
     @apply text-xs font-medium text-slate-500;
@@ -63,10 +64,17 @@ body {
 
   .dark .input-field,
   .dark .select-field {
-    @apply border-slate-600 bg-slate-900/80 text-slate-100 placeholder:text-slate-500 focus:border-blue-400 focus:ring-blue-400/25;
+    @apply border-slate-600 bg-slate-900/80 text-slate-100 focus:border-blue-400 focus:ring-blue-400/25;
+  }
+  .dark .input-field::placeholder,
+  .dark .select-field::placeholder {
+    color: rgb(100 116 139);
   }
   .dark .textarea-field {
-    @apply border-slate-600 bg-slate-900/80 text-slate-100 placeholder:text-slate-500 focus:border-blue-400 focus:ring-blue-400/25;
+    @apply border-slate-600 bg-slate-900/80 text-slate-100 focus:border-blue-400 focus:ring-blue-400/25;
+  }
+  .dark .textarea-field::placeholder {
+    color: rgb(100 116 139);
   }
   .dark .btn-secondary {
     @apply border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700 focus-visible:ring-slate-500/40;
@@ -87,7 +95,31 @@ body {
     @apply border-slate-700/90 bg-slate-900/40 shadow-none ring-1 ring-slate-700/50;
   }
   .dark .modal-panel {
-    @apply border-slate-600 bg-slate-900 text-slate-100 ring-1 ring-slate-700/50;
+    @apply border-slate-600 bg-slate-950 text-slate-100 shadow-none ring-1 ring-slate-700/60;
+  }
+  /* Texto slate explícito dentro de .modal-panel no tema escuro */
+  .dark .modal-panel .text-slate-900 {
+    color: rgb(248 250 252);
+  }
+  .dark .modal-panel .text-slate-800 {
+    color: rgb(226 232 240);
+  }
+  .dark .modal-panel .text-slate-700 {
+    color: rgb(203 213 225);
+  }
+  .dark .modal-panel .text-slate-600 {
+    color: rgb(203 213 225);
+  }
+  .dark .modal-panel .text-slate-500 {
+    color: rgb(148 163 184);
+  }
+  .dark .modal-panel code {
+    border-radius: 0.25rem;
+    background-color: rgb(30 41 59);
+    padding: 0.125rem 0.25rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: rgb(226 232 240);
   }
   .dark .form-label {
     @apply text-slate-400;

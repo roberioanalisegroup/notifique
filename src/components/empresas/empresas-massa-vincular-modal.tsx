@@ -165,8 +165,8 @@ export function EmpresasMassaVincularModal({
         if (e.target === e.currentTarget && !submitting) onClose();
       }}
     >
-      <div className="max-h-[min(90vh,44rem)] w-full max-w-xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-        <div className="border-b border-slate-100 px-4 py-3 sm:px-5">
+      <div className="modal-panel max-h-[min(90vh,44rem)] w-full max-w-xl overflow-hidden p-0 shadow-xl">
+        <div className="border-b border-slate-100 px-4 py-3 sm:px-5 dark:border-slate-700">
           <h2 id="empresas-massa-vincular-title" className="text-lg font-semibold text-slate-900">
             Vincular tarefas em massa
           </h2>
@@ -177,14 +177,14 @@ export function EmpresasMassaVincularModal({
         </div>
         <div className="max-h-[min(62vh,30rem)] overflow-y-auto px-4 py-3 sm:px-5">
           {loadingData ? (
-            <p className="text-sm text-slate-500">A carregar…</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">A carregar…</p>
           ) : (
             <>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Grupos de tarefas
               </p>
               {groups.length === 0 ? (
-                <p className="mb-4 text-sm text-slate-500">Nenhum grupo cadastrado.</p>
+                <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Nenhum grupo cadastrado.</p>
               ) : (
                 <ul className="mb-4 space-y-3">
                   {groups.map((g) => {
@@ -193,7 +193,7 @@ export function EmpresasMassaVincularModal({
                     const nSel = ids.filter((id) => selectedAlvaraIds.has(id)).length;
                     const allChecked = list !== undefined && ids.length > 0 && nSel === ids.length;
                     return (
-                      <li key={g.id} className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
+                      <li key={g.id} className="rounded-lg border border-slate-100 bg-slate-50/60 p-3 dark:border-slate-600 dark:bg-slate-800/50">
                         <label className="flex cursor-pointer items-start gap-2 text-sm font-medium text-slate-900">
                           <input
                             ref={(el) => {
@@ -208,14 +208,14 @@ export function EmpresasMassaVincularModal({
                         </label>
                         {list !== undefined ? (
                           list.length === 0 ? (
-                            <p className="mt-2 pl-6 text-xs text-slate-500">
+                            <p className="mt-2 pl-6 text-xs text-slate-500 dark:text-slate-400">
                               Este grupo não tem tarefas cadastradas.
                             </p>
                           ) : (
-                            <ul className="mt-2 space-y-1.5 border-t border-slate-100/80 pt-2 pl-6">
+                            <ul className="mt-2 space-y-1.5 border-t border-slate-100/80 pt-2 pl-6 dark:border-slate-600/80">
                               {list.map((a) => (
                                 <li key={a.id}>
-                                  <label className="flex cursor-pointer items-start gap-2 text-sm font-normal text-slate-800">
+                                  <label className="flex cursor-pointer items-start gap-2 text-sm font-normal text-slate-800 dark:text-slate-200">
                                     <input
                                       type="checkbox"
                                       className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30"
@@ -229,7 +229,7 @@ export function EmpresasMassaVincularModal({
                             </ul>
                           )
                         ) : (
-                          <p className="mt-1.5 pl-6 text-xs text-slate-500">
+                          <p className="mt-1.5 pl-6 text-xs text-slate-500 dark:text-slate-400">
                             Marque o grupo para carregar e selecionar as tarefas.
                           </p>
                         )}
@@ -238,16 +238,16 @@ export function EmpresasMassaVincularModal({
                   })}
                 </ul>
               )}
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Tarefas sem grupo
               </p>
               {semGrupo.length === 0 ? (
-                <p className="text-sm text-slate-500">Nenhuma tarefa sem grupo.</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Nenhuma tarefa sem grupo.</p>
               ) : (
                 <ul className="space-y-2">
                   {semGrupo.map((a) => (
                     <li key={a.id}>
-                      <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800">
+                      <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800 dark:text-slate-200">
                         <input
                           type="checkbox"
                           className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30"
@@ -263,7 +263,7 @@ export function EmpresasMassaVincularModal({
             </>
           )}
         </div>
-        <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50/80 px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50/80 px-4 py-3 sm:px-5 dark:border-slate-700 dark:bg-slate-900/70">
           <button
             type="button"
             className="btn-secondary"

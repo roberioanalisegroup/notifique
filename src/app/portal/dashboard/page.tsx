@@ -69,9 +69,9 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-slate-500">
+      <div className="flex h-64 items-center justify-center text-slate-500 dark:text-slate-400">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-slate-600 dark:border-t-blue-400" />
           <span className="text-sm">Carregando…</span>
         </div>
       </div>
@@ -83,46 +83,46 @@ export default function DashboardPage() {
       label: "TOTAL DE EMPRESAS",
       value: kpis?.totalEmpresas ?? 0,
       icon: <Building2 className="h-5 w-5" />,
-      iconBg: "bg-blue-100 text-blue-600",
+      iconBg: "bg-blue-100 text-blue-600 dark:bg-blue-950/55 dark:text-blue-300",
     },
     {
       label: "EMPRESAS ATIVAS",
       value: kpis?.ativas ?? 0,
       icon: <CheckCircle className="h-5 w-5" />,
-      iconBg: "bg-green-100 text-green-600",
+      iconBg: "bg-green-100 text-green-600 dark:bg-emerald-950/55 dark:text-emerald-300",
     },
     {
       label: "SYNC PENDENTE",
       value: kpis?.syncPendentes ?? 0,
       icon: <RefreshCw className="h-5 w-5" />,
-      iconBg: "bg-rose-100 text-rose-600",
+      iconBg: "bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-300",
     },
     {
       label: "TIPOS DE ALVARÁS",
       value: kpis?.totalAlvaras ?? 0,
       icon: <FileStack className="h-5 w-5" />,
-      iconBg: "bg-blue-100 text-blue-600",
+      iconBg: "bg-blue-100 text-blue-600 dark:bg-blue-950/55 dark:text-blue-300",
     },
     {
       label: "ALVARÁS VENCIDOS",
       value: kpis?.alvarasVencidos ?? 0,
       icon: <AlertTriangle className="h-5 w-5" />,
-      iconBg: "bg-orange-100 text-orange-600",
+      iconBg: "bg-orange-100 text-orange-600 dark:bg-orange-950/50 dark:text-orange-300",
     },
     {
       label: "NOTIFICADOS NO MÊS",
       value: kpis?.notificacoesNoMes ?? 0,
       icon: <Bell className="h-5 w-5" />,
-      iconBg: "bg-purple-100 text-purple-600",
+      iconBg: "bg-purple-100 text-purple-600 dark:bg-purple-950/50 dark:text-purple-300",
     },
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-slate-900 dark:text-slate-100">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Dashboard</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           Visão geral da gestão de alvarás e empresas no portal.
         </p>
       </div>
@@ -132,16 +132,16 @@ export default function DashboardPage() {
         {cards.map((c) => (
           <div
             key={c.label}
-            className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+            className="card-portal flex items-center gap-4 p-5 transition-shadow hover:shadow-md dark:hover:ring-slate-600/60"
           >
             <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${c.iconBg}`}>
               {c.icon}
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {c.label}
               </p>
-              <p className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">
+              <p className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-50">
                 {c.value}
               </p>
             </div>
@@ -152,40 +152,50 @@ export default function DashboardPage() {
       {/* Bottom sections */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Últimas sincronizações */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4">
-            <h2 className="text-base font-semibold text-slate-900">
+        <section className="card-portal overflow-hidden shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
               Últimas sincronizações
             </h2>
           </div>
           <div className="p-5">
             {logs.length === 0 ? (
-              <p className="py-8 text-center text-sm text-slate-400">
+              <p className="py-8 text-center text-sm text-slate-400 dark:text-slate-500">
                 Nenhuma sincronização executada ainda.
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="w-full text-left text-sm text-slate-800 dark:text-slate-200">
                   <thead>
-                    <tr className="border-b border-slate-100">
-                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Início</th>
-                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Total</th>
-                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500">OK</th>
-                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Erros</th>
-                      <th className="pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Disparo</th>
+                    <tr className="border-b border-slate-100 dark:border-slate-700">
+                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Início
+                      </th>
+                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Total
+                      </th>
+                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        OK
+                      </th>
+                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Erros
+                      </th>
+                      <th className="pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Disparo
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {logs.map((row) => (
                       <tr
                         key={row.id}
-                        className="border-b border-slate-50 last:border-0"
+                        className="border-b border-slate-100 last:border-0 dark:border-slate-700/80"
                       >
                         <td className="py-2.5 pr-3">{formatDate(row.started_at)}</td>
                         <td className="py-2.5 pr-3">{row.total}</td>
-                        <td className="py-2.5 pr-3 text-green-600">{row.success}</td>
-                        <td className="py-2.5 pr-3 text-red-600">{row.errors}</td>
-                        <td className="py-2.5">{row.triggered_by}</td>
+                        <td className="py-2.5 pr-3 text-green-600 dark:text-green-400">{row.success}</td>
+                        <td className="py-2.5 pr-3 text-red-600 dark:text-red-400">{row.errors}</td>
+                        <td className="py-2.5 text-slate-700 dark:text-slate-300">{row.triggered_by}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -196,36 +206,40 @@ export default function DashboardPage() {
         </section>
 
         {/* Alvarás vencendo */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4">
-            <h2 className="text-base font-semibold text-slate-900">
+        <section className="card-portal overflow-hidden shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
               Alvarás vencendo nos próximos 30 dias
             </h2>
           </div>
           <div className="p-5">
             {vencendo.length === 0 ? (
-              <p className="py-8 text-center text-sm text-slate-400">
+              <p className="py-8 text-center text-sm text-slate-400 dark:text-slate-500">
                 Nenhum alvará vence nos próximos 30 dias.
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="w-full text-left text-sm text-slate-800 dark:text-slate-200">
                   <thead>
-                    <tr className="border-b border-slate-100">
-                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Empresa</th>
-                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Alvará</th>
-                      <th className="pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Vencimento</th>
+                    <tr className="border-b border-slate-100 dark:border-slate-700">
+                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Empresa
+                      </th>
+                      <th className="pb-2 pr-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Alvará
+                      </th>
+                      <th className="pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Vencimento
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {vencendo.map((row) => (
                       <tr
                         key={row.id}
-                        className="border-b border-slate-50 last:border-0"
+                        className="border-b border-slate-100 last:border-0 dark:border-slate-700/80"
                       >
-                        <td className="py-2.5 pr-3">
-                          {row.companies?.razao_social ?? row.companies?.cnpj ?? "—"}
-                        </td>
+                        <td className="py-2.5 pr-3">{row.companies?.razao_social ?? row.companies?.cnpj ?? "—"}</td>
                         <td className="py-2.5 pr-3">{row.alvaras?.name ?? "—"}</td>
                         <td className="py-2.5">{formatDate(row.data_vencimento)}</td>
                       </tr>

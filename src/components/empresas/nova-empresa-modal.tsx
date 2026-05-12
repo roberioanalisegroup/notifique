@@ -245,11 +245,11 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
       role="dialog"
       aria-modal
     >
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-portal-md">
-        <h2 className="text-lg font-semibold text-slate-900">Nova empresa / cadastro</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Escolha o tipo de identificação. <strong className="font-medium text-slate-700">CNPJ</strong> e{" "}
-          <strong className="font-medium text-slate-700">MEI</strong> podem consultar a BrasilAPI; CAEPF, CPF e
+      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-portal-md dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Nova empresa / cadastro</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          Escolha o tipo de identificação. <strong className="font-medium text-slate-700 dark:text-slate-300">CNPJ</strong> e{" "}
+          <strong className="font-medium text-slate-700 dark:text-slate-300">MEI</strong> podem consultar a BrasilAPI; CAEPF, CPF e
           outros são preenchidos manualmente (ou CNPJ com a consulta desligada).
         </p>
 
@@ -289,14 +289,14 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
               maxLength={80}
               autoComplete="off"
             />
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Referência interna manual; aparece na listagem e na pesquisa de empresas.
             </p>
           </div>
 
           {mostrarConsultaReceitaSwitch && (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
-              <span className="text-sm text-slate-800" id="nova-empresa-consulta-label">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 dark:border-slate-600 dark:bg-slate-900/70">
+              <span className="text-sm text-slate-800 dark:text-slate-200" id="nova-empresa-consulta-label">
                 Consultar dados na Receita (BrasilAPI)
               </span>
               <button
@@ -311,13 +311,13 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
                 }}
                 className={cn(
                   "relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
-                  consultarReceita ? "bg-blue-600" : "bg-slate-300"
+                  consultarReceita ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-600"
                 )}
               >
                 <span
                   aria-hidden
                   className={cn(
-                    "pointer-events-none absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-[transform]",
+                    "pointer-events-none absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-[transform] dark:bg-slate-100",
                     consultarReceita ? "translate-x-6" : "translate-x-0.5"
                   )}
                 />
@@ -325,12 +325,12 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
             </div>
           )}
           {mostrarConsultaReceitaSwitch && !consultarReceita && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Consulta desligada: preencha os dados cadastrais abaixo do documento.
             </p>
           )}
           {cadastroTipo === "mei" && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               MEI: ao sair do campo com 14 dígitos, os dados podem ser buscados na Receita; o formulário abaixo
               permanece disponível para ajustes.
             </p>
@@ -363,31 +363,31 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
                 autoComplete="off"
               />
               {syncing && (
-                <span className="absolute right-3 top-2.5 h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+                <span className="absolute right-3 top-2.5 h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600 dark:border-slate-600 dark:border-t-blue-400" />
               )}
             </div>
           </div>
 
           {readOnly && (cadastroTipo === "mei" || (cadastroTipo === "cnpj" && consultarReceita)) && (
-            <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-sm">
+            <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-sm dark:border-slate-600 dark:bg-slate-900/60 dark:text-slate-200">
               <p>
-                <span className="text-slate-500">Razão social: </span>
+                <span className="text-slate-500 dark:text-slate-400">Razão social: </span>
                 {readOnly.razao_social ?? "—"}
               </p>
               <p>
-                <span className="text-slate-500">Município/UF: </span>
+                <span className="text-slate-500 dark:text-slate-400">Município/UF: </span>
                 {readOnly.municipio ?? "—"}/{readOnly.uf ?? "—"}
               </p>
               <p>
-                <span className="text-slate-500">Situação: </span>
+                <span className="text-slate-500 dark:text-slate-400">Situação: </span>
                 {readOnly.situacao_cadastral ?? "—"}
               </p>
             </div>
           )}
 
           {mostrarFormularioManual && (
-          <div className="space-y-3 border-t border-slate-100 pt-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Dados cadastrais</p>
+          <div className="space-y-3 border-t border-slate-100 pt-4 dark:border-slate-700">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Dados cadastrais</p>
               <div>
                 <label className="form-label" htmlFor="m-razao">
                   Razão social / nome
