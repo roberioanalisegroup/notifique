@@ -1,19 +1,28 @@
 "use client";
 
+import { ThemeProvider, useTheme } from "@/components/theme-provider";
 import { Toaster } from "sonner";
-import { usePathname } from "next/navigation";
+
+function AppToaster() {
+  const { resolved } = useTheme();
+  return (
+    <Toaster richColors position="top-right" theme={resolved} />
+  );
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const isAuth = pathname?.startsWith("/auth");
+  return (
+    <ThemeProvider>
+      <ProvidersInner>{children}</ProvidersInner>
+    </ThemeProvider>
+  );
+}
+
+function ProvidersInner({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
-      <Toaster
-        richColors
-        position="top-right"
-        theme={isAuth ? "light" : "system"}
-      />
+      <AppToaster />
     </>
   );
 }

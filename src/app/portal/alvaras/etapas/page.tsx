@@ -436,7 +436,7 @@ export default function AlvarasEtapasPage() {
         }}
       />
 
-      <div className="mx-auto max-w-3xl space-y-6 text-slate-900 [color-scheme:light]">
+      <div className="mx-auto max-w-3xl space-y-6 text-slate-900 dark:text-slate-100">
         {/* Breadcrumb */}
         <div>
           <div className="flex flex-wrap items-center gap-2 text-sm">

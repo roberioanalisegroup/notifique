@@ -17,7 +17,7 @@ function durationSec(start: string, end: string | null) {
 
 function SincronizacaoSkeleton() {
   return (
-    <div className="space-y-6 text-slate-900 [color-scheme:light]">
+    <div className="space-y-6 text-slate-900 dark:text-slate-100">
       <div className="space-y-2">
         <Skeleton className="h-9 w-80 max-w-full" />
         <Skeleton className="h-4 w-full max-w-xl" />
@@ -128,7 +128,7 @@ export default function SincConfigPage() {
   if (loading) return <SincronizacaoSkeleton />;
 
   return (
-    <div className="max-w-3xl space-y-6 text-slate-900 [color-scheme:light]">
+    <div className="max-w-3xl space-y-6 text-slate-900 dark:text-slate-100">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
           Sincronização com a Receita (BrasilAPI)

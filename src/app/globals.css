@@ -5,13 +5,13 @@
 :root {
   --background: #ffffff;
   --foreground: #0f172a;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  color-scheme: dark;
 }
 
 body {
@@ -59,6 +59,38 @@ body {
   }
   .form-label {
     @apply text-xs font-medium text-slate-500;
+  }
+
+  .dark .input-field,
+  .dark .select-field {
+    @apply border-slate-600 bg-slate-900/80 text-slate-100 placeholder:text-slate-500 focus:border-blue-400 focus:ring-blue-400/25;
+  }
+  .dark .textarea-field {
+    @apply border-slate-600 bg-slate-900/80 text-slate-100 placeholder:text-slate-500 focus:border-blue-400 focus:ring-blue-400/25;
+  }
+  .dark .btn-secondary {
+    @apply border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700 focus-visible:ring-slate-500/40;
+  }
+  .dark .table-portal thead {
+    @apply border-slate-700 bg-slate-800/80;
+  }
+  .dark .table-portal th {
+    @apply text-slate-400;
+  }
+  .dark .table-portal td {
+    @apply border-slate-700/80 text-slate-200;
+  }
+  .dark .table-portal tbody tr {
+    @apply hover:bg-slate-800/60;
+  }
+  .dark .card-portal {
+    @apply border-slate-700/90 bg-slate-900/40 shadow-none ring-1 ring-slate-700/50;
+  }
+  .dark .modal-panel {
+    @apply border-slate-600 bg-slate-900 text-slate-100 ring-1 ring-slate-700/50;
+  }
+  .dark .form-label {
+    @apply text-slate-400;
   }
 }
 

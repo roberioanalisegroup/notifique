@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Providers } from "@/components/providers";
+import { themeInitScript } from "@/lib/theme-init-script";
+import Script from "next/script";
 import { Suspense } from "react";
 import "./globals.css";
 
@@ -27,11 +29,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen font-sans antialiased`}
       >
-        <Suspense fallback={<>{children}</>}>
+        <Script id="theme-init" strategy="beforeInteractive">
+          {themeInitScript()}
+        </Script>
+        <Suspense fallback={null}>
           <Providers>{children}</Providers>
         </Suspense>
       </body>

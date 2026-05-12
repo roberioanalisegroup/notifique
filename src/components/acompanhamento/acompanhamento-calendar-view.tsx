@@ -40,10 +40,11 @@ function responsibleFromCompany(c: Company | null | undefined) {
 }
 
 function eventClass(t: AcompanhamentoTaskRow, getUiColumn: (t: AcompanhamentoTaskRow) => UiColumn): string {
-  if (t.status === "concluida") return "bg-emerald-100 text-emerald-900 line-through decoration-emerald-700/60";
+  if (t.status === "concluida")
+    return "bg-emerald-100 text-emerald-900 line-through decoration-emerald-700/60 dark:bg-emerald-950/50 dark:text-emerald-200 dark:decoration-emerald-400/50";
   const col = getUiColumn(t);
-  if (col === "andamento") return "bg-amber-100 text-amber-900";
-  return "bg-red-100 text-red-900";
+  if (col === "andamento") return "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200";
+  return "bg-red-100 text-red-900 dark:bg-red-950/50 dark:text-red-200";
 }
 
 export function AcompanhamentoCalendarView({
@@ -97,7 +98,7 @@ export function AcompanhamentoCalendarView({
           <button
             type="button"
             onClick={() => setCursor((d) => addMonths(d, -1))}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             aria-label="Mês anterior"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -106,7 +107,7 @@ export function AcompanhamentoCalendarView({
           <button
             type="button"
             onClick={() => setCursor((d) => addMonths(d, 1))}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             aria-label="Próximo mês"
           >
             Próximo
@@ -115,18 +116,18 @@ export function AcompanhamentoCalendarView({
           <button
             type="button"
             onClick={() => setCursor(startOfMonth(new Date()))}
-            className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-900 transition hover:bg-emerald-100"
+            className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-900 transition hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200 dark:hover:bg-emerald-900/60"
           >
             Hoje
           </button>
         </div>
-        <h2 className="text-center text-base font-semibold capitalize text-emerald-950 sm:text-lg">
+        <h2 className="text-center text-base font-semibold capitalize text-emerald-950 sm:text-lg dark:text-emerald-100">
           {monthTitle}
         </h2>
         <div className="hidden w-[min(100%,14rem)] sm:block" aria-hidden />
       </div>
 
-      <div className="grid grid-cols-7 border-b border-slate-200 pb-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+      <div className="grid grid-cols-7 border-b border-slate-200 pb-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:text-slate-400">
         {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
           <div key={d}>{d}</div>
         ))}
@@ -151,16 +152,21 @@ export function AcompanhamentoCalendarView({
               }}
               className={cn(
                 "flex min-h-[5.5rem] flex-col rounded-xl border p-1.5 transition sm:min-h-[6.5rem] sm:p-2",
-                inMonth ? "border-slate-200/90 bg-slate-50/80" : "border-transparent bg-slate-100/40 opacity-70",
-                isToday(day) && "ring-2 ring-emerald-700 ring-offset-1 ring-offset-white",
-                dayTasks.length > 0 && "cursor-pointer hover:border-emerald-300/80 hover:bg-emerald-50/40",
-                expanded && "z-10 min-h-[11rem] border-emerald-300 bg-emerald-50/40 shadow-sm"
+                inMonth
+                  ? "border-slate-200/90 bg-slate-50/80 dark:border-slate-600/80 dark:bg-slate-800/50"
+                  : "border-transparent bg-slate-100/40 opacity-70 dark:bg-slate-800/20",
+                isToday(day) &&
+                  "ring-2 ring-emerald-700 ring-offset-1 ring-offset-white dark:ring-emerald-500 dark:ring-offset-slate-900",
+                dayTasks.length > 0 &&
+                  "cursor-pointer hover:border-emerald-300/80 hover:bg-emerald-50/40 dark:hover:border-emerald-600/80 dark:hover:bg-emerald-950/30",
+                expanded &&
+                  "z-10 min-h-[11rem] border-emerald-300 bg-emerald-50/40 shadow-sm dark:border-emerald-600 dark:bg-emerald-950/25"
               )}
             >
               <span
                 className={cn(
                   "mb-1 text-xs font-semibold tabular-nums",
-                  inMonth ? "text-slate-800" : "text-slate-400"
+                  inMonth ? "text-slate-800 dark:text-slate-200" : "text-slate-400 dark:text-slate-500"
                 )}
               >
                 {format(day, "d")}
@@ -195,7 +201,7 @@ export function AcompanhamentoCalendarView({
                       e.stopPropagation();
                       setExpandedDayKey(key);
                     }}
-                    className="text-center text-[10px] font-medium text-emerald-800 hover:underline"
+                    className="text-center text-[10px] font-medium text-emerald-800 hover:underline dark:text-emerald-300"
                   >
                     +{more} mais
                   </button>
@@ -207,7 +213,7 @@ export function AcompanhamentoCalendarView({
                       e.stopPropagation();
                       setExpandedDayKey(null);
                     }}
-                    className="text-center text-[10px] font-medium text-slate-600 hover:underline"
+                    className="text-center text-[10px] font-medium text-slate-600 hover:underline dark:text-slate-400"
                   >
                     Recolher
                   </button>
@@ -218,9 +224,9 @@ export function AcompanhamentoCalendarView({
         })}
       </div>
 
-      <p className="mt-4 text-center text-xs text-slate-500">
-        Eventos pela <strong className="text-slate-600">data de vencimento da tarefa</strong>; se não existir, usa-se
-        o <strong className="text-slate-600">início obrigatório</strong> (1.º ciclo).
+      <p className="mt-4 text-center text-xs text-slate-500 dark:text-slate-400">
+        Eventos pela <strong className="text-slate-600 dark:text-slate-300">data de vencimento da tarefa</strong>; se não existir, usa-se
+        o <strong className="text-slate-600 dark:text-slate-300">início obrigatório</strong> (1.º ciclo).
       </p>
     </div>
   );

@@ -1,4 +1,5 @@
 import { HomeBrandIcon, SessionCta } from "@/components/home/session-cta";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { FileStack, RefreshCw, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -39,6 +40,7 @@ export default function HomePage() {
             Analise Alvará
           </Link>
           <div className="flex items-center gap-2 text-sm">
+            <ThemeToggle compact className="mr-1" />
             <Link
               href="/auth/login"
               className="rounded-lg px-3 py-2 font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"

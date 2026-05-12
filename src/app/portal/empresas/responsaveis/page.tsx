@@ -246,7 +246,7 @@ export default function EmpresasResponsaveisPage() {
   );
 
   return (
-    <div className="space-y-6 text-slate-900 [color-scheme:light]">
+    <div className="space-y-6 text-slate-900 dark:text-slate-100">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Responsáveis por empresa</h1>

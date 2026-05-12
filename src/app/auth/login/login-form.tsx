@@ -59,7 +59,7 @@ export function LoginForm() {
       </p>
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
         <div>
-          <label className="text-sm font-medium" htmlFor="email">
+          <label className="text-sm font-medium text-slate-900 dark:text-slate-200" htmlFor="email">
             E-mail
           </label>
           <input
@@ -67,20 +67,20 @@ export function LoginForm() {
             type="email"
             required
             autoComplete="email"
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
         <div>
-          <label className="text-sm font-medium" htmlFor="password">
+          <label className="text-sm font-medium text-slate-900 dark:text-slate-200" htmlFor="password">
             Senha
           </label>
           <input
             id="password"
             type="password"
             required
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -93,8 +93,8 @@ export function LoginForm() {
           {loading ? "Entrando…" : "Entrar"}
         </button>
       </form>
-      <p className="mt-4 text-center text-sm text-slate-600">
-        <Link href="/auth/register" className="text-blue-600 hover:underline">
+      <p className="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
+        <Link href="/auth/register" className="text-blue-600 hover:underline dark:text-blue-400">
           Criar conta (setup inicial)
         </Link>
       </p>

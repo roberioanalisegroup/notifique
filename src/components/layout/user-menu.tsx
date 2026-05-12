@@ -42,13 +42,13 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
 
   if (collapsed) {
     return (
-      <div className="shrink-0 border-t border-slate-100 p-2">
+      <div className="shrink-0 border-t border-slate-100 p-2 dark:border-slate-800">
         <button
           type="button"
           onClick={signOut}
           disabled={loading}
           title={user ? `Sair (${user.email})` : "Sair"}
-          className="flex w-full items-center justify-center rounded-xl p-2.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+          className="flex w-full items-center justify-center rounded-xl p-2.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 disabled:opacity-50"
         >
           <LogOut className="h-5 w-5" />
         </button>
@@ -57,18 +57,18 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
   }
 
   return (
-    <div className="shrink-0 border-t border-slate-100 bg-slate-50/50 p-3">
+    <div className="shrink-0 border-t border-slate-100 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-900/50">
       {user && (
-        <div className="mb-2 rounded-lg border border-slate-100/80 bg-white px-3 py-2 shadow-sm">
-          <p className="truncate text-sm font-medium text-slate-900">{user.name}</p>
-          <p className="truncate text-xs text-slate-500">{user.email}</p>
+        <div className="mb-2 rounded-lg border border-slate-100/80 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{user.name}</p>
+          <p className="truncate text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
         </div>
       )}
       <button
         type="button"
         onClick={signOut}
         disabled={loading}
-        className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:shadow-sm disabled:opacity-50"
+        className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:shadow-sm dark:text-slate-300 dark:hover:bg-slate-800 disabled:opacity-50"
       >
         <LogOut className="h-4 w-4 shrink-0" />
         {loading ? "Saindo…" : "Sair"}

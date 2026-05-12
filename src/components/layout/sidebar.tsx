@@ -2,6 +2,7 @@
 
 import { usePortalProfile } from "@/components/portal/portal-access-context";
 import { UserMenu } from "@/components/layout/user-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { accessForPortalPath } from "@/lib/portal-access";
 import { cn } from "@/lib/utils";
 import {
@@ -163,16 +164,19 @@ function NavItem({
           onClick={() => setOpenFlyout(flyoutOpen ? null : item.id)}
           className={cn(
             "flex w-full items-center justify-center rounded-xl p-2.5 text-sm font-medium transition-colors",
-            "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-            flyoutOpen && "bg-slate-100 text-slate-900 ring-1 ring-slate-200/80",
-            !flyoutOpen && sectionUnderHref && "bg-blue-50 text-blue-800 ring-1 ring-blue-200/80"
+            "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white",
+            flyoutOpen &&
+              "bg-slate-100 text-slate-900 ring-1 ring-slate-200/80 dark:bg-slate-800 dark:text-white dark:ring-slate-600/80",
+            !flyoutOpen &&
+              sectionUnderHref &&
+              "bg-blue-50 text-blue-800 ring-1 ring-blue-200/80 dark:bg-blue-950/60 dark:text-blue-200 dark:ring-blue-800/40"
           )}
         >
           {item.icon}
         </button>
         {flyoutOpen && (
           <div
-            className="absolute left-full top-0 z-[70] ml-2 min-w-[11rem] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1.5 shadow-portal-md ring-1 ring-slate-900/5"
+            className="absolute left-full top-0 z-[70] ml-2 min-w-[11rem] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1.5 shadow-portal-md ring-1 ring-slate-900/5 dark:border-slate-600 dark:bg-slate-800 dark:ring-slate-950/50"
             role="menu"
           >
             {allow(item.href) ? (
@@ -183,16 +187,16 @@ function NavItem({
                   mobileClose?.();
                 }}
                 className={cn(
-                  "block border-b border-slate-100 px-3 py-2 text-sm font-medium transition-colors",
+                  "block border-b border-slate-100 px-3 py-2 text-sm font-medium transition-colors dark:border-slate-700",
                   parentLinkExactActive
-                    ? "bg-blue-50 text-blue-800"
-                    : "text-slate-800 hover:bg-slate-50"
+                    ? "bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-200"
+                    : "text-slate-800 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/80"
                 )}
               >
                 {item.label}
               </Link>
             ) : (
-              <p className="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              <p className="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-700 dark:text-slate-500">
                 {item.label}
               </p>
             )}
@@ -210,8 +214,8 @@ function NavItem({
                   className={cn(
                     "block px-3 py-2 text-sm transition-colors",
                     cActive
-                      ? "font-medium text-blue-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      ? "font-medium text-blue-700 dark:text-blue-300"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/80 dark:hover:text-white"
                   )}
                 >
                   {c.label}
@@ -236,7 +240,7 @@ function NavItem({
                 "flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                 parentLinkExactActive
                   ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-600/20"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
               )}
             >
               {item.icon}
@@ -245,7 +249,7 @@ function NavItem({
           ) : (
             <div
               className={cn(
-                "flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500"
+                "flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 dark:text-slate-400"
               )}
             >
               {item.icon}
@@ -256,8 +260,8 @@ function NavItem({
             type="button"
             onClick={() => setAccordionOpen(!accordionOpen)}
             className={cn(
-              "shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600",
-              accordionOpen && "text-slate-600"
+              "shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300",
+              accordionOpen && "text-slate-600 dark:text-slate-300"
             )}
             aria-expanded={accordionOpen}
             aria-label={accordionOpen ? "Recolher submenu" : "Expandir submenu"}
@@ -270,7 +274,7 @@ function NavItem({
           </button>
         </div>
         {accordionOpen && (
-          <div className="mt-1 space-y-0.5 border-l-2 border-slate-200/80 pl-3 ml-1.5">
+          <div className="mt-1 space-y-0.5 border-l-2 border-slate-200/80 pl-3 ml-1.5 dark:border-slate-600/80">
             {childFiltered.map((c) => {
               const cActive =
                 pathname === c.href || pathname?.startsWith(c.href + "/");
@@ -282,8 +286,8 @@ function NavItem({
                   className={cn(
                     "block rounded-lg px-3 py-1.5 text-sm transition-colors",
                     cActive
-                      ? "font-medium text-blue-700"
-                      : "text-slate-500 hover:text-slate-900"
+                      ? "font-medium text-blue-700 dark:text-blue-300"
+                      : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                   )}
                 >
                   {c.label}
@@ -305,18 +309,19 @@ function NavItem({
           onClick={() => setOpenFlyout(flyoutOpen ? null : item.id)}
           className={cn(
             "flex w-full items-center justify-center rounded-xl p-2.5 text-sm font-medium transition-colors",
-            "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-            flyoutOpen && "bg-slate-100 text-slate-900 ring-1 ring-slate-200/80"
+            "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white",
+            flyoutOpen &&
+              "bg-slate-100 text-slate-900 ring-1 ring-slate-200/80 dark:bg-slate-800 dark:text-white dark:ring-slate-600/80"
           )}
         >
           {item.icon}
         </button>
         {flyoutOpen && (
           <div
-            className="absolute left-full top-0 z-[70] ml-2 min-w-[11rem] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1.5 shadow-portal-md ring-1 ring-slate-900/5"
+            className="absolute left-full top-0 z-[70] ml-2 min-w-[11rem] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1.5 shadow-portal-md ring-1 ring-slate-900/5 dark:border-slate-600 dark:bg-slate-800 dark:ring-slate-950/50"
             role="menu"
           >
-            <p className="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <p className="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-700 dark:text-slate-500">
               {item.label}
             </p>
             {childFiltered.map((c) => {
@@ -332,8 +337,8 @@ function NavItem({
                   className={cn(
                     "block px-3 py-2 text-sm transition-colors",
                     cActive
-                      ? "font-medium text-blue-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      ? "font-medium text-blue-700 dark:text-blue-300"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/80 dark:hover:text-white"
                   )}
                 >
                   {c.label}
@@ -357,7 +362,7 @@ function NavItem({
           collapsed ? "justify-center p-2.5" : "px-3 py-2.5",
           active
             ? "bg-blue-600 text-white shadow-sm ring-1 ring-blue-600/20"
-            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
         )}
       >
         {item.icon}
@@ -373,7 +378,7 @@ function NavItem({
         onClick={() => setAccordionOpen(!accordionOpen)}
         className={cn(
           "flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-          "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
         )}
       >
         <span className="flex min-w-0 items-center gap-3">
@@ -387,7 +392,7 @@ function NavItem({
         )}
       </button>
       {accordionOpen && (
-        <div className="mt-1 space-y-0.5 border-l-2 border-slate-200/80 pl-3 ml-1.5">
+        <div className="mt-1 space-y-0.5 border-l-2 border-slate-200/80 pl-3 ml-1.5 dark:border-slate-600/80">
           {childFiltered.map((c) => {
             const cActive = pathname === c.href;
             return (
@@ -398,8 +403,8 @@ function NavItem({
                 className={cn(
                   "block rounded-lg px-3 py-1.5 text-sm transition-colors",
                   cActive
-                    ? "font-medium text-blue-700"
-                    : "text-slate-500 hover:text-slate-900"
+                    ? "font-medium text-blue-700 dark:text-blue-300"
+                    : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                 )}
               >
                 {c.label}
@@ -468,7 +473,7 @@ export function Sidebar() {
     <>
       <button
         type="button"
-        className="fixed left-3 top-3 z-40 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white p-2 text-slate-700 shadow-md shadow-slate-200/50 md:hidden"
+        className="fixed left-3 top-3 z-40 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white p-2 text-slate-700 shadow-md shadow-slate-200/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:shadow-black/40 md:hidden"
         onClick={() => setMobileOpen(true)}
         aria-label="Abrir menu"
       >
@@ -487,9 +492,9 @@ export function Sidebar() {
       <aside
         id="portal-sidebar"
         className={cn(
-          "fixed z-50 flex h-screen min-h-0 w-[17rem] max-w-[85vw] flex-col border-slate-200/90 bg-white shadow-xl shadow-slate-200/40 transition-[transform,width] duration-300 ease-out [color-scheme:light]",
+          "fixed z-50 flex h-screen min-h-0 w-[17rem] max-w-[85vw] flex-col border-slate-200/90 bg-white shadow-xl shadow-slate-200/40 transition-[transform,width] duration-300 ease-out dark:border-slate-700/90 dark:bg-slate-900 dark:shadow-black/40",
           "left-0 top-0",
-          "md:relative md:z-50 md:max-w-none md:shadow-sm md:shadow-slate-200/30",
+          "md:relative md:z-50 md:max-w-none md:shadow-sm md:shadow-slate-200/30 dark:md:shadow-black/40",
           "md:shrink-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           "md:translate-x-0",
@@ -498,7 +503,7 @@ export function Sidebar() {
       >
         <div
           className={cn(
-            "flex h-16 min-h-[4rem] shrink-0 items-center border-b border-slate-100",
+            "flex h-16 min-h-[4rem] shrink-0 items-center border-b border-slate-100 dark:border-slate-800",
             effectiveCollapsed ? "justify-center px-2" : "justify-between gap-1 px-3"
           )}
         >
@@ -513,18 +518,19 @@ export function Sidebar() {
             </div>
             {!effectiveCollapsed && (
               <div className="min-w-0 pr-1">
-                <p className="truncate text-sm font-semibold leading-tight text-slate-900">
+                <p className="truncate text-sm font-semibold leading-tight text-slate-900 dark:text-slate-100">
                   Analise Alvará
                 </p>
-                <p className="truncate text-xs text-slate-500">Gestão de Alvarás</p>
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400">Gestão de Alvarás</p>
               </div>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
+            <ThemeToggle compact />
             <button
               type="button"
               onClick={() => setCollapsedPersist(!collapsed)}
-              className="hidden rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 md:inline-flex"
+              className="hidden rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 md:inline-flex"
               title={collapsed ? "Expandir menu" : "Recolher menu"}
               aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
             >
@@ -536,7 +542,7 @@ export function Sidebar() {
             </button>
             <button
               type="button"
-              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 md:hidden"
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 md:hidden"
               onClick={() => setMobileOpen(false)}
               aria-label="Fechar"
             >

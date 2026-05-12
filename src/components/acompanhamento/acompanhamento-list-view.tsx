@@ -25,9 +25,9 @@ function colLabel(col: UiColumn): string {
 }
 
 function colBadgeClass(col: UiColumn): string {
-  if (col === "pendente") return "bg-red-100 text-red-900";
-  if (col === "andamento") return "bg-amber-100 text-amber-900";
-  return "bg-emerald-100 text-emerald-900";
+  if (col === "pendente") return "bg-red-100 text-red-900 dark:bg-red-950/50 dark:text-red-200";
+  if (col === "andamento") return "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200";
+  return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200";
 }
 
 export function AcompanhamentoListView({
@@ -47,7 +47,7 @@ export function AcompanhamentoListView({
 
   if (sorted.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">
+      <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-400">
         Nenhuma tarefa com os filtros atuais.
       </div>
     );
@@ -76,21 +76,21 @@ export function AcompanhamentoListView({
               return (
                 <tr
                   key={t.id}
-                  className="hover:bg-slate-50/80 transition-colors"
+                  className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
                 >
-                  <td className="max-w-[220px] font-medium text-slate-900">
+                  <td className="max-w-[220px] font-medium text-slate-900 dark:text-slate-100">
                     <span className="line-clamp-2">{nome}</span>
                   </td>
-                  <td className="max-w-[200px] text-slate-700">
+                  <td className="max-w-[200px] text-slate-700 dark:text-slate-300">
                     <span className="line-clamp-2">{labelFromCa(ca)}</span>
                   </td>
-                  <td className="max-w-[160px] text-slate-600">
+                  <td className="max-w-[160px] text-slate-600 dark:text-slate-400">
                     <span className="line-clamp-2">{responsibleFromCompany(ca?.companies)}</span>
                   </td>
-                  <td className="whitespace-nowrap text-slate-600">
+                  <td className="whitespace-nowrap text-slate-600 dark:text-slate-400">
                     {formatDate(t.due_date, { empty: "—" })}
                   </td>
-                  <td className="whitespace-nowrap text-slate-600">
+                  <td className="whitespace-nowrap text-slate-600 dark:text-slate-400">
                     {formatDate(ca?.data_emissao ?? null, { empty: "—" })}
                   </td>
                   <td>
@@ -107,7 +107,7 @@ export function AcompanhamentoListView({
                     <button
                       type="button"
                       onClick={() => onOpen(t)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       Abrir

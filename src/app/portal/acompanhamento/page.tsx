@@ -130,11 +130,15 @@ function validityMeta(expirationDate: string | null | undefined): { className: s
   const exp = new Date(expirationDate);
   exp.setHours(0, 0, 0, 0);
   const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 3600 * 24));
-  if (diffDays < 0) return { className: "bg-red-100 text-red-800", text: "Vencido" };
+  if (diffDays < 0)
+    return { className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200", text: "Vencido" };
   if (diffDays <= 90)
-    return { className: "bg-orange-100 text-orange-900", text: `Vence em ${diffDays} dias` };
+    return {
+      className: "bg-orange-100 text-orange-900 dark:bg-orange-950/50 dark:text-orange-200",
+      text: `Vence em ${diffDays} dias`,
+    };
   return {
-    className: "bg-sky-100 text-sky-800",
+    className: "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200",
     text: `Válido até ${exp.toLocaleDateString("pt-BR")}`,
   };
 }
@@ -602,17 +606,17 @@ export default function AcompanhamentoPage() {
         : `${selectedAlvaraNames.length} tipos selecionados`;
 
   return (
-    <div className="space-y-6 text-slate-900 [color-scheme:light]">
+    <div className="space-y-6 text-slate-900 dark:text-slate-100">
       {/* Cabeçalho — alinhado ao portal + tom verde do modelo */}
       <div className="space-y-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight text-emerald-950">
-            <FileSignature className="h-7 w-7 text-emerald-800" aria-hidden />
+          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight text-emerald-950 dark:text-emerald-100">
+            <FileSignature className="h-7 w-7 text-emerald-800 dark:text-emerald-400" aria-hidden />
             Gestão de alvarás
           </h1>
           <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
             <div
-              className="inline-flex rounded-lg border border-slate-200/90 bg-white p-0.5 shadow-sm"
+              className="inline-flex rounded-lg border border-slate-200/90 bg-white p-0.5 shadow-sm dark:border-slate-600/90 dark:bg-slate-800/90"
               role="group"
               aria-label="Tipo de visualização"
             >
@@ -625,7 +629,7 @@ export default function AcompanhamentoPage() {
                   "inline-flex h-9 w-9 items-center justify-center rounded-md transition sm:h-8 sm:w-8",
                   viewMode === "kanban"
                     ? "bg-emerald-800 text-white shadow-sm"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                 )}
               >
                 <LayoutGrid className="h-4 w-4" aria-hidden />
@@ -639,7 +643,7 @@ export default function AcompanhamentoPage() {
                   "inline-flex h-9 w-9 items-center justify-center rounded-md transition sm:h-8 sm:w-8",
                   viewMode === "lista"
                     ? "bg-emerald-800 text-white shadow-sm"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                 )}
               >
                 <List className="h-4 w-4" aria-hidden />
@@ -653,7 +657,7 @@ export default function AcompanhamentoPage() {
                   "inline-flex h-9 w-9 items-center justify-center rounded-md transition sm:h-8 sm:w-8",
                   viewMode === "calendario"
                     ? "bg-emerald-800 text-white shadow-sm"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                 )}
               >
                 <CalendarDays className="h-4 w-4" aria-hidden />
@@ -665,12 +669,12 @@ export default function AcompanhamentoPage() {
               aria-expanded={helpPanelOpen}
               aria-controls="acompanhamento-ajuda-conteudo"
               onClick={() => setHelpPanelOpen((o) => !o)}
-              className="inline-flex items-center gap-2 rounded-lg border border-emerald-200/90 bg-white px-3 py-2 text-sm font-medium text-emerald-950 shadow-sm transition hover:bg-emerald-50/90"
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-200/90 bg-white px-3 py-2 text-sm font-medium text-emerald-950 shadow-sm transition hover:bg-emerald-50/90 dark:border-emerald-800/60 dark:bg-slate-800 dark:text-emerald-100 dark:hover:bg-emerald-950/40"
             >
               <span>Dicas de Uso</span>
               <ChevronDown
                 className={cn(
-                  "h-4 w-4 shrink-0 text-emerald-800 transition-transform duration-300",
+                  "h-4 w-4 shrink-0 text-emerald-800 transition-transform duration-300 dark:text-emerald-300",
                   helpPanelOpen && "rotate-180"
                 )}
                 aria-hidden
@@ -689,10 +693,10 @@ export default function AcompanhamentoPage() {
             <div className="min-h-0 overflow-hidden">
               <div
                 id="acompanhamento-ajuda-conteudo"
-                className="space-y-5 rounded-xl border border-emerald-200/90 bg-gradient-to-b from-emerald-50/90 to-white px-4 pb-4 pt-3 text-sm leading-relaxed text-slate-700 shadow-sm"
+                className="space-y-5 rounded-xl border border-emerald-200/90 bg-gradient-to-b from-emerald-50/90 to-white px-4 pb-4 pt-3 text-sm leading-relaxed text-slate-700 shadow-sm dark:border-emerald-800/40 dark:from-emerald-950/30 dark:to-slate-900 dark:text-slate-300"
               >
                 <section>
-                  <h2 className="text-base font-semibold text-slate-900">Quadro de Acompanhamento</h2>
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Quadro de Acompanhamento</h2>
                   <p className="mt-2">
                     Aqui você acompanha as tarefas geradas a partir dos alvarás das empresas.
                   </p>
@@ -700,78 +704,78 @@ export default function AcompanhamentoPage() {
                     Veja rapidamente o que está pendente, em andamento ou concluído, sempre considerando a validade e a
                     empresa.
                   </p>
-                  <p className="mt-2 text-slate-600">
-                    Use os ícones ao lado de <strong className="text-slate-800">Dicas de Uso</strong> para alternar
-                    entre <strong className="text-slate-800">Kanban</strong>, <strong className="text-slate-800">lista</strong>{" "}
-                    e <strong className="text-slate-800">calendário</strong> (vencimento ou início obrigatório).
+                  <p className="mt-2 text-slate-600 dark:text-slate-400">
+                    Use os ícones ao lado de <strong className="text-slate-800 dark:text-slate-200">Dicas de Uso</strong> para alternar
+                    entre <strong className="text-slate-800 dark:text-slate-200">Kanban</strong>, <strong className="text-slate-800 dark:text-slate-200">lista</strong>{" "}
+                    e <strong className="text-slate-800 dark:text-slate-200">calendário</strong> (vencimento ou início obrigatório).
                   </p>
                 </section>
 
                 <section>
-                  <h2 className="text-base font-semibold text-slate-900">Filtros</h2>
-                  <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-700">
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Filtros</h2>
+                  <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-700 dark:text-slate-300">
                     <li>
-                      <span className="font-medium text-slate-800">Anos:</span> considera o ano do vencimento da tarefa
+                      <span className="font-medium text-slate-800 dark:text-slate-200">Anos:</span> considera o ano do vencimento da tarefa
                     </li>
                     <li>
-                      <span className="font-medium text-slate-800">Nenhum selecionado</span> → mostra todas
+                      <span className="font-medium text-slate-800 dark:text-slate-200">Nenhum selecionado</span> → mostra todas
                     </li>
                     <li>
-                      <span className="font-medium text-slate-800">Vários selecionados</span> → mostra do menor ao
+                      <span className="font-medium text-slate-800 dark:text-slate-200">Vários selecionados</span> → mostra do menor ao
                       maior ano
                     </li>
                     <li>
-                      <span className="font-medium text-slate-800">Empresas e Tipo de Alvará:</span> use para focar
+                      <span className="font-medium text-slate-800 dark:text-slate-200">Empresas e Tipo de Alvará:</span> use para focar
                       apenas no que precisa no momento
                     </li>
                   </ul>
                 </section>
 
                 <section>
-                  <h2 className="text-base font-semibold text-slate-900">Colunas</h2>
-                  <dl className="mt-2 space-y-3 text-slate-700">
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Colunas</h2>
+                  <dl className="mt-2 space-y-3 text-slate-700 dark:text-slate-300">
                     <div>
-                      <dt className="font-medium text-slate-800">Pendente</dt>
-                      <dd className="mt-0.5 pl-0 text-slate-600">Tarefas que ainda não foram iniciadas</dd>
+                      <dt className="font-medium text-slate-800 dark:text-slate-200">Pendente</dt>
+                      <dd className="mt-0.5 pl-0 text-slate-600 dark:text-slate-400">Tarefas que ainda não foram iniciadas</dd>
                     </div>
                     <div>
-                      <dt className="font-medium text-slate-800">Em andamento</dt>
-                      <dd className="mt-0.5 text-slate-600">
+                      <dt className="font-medium text-slate-800 dark:text-slate-200">Em andamento</dt>
+                      <dd className="mt-0.5 text-slate-600 dark:text-slate-400">
                         Use para destacar o que já está em tratamento ou com documentação em curso, à parte do que
                         ainda não começou. É só organização no quadro: a tarefa continua{" "}
-                        <strong className="text-slate-800">pendente</strong> no sistema até passar para{" "}
-                        <strong className="text-slate-800">Concluído</strong> (ou usar «Dar baixa», quando aplicável).
+                        <strong className="text-slate-800 dark:text-slate-200">pendente</strong> no sistema até passar para{" "}
+                        <strong className="text-slate-800 dark:text-slate-200">Concluído</strong> (ou usar «Dar baixa», quando aplicável).
                       </dd>
                     </div>
                     <div>
-                      <dt className="font-medium text-slate-800">Concluído</dt>
-                      <dd className="mt-0.5 text-slate-600">Tarefas finalizadas</dd>
+                      <dt className="font-medium text-slate-800 dark:text-slate-200">Concluído</dt>
+                      <dd className="mt-0.5 text-slate-600 dark:text-slate-400">Tarefas finalizadas</dd>
                     </div>
                   </dl>
                 </section>
 
-                <p className="rounded-lg bg-emerald-50/80 px-3 py-2 text-slate-700">
+                <p className="rounded-lg bg-emerald-50/80 px-3 py-2 text-slate-700 dark:bg-emerald-950/30 dark:text-slate-300">
                   No modo Kanban, pode arrastar os cartões entre as colunas para refletir o andamento.
                 </p>
 
                 <section>
-                  <h2 className="text-base font-semibold text-slate-900">Como concluir uma tarefa</h2>
-                  <p className="mt-2 font-medium text-slate-800">Para mover para Concluído:</p>
-                  <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-700">
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Como concluir uma tarefa</h2>
+                  <p className="mt-2 font-medium text-slate-800 dark:text-slate-200">Para mover para Concluído:</p>
+                  <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-700 dark:text-slate-300">
                     <li>
                       Normalmente é preciso preencher a data de emissão no vínculo empresa–alvará
                     </li>
                     <li>O próprio cartão avisa se falta alguma informação</li>
                   </ul>
-                  <p className="mt-3 font-medium text-slate-800">Se precisar encerrar sem emissão:</p>
-                  <p className="mt-1.5 text-slate-700">
+                  <p className="mt-3 font-medium text-slate-800 dark:text-slate-200">Se precisar encerrar sem emissão:</p>
+                  <p className="mt-1.5 text-slate-700 dark:text-slate-300">
                     Use a opção &quot;Dar baixa&quot; dentro da tarefa
                   </p>
                 </section>
 
                 <section>
-                  <h2 className="text-base font-semibold text-slate-900">Dicas rápidas</h2>
-                  <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-700">
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Dicas rápidas</h2>
+                  <ul className="mt-2 list-inside list-disc space-y-1.5 text-slate-700 dark:text-slate-300">
                     <li>As cores no Kanban, na lista e no calendário ajudam a ver prazos e estado</li>
                     <li>
                       O quadro atualiza sozinho em segundo plano (cerca de 30 segundos) e de novo ao voltar a este
@@ -779,7 +783,7 @@ export default function AcompanhamentoPage() {
                       sessão. Enquanto um card está em edição, essa atualização automática fica pausada.
                     </li>
                     <li>
-                      Em <strong className="text-slate-800">Configurações → Geração e manutenção</strong> pode
+                      Em <strong className="text-slate-800 dark:text-slate-200">Configurações → Geração e manutenção</strong> pode
                       recriar ou ajustar tarefas em massa (anos, empresas, etc.), por exemplo se tiver apagado cartões.
                     </li>
                   </ul>
@@ -793,7 +797,7 @@ export default function AcompanhamentoPage() {
       {/* Barra de filtros — estilo cartão do modelo */}
       <div className="card-portal flex flex-wrap items-end gap-6 p-5">
         <div ref={yearMenuRef} className="relative min-w-[200px] flex-1">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Anos (vencimento da tarefa)
           </label>
           <button
@@ -806,14 +810,14 @@ export default function AcompanhamentoPage() {
             <ChevronDown className={cn("h-4 w-4 shrink-0 transition", yearMenuOpen && "rotate-180")} />
           </button>
           {yearMenuOpen ? (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 flex max-h-72 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-              <p className="px-2 py-1.5 text-[0.7rem] text-slate-500">
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 flex max-h-72 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800 dark:shadow-black/40">
+              <p className="px-2 py-1.5 text-[0.7rem] text-slate-500 dark:text-slate-400">
                 Nenhum marcado = todas as tarefas. Vários anos = intervalo do menor ao maior.
               </p>
-              <div className="flex flex-wrap gap-2 border-b border-slate-100 px-2 pb-2">
+              <div className="flex flex-wrap gap-2 border-b border-slate-100 px-2 pb-2 dark:border-slate-700">
                 <button
                   type="button"
-                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/80 dark:text-slate-200 dark:hover:bg-slate-600"
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedYears(yearOptions.slice());
@@ -823,7 +827,7 @@ export default function AcompanhamentoPage() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/80 dark:text-slate-200 dark:hover:bg-slate-600"
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedYears([]);
@@ -838,7 +842,7 @@ export default function AcompanhamentoPage() {
                 return (
                   <label
                     key={y}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-50"
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/80"
                   >
                     <input
                       type="checkbox"
@@ -859,7 +863,7 @@ export default function AcompanhamentoPage() {
         </div>
 
         <div ref={companyMenuRef} className="relative min-w-[240px] flex-1">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Empresas
           </label>
           <button
@@ -872,8 +876,8 @@ export default function AcompanhamentoPage() {
             <ChevronDown className={cn("h-4 w-4 shrink-0 transition", companyMenuOpen && "rotate-180")} />
           </button>
           {companyMenuOpen ? (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-              <div className="border-b border-slate-100 p-2">
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800 dark:shadow-black/40">
+              <div className="border-b border-slate-100 p-2 dark:border-slate-700">
                 <input
                   type="search"
                   className="input-field h-9 text-sm"
@@ -885,7 +889,7 @@ export default function AcompanhamentoPage() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/80 dark:text-slate-200 dark:hover:bg-slate-600"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedCompanies(uniqueCompanies.slice());
@@ -895,7 +899,7 @@ export default function AcompanhamentoPage() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/80 dark:text-slate-200 dark:hover:bg-slate-600"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedCompanies([]);
@@ -913,7 +917,7 @@ export default function AcompanhamentoPage() {
                     const checked = selectedCompanies.includes(name);
                     return (
                       <li key={name}>
-                        <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-50">
+                        <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/80">
                           <input
                             type="checkbox"
                             checked={checked}
@@ -935,7 +939,7 @@ export default function AcompanhamentoPage() {
         </div>
 
         <div ref={taskMenuRef} className="relative min-w-[240px] flex-1">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Tipo de alvará (tarefa)
           </label>
           <button
@@ -948,8 +952,8 @@ export default function AcompanhamentoPage() {
             <ChevronDown className={cn("h-4 w-4 shrink-0 transition", taskMenuOpen && "rotate-180")} />
           </button>
           {taskMenuOpen ? (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-              <div className="border-b border-slate-100 p-2">
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800 dark:shadow-black/40">
+              <div className="border-b border-slate-100 p-2 dark:border-slate-700">
                 <input
                   type="search"
                   className="input-field h-9 text-sm"
@@ -961,7 +965,7 @@ export default function AcompanhamentoPage() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/80 dark:text-slate-200 dark:hover:bg-slate-600"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedAlvaraNames(uniqueAlvaraNames.slice());
@@ -971,7 +975,7 @@ export default function AcompanhamentoPage() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/80 dark:text-slate-200 dark:hover:bg-slate-600"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedAlvaraNames([]);
@@ -989,7 +993,7 @@ export default function AcompanhamentoPage() {
                     const checked = selectedAlvaraNames.includes(name);
                     return (
                       <li key={name}>
-                        <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-50">
+                        <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/80">
                           <input
                             type="checkbox"
                             checked={checked}
@@ -1022,7 +1026,7 @@ export default function AcompanhamentoPage() {
 
       {/* Quadro: Kanban | Lista | Calendário */}
       {loading ? (
-        <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-slate-500">
+        <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-slate-500 dark:border-slate-600 dark:bg-slate-900/50 dark:text-slate-400">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
             <span className="text-sm">A carregar quadro…</span>
@@ -1053,7 +1057,7 @@ export default function AcompanhamentoPage() {
             return (
               <section
                 key={col.id}
-                className="flex min-h-[420px] min-w-[min(100%,320px)] flex-1 flex-col rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3 shadow-sm md:min-w-[300px]"
+                className="flex min-h-[420px] min-w-[min(100%,320px)] flex-1 flex-col rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3 shadow-sm dark:border-slate-700/90 dark:bg-slate-900/50 md:min-w-[300px]"
                 onDragOver={onDragOver}
                 onDrop={(e) => void onDropColumn(e, col.id)}
               >
@@ -1062,22 +1066,22 @@ export default function AcompanhamentoPage() {
                     <h2
                       className={cn(
                         "flex items-center gap-2 text-base font-semibold",
-                        col.id === "concluido" && "text-emerald-800",
-                        col.id === "andamento" && "text-amber-800",
-                        col.id === "pendente" && "text-red-800"
+                        col.id === "concluido" && "text-emerald-800 dark:text-emerald-300",
+                        col.id === "andamento" && "text-amber-800 dark:text-amber-300",
+                        col.id === "pendente" && "text-red-800 dark:text-red-300"
                       )}
                     >
                       {col.icon}
                       {col.label}
                     </h2>
-                    <p className="mt-0.5 text-xs text-slate-500">{col.description}</p>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{col.description}</p>
                   </div>
                   <span
                     className={cn(
                       "rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
-                      col.id === "concluido" && "bg-emerald-100 text-emerald-800",
-                      col.id === "andamento" && "bg-amber-100 text-amber-800",
-                      col.id === "pendente" && "bg-red-100 text-red-800"
+                      col.id === "concluido" && "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
+                      col.id === "andamento" && "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
+                      col.id === "pendente" && "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300"
                     )}
                   >
                     {list.length}
@@ -1086,7 +1090,7 @@ export default function AcompanhamentoPage() {
 
                 <div className="flex min-h-[360px] flex-col gap-3">
                   {list.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-slate-200 bg-white/80 px-3 py-8 text-center text-sm text-slate-400">
+                    <p className="rounded-xl border border-dashed border-slate-200 bg-white/80 px-3 py-8 text-center text-sm text-slate-400 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-500">
                       Nenhum item
                     </p>
                   ) : (
@@ -1097,9 +1101,11 @@ export default function AcompanhamentoPage() {
                         onDragStart={(e) => onDragStart(e, t.id)}
                         onDragEnd={onDragEnd}
                         className={cn(
-                          "group cursor-grab rounded-2xl bg-white p-4 shadow-sm transition active:cursor-grabbing",
-                          col.id === "concluido" && "border-4 border-emerald-500/60 shadow-emerald-50",
-                          col.id === "andamento" && "border-2 border-amber-500/60 shadow-amber-50",
+                          "group cursor-grab rounded-2xl bg-white p-4 shadow-sm transition active:cursor-grabbing dark:bg-slate-800/90 dark:shadow-black/20",
+                          col.id === "concluido" &&
+                            "border-4 border-emerald-500/60 shadow-emerald-50 dark:border-emerald-500/50 dark:shadow-emerald-950/30",
+                          col.id === "andamento" &&
+                            "border-2 border-amber-500/60 shadow-amber-50 dark:border-amber-500/50 dark:shadow-amber-950/20",
                           col.id === "pendente" && "border-0 border-transparent shadow-sm",
                           dragTaskId === t.id && "opacity-60"
                         )}
@@ -1129,15 +1135,15 @@ export default function AcompanhamentoPage() {
       )}
 
       {!loading && tasks.length === 0 ? (
-        <p className="text-center text-sm text-slate-500">
+        <p className="text-center text-sm text-slate-500 dark:text-slate-400">
           Nenhuma tarefa no período com estes filtros. As tarefas são criadas{" "}
-          <strong className="text-slate-700">automaticamente</strong> ao vincular alvarás às empresas. Se apagou
+          <strong className="text-slate-700 dark:text-slate-300">automaticamente</strong> ao vincular alvarás às empresas. Se apagou
           entradas ou precisa de manutenção em massa, use{" "}
-          <strong className="text-slate-700">Configurações → Geração e manutenção</strong> no menu lateral.
+          <strong className="text-slate-700 dark:text-slate-300">Configurações → Geração e manutenção</strong> no menu lateral.
         </p>
       ) : null}
 
-      <p className="text-center text-xs text-slate-400">
+      <p className="text-center text-xs text-slate-400 dark:text-slate-500">
         <ClipboardList className="mb-0.5 inline h-3.5 w-3.5 align-text-bottom" /> Para <strong>concluir</strong> é
         necessário ter emissão no vínculo e o vencimento da tarefa (calculado ao registar a emissão). Use o ícone de
         edição para detalhes e histórico.
@@ -1205,15 +1211,15 @@ function TaskCard({
         <span
           className={cn(
             "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold",
-            venc.className || "bg-slate-100 text-slate-700"
+            venc.className || "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
           )}
         >
           {venc.text}
         </span>
-        <div className="flex shrink-0 items-center gap-1 text-slate-400">
+        <div className="flex shrink-0 items-center gap-1 text-slate-400 dark:text-slate-500">
           <button
             type="button"
-            className="rounded p-1 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded p-1 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
             title="Detalhes e histórico"
             onClick={(e) => {
               e.stopPropagation();
@@ -1224,7 +1230,7 @@ function TaskCard({
           </button>
           <button
             type="button"
-            className="rounded p-1 hover:bg-slate-100 hover:text-red-600"
+            className="rounded p-1 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-700 dark:hover:text-red-400"
             title="Cancelar tarefa"
             onClick={(e) => {
               e.stopPropagation();
@@ -1233,36 +1239,36 @@ function TaskCard({
           >
             <Trash2 className="h-4 w-4" />
           </button>
-          <GripVertical className="h-4 w-4 text-slate-300 group-hover:text-slate-400" aria-hidden />
+          <GripVertical className="h-4 w-4 text-slate-300 group-hover:text-slate-400 dark:text-slate-600 dark:group-hover:text-slate-500" aria-hidden />
         </div>
       </div>
 
-      <h3 className="mt-2 text-sm font-bold leading-snug text-slate-900">
+      <h3 className="mt-2 text-sm font-bold leading-snug text-slate-900 dark:text-slate-100">
         {a?.name ?? "Tarefa de alvará"}
       </h3>
 
-      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-800">
+      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
         <Building2 className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate">{companyLabel(c)}</span>
       </p>
 
-      <div className="mt-2 rounded-xl bg-slate-50 px-2.5 py-1.5 text-[0.7rem] text-slate-700">
+      <div className="mt-2 rounded-xl bg-slate-50 px-2.5 py-1.5 text-[0.7rem] text-slate-700 dark:bg-slate-800/80 dark:text-slate-200">
         {ca?.numero ? `📄 ${ca.numero}` : `Grupo: ${g?.name ?? "Sem grupo"}`}
       </div>
 
-      <div className="mt-2 flex items-center gap-1 rounded-lg border border-slate-100 bg-white px-2 py-1.5 text-[0.7rem] font-medium text-slate-800 shadow-sm">
-        <CalendarDays className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+      <div className="mt-2 flex items-center gap-1 rounded-lg border border-slate-100 bg-white px-2 py-1.5 text-[0.7rem] font-medium text-slate-800 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+        <CalendarDays className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
         <span>Criação da tarefa: {formatDate(task.created_at, { empty: "—" })}</span>
       </div>
 
-      <div className="mt-2 rounded-xl bg-violet-50/60 px-2 py-2 text-[0.7rem] text-slate-700">
+      <div className="mt-2 rounded-xl bg-violet-50/60 px-2 py-2 text-[0.7rem] text-slate-700 dark:bg-violet-950/25 dark:text-slate-200">
         <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
           <span className="flex items-center gap-1">
-            <CalendarDays className="h-3 w-3 shrink-0 text-slate-500" />
+            <CalendarDays className="h-3 w-3 shrink-0 text-slate-500 dark:text-slate-400" />
             Emissão: {formatDate(ca?.data_emissao ?? null, { empty: "—" })}
           </span>
-          <span className={cn("flex items-center gap-1", atrasada && "font-semibold text-amber-800")}>
-            <CalendarDays className="h-3 w-3 shrink-0 text-slate-500" />
+          <span className={cn("flex items-center gap-1", atrasada && "font-semibold text-amber-800 dark:text-amber-300")}>
+            <CalendarDays className="h-3 w-3 shrink-0 text-slate-500 dark:text-slate-400" />
             {temEm ? "Validade (vínculo):" : "Prazo de início:"}{" "}
             {temEm
               ? formatDate(ca?.data_vencimento ?? null, { empty: "—" })
@@ -1270,50 +1276,50 @@ function TaskCard({
           </span>
         </div>
         {temEm && primeiroCiclo ? (
-          <p className="mt-2 border-t border-violet-200/80 pt-2 text-[0.7rem] leading-snug text-slate-700">
-            <span className="font-medium text-slate-600">Prazo de início (1.º ciclo):</span>{" "}
+          <p className="mt-2 border-t border-violet-200/80 pt-2 text-[0.7rem] leading-snug text-slate-700 dark:border-violet-800/60 dark:text-slate-300">
+            <span className="font-medium text-slate-600 dark:text-slate-400">Prazo de início (1.º ciclo):</span>{" "}
             <span className="tabular-nums">{formatDate(dataPrazoPrimeiroCiclo, { empty: "—" })}</span>
           </p>
         ) : null}
       </div>
 
-      <p className="mt-2 text-[0.7rem] text-slate-600">
-        <span className="font-medium text-slate-500">Vencimento (tarefa):</span>{" "}
+      <p className="mt-2 text-[0.7rem] text-slate-600 dark:text-slate-400">
+        <span className="font-medium text-slate-500 dark:text-slate-400">Vencimento (tarefa):</span>{" "}
         {task.due_date != null && String(task.due_date).trim() !== "" ? (
           <>
             {formatDate(task.due_date, { empty: "—" })}
             {atrasoVenc ? " · atrasada" : ""}
           </>
         ) : (
-          <span className="text-slate-500">
+          <span className="text-slate-500 dark:text-slate-400">
             —
             {!temEm ? (
-              <span className="text-slate-400"> (sem data até à primeira emissão)</span>
+              <span className="text-slate-400 dark:text-slate-500"> (sem data até à primeira emissão)</span>
             ) : null}
           </span>
         )}
       </p>
 
-      <p className="mt-1 text-[0.7rem] text-slate-600">Periodicidade: {freq}</p>
+      <p className="mt-1 text-[0.7rem] text-slate-600 dark:text-slate-400">Periodicidade: {freq}</p>
 
-      <div className="mt-2 text-[0.7rem] text-slate-600">
-        <span className="font-medium text-slate-500">Responsável (empresa):</span>{" "}
+      <div className="mt-2 text-[0.7rem] text-slate-600 dark:text-slate-400">
+        <span className="font-medium text-slate-500 dark:text-slate-400">Responsável (empresa):</span>{" "}
         {(c?.responsible?.display_name ?? "").trim() || "—"}
       </div>
 
-      <div className="mt-1 flex items-center gap-1 text-[0.75rem] text-slate-600">
-        <UserCircle className="h-4 w-4 shrink-0 text-slate-400" />
+      <div className="mt-1 flex items-center gap-1 text-[0.75rem] text-slate-600 dark:text-slate-400">
+        <UserCircle className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
         <span className="truncate">{task.notes?.slice(0, 80) || "Sem notas na tarefa"}</span>
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-2 text-[0.72rem]">
-        <span className={cn("flex items-center gap-1", hasFile ? "text-emerald-700" : "text-slate-500")}>
+        <span className={cn("flex items-center gap-1", hasFile ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400")}>
           <Paperclip className="h-3.5 w-3.5" />
           {hasFile ? "Comprovante no vínculo" : "Sem anexo no vínculo"}
         </span>
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[0.65rem] font-medium text-slate-600 hover:bg-slate-50"
+          className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[0.65rem] font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
           onClick={(e) => {
             e.stopPropagation();
             toast.message("Upload de anexo em breve", {
@@ -1340,8 +1346,8 @@ function TaskCard({
             className={cn(
               "mt-3 w-full rounded-full py-2 text-[0.75rem] font-semibold transition",
               podeConcluir
-                ? "bg-emerald-100 text-emerald-900 hover:bg-emerald-200"
-                : "cursor-not-allowed bg-slate-100 text-slate-400"
+                ? "bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:hover:bg-emerald-900/60"
+                : "cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
             )}
             disabled={!podeConcluir}
             title={!podeConcluir ? taskMotivoNaoConclusao(task) : undefined}
@@ -1354,7 +1360,7 @@ function TaskCard({
           </button>
           <button
             type="button"
-            className="mt-2 w-full rounded-full border border-slate-200 py-2 text-[0.72rem] font-medium text-slate-700 hover:bg-slate-50"
+            className="mt-2 w-full rounded-full border border-slate-200 py-2 text-[0.72rem] font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
             onClick={(e) => {
               e.stopPropagation();
               onBaixa();
@@ -1366,7 +1372,7 @@ function TaskCard({
       ) : (
         <button
           type="button"
-          className="mt-3 w-full rounded-full border border-slate-200 py-2 text-[0.72rem] font-medium text-slate-600 hover:bg-slate-50"
+          className="mt-3 w-full rounded-full border border-slate-200 py-2 text-[0.72rem] font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
           onClick={(e) => {
             e.stopPropagation();
             onReabrir();

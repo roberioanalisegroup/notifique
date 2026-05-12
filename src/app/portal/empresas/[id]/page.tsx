@@ -689,7 +689,7 @@ export default function EmpresaPerfilPage() {
 
   if (loading || !company) {
     return (
-      <div className="space-y-6 text-slate-900 [color-scheme:light]">
+      <div className="space-y-6 text-slate-900 dark:text-slate-100">
         <div className="card-portal py-16 text-center text-sm text-slate-500">Carregando…</div>
       </div>
     );
@@ -718,7 +718,7 @@ export default function EmpresaPerfilPage() {
   return (
     <div
       className={cn(
-        "space-y-6 text-slate-900 [color-scheme:light]",
+        "space-y-6 text-slate-900 dark:text-slate-100",
         tab === "alvaras" && linkSelectCount > 0 && "pb-28"
       )}
     >

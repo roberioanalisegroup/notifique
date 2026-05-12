@@ -206,7 +206,7 @@ export default function ImportarAlvarasPage() {
     .join(", ");
 
   return (
-    <div className="space-y-6 text-slate-900 [color-scheme:light]">
+    <div className="space-y-6 text-slate-900 dark:text-slate-100">
       <div>
         <Link href="/portal/alvaras" className="text-sm font-medium text-blue-600 hover:text-blue-700">
           ← Alvarás

@@ -172,19 +172,19 @@ export default function GeracaoTarefasPage() {
   }
 
   return (
-    <div className="space-y-8 text-slate-900 [color-scheme:light]">
+    <div className="space-y-8 text-slate-900 dark:text-slate-100">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link
             href="/portal/acompanhamento"
-            className="text-sm font-medium text-blue-600 hover:text-blue-700"
+            className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
           >
             ← Acompanhamento
           </Link>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Geração e manutenção de tarefas
           </h1>
-          <p className="mt-1 max-w-3xl text-sm text-slate-600">
+          <p className="mt-1 max-w-3xl text-sm text-slate-600 dark:text-slate-400">
             Cada vínculo ativo pode ter <strong>uma tarefa pendente</strong>. No <strong>1.º ciclo</strong>, a meta
             para sair de Pendente é o <strong>Início Obrigatório</strong> (dias configurados no tipo). Após
             registar a <strong>emissão</strong>, o <strong>vencimento da tarefa</strong> é calculado
@@ -200,11 +200,11 @@ export default function GeracaoTarefasPage() {
       </div>
 
       <section className="card-portal p-5">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-          <Wand2 className="h-5 w-5 text-emerald-700" />
+        <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-slate-100">
+          <Wand2 className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
           Gerar tarefas em falta
         </h2>
-        <p className="mt-2 text-sm text-slate-600">
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
           Insere uma pendente por vínculo que ainda não tenha nenhuma. Não duplica enquanto existir tarefa
           pendente para o mesmo vínculo.
         </p>
@@ -217,10 +217,10 @@ export default function GeracaoTarefasPage() {
       </section>
 
       <section className="card-portal overflow-hidden">
-        <div className="border-b border-slate-100 px-5 py-4">
-          <h2 className="text-base font-semibold text-slate-900">Tarefas pendentes (seleção em massa)</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Lista: pendentes com <code className="rounded bg-slate-100 px-1">due_date</code> no intervalo {cy - 1}–{cy + 3}{" "}
+        <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Tarefas pendentes (seleção em massa)</h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Lista: pendentes com <code className="rounded bg-slate-100 px-1 dark:bg-slate-800 dark:text-slate-200">due_date</code> no intervalo {cy - 1}–{cy + 3}{" "}
             ou <strong>sem vencimento</strong> (aguardam emissão no vínculo). Eliminação segura: só linhas{" "}
             <strong>pendentes</strong> sem eventos de histórico além da criação (ou sem histórico — legado).
           </p>
@@ -230,7 +230,7 @@ export default function GeracaoTarefasPage() {
             </button>
             <button
               type="button"
-              className="btn-secondary inline-flex items-center gap-1 border-red-200 text-sm text-red-800 hover:bg-red-50"
+              className="btn-secondary inline-flex items-center gap-1 border-red-200 text-sm text-red-800 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
               disabled={bulkBusy || selected.size === 0}
               onClick={() => void eliminarPendentesIntactas()}
             >
@@ -254,13 +254,13 @@ export default function GeracaoTarefasPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
+                  <td colSpan={6} className="py-12 text-center text-slate-500 dark:text-slate-400">
                     A carregar…
                   </td>
                 </tr>
               ) : (
                 tasks.map((t) => (
-                  <tr key={t.id} className={cn(selected.has(t.id) && "bg-blue-50/50")}>
+                  <tr key={t.id} className={cn(selected.has(t.id) && "bg-blue-50/50 dark:bg-blue-950/25")}>
                     <td>
                       <input
                         type="checkbox"
@@ -270,16 +270,16 @@ export default function GeracaoTarefasPage() {
                       />
                     </td>
                     <td className="whitespace-nowrap font-medium">{formatDate(t.due_date, { empty: "—" })}</td>
-                    <td className="whitespace-nowrap text-slate-600">{formatDate(t.inicio_obrigatorio_ate, { empty: "—" })}</td>
+                    <td className="whitespace-nowrap text-slate-600 dark:text-slate-400">{formatDate(t.inicio_obrigatorio_ate, { empty: "—" })}</td>
                     <td>{companyLabel(t.company_alvaras?.companies)}</td>
                     <td>{t.company_alvaras?.alvaras?.name ?? "—"}</td>
-                    <td className="max-w-xs truncate text-slate-600">{t.notes ?? "—"}</td>
+                    <td className="max-w-xs truncate text-slate-600 dark:text-slate-400">{t.notes ?? "—"}</td>
                   </tr>
                 ))
               )}
               {!loading && tasks.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center text-slate-500">
+                  <td colSpan={6} className="py-10 text-center text-slate-500 dark:text-slate-400">
                     Nenhuma tarefa pendente no intervalo da lista.
                   </td>
                 </tr>
@@ -289,13 +289,13 @@ export default function GeracaoTarefasPage() {
         </div>
       </section>
 
-      <section className="card-portal border-amber-200/80 bg-amber-50/30 p-5">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-amber-950">
+      <section className="card-portal border-amber-200/80 bg-amber-50/30 p-5 dark:border-amber-900/40 dark:bg-amber-950/20">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-amber-950 dark:text-amber-100">
           <AlertTriangle className="h-5 w-5" />
           Exclusão avançada (por período de vencimento)
         </h2>
-        <p className="mt-2 text-sm text-amber-950/80">
-          Remove <strong>todas</strong> as tarefas cuja <code className="rounded bg-white px-1">due_date</code>{" "}
+        <p className="mt-2 text-sm text-amber-950/80 dark:text-amber-200/90">
+          Remove <strong>todas</strong> as tarefas cuja <code className="rounded bg-white px-1 dark:bg-slate-800 dark:text-slate-200">due_date</code>{" "}
           está no intervalo, incluindo já alteradas ou concluídas. Exige a sua <strong>palavra-passe</strong> de
           início de sessão para confirmar.
         </p>

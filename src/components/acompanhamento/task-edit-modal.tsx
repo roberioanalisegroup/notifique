@@ -63,11 +63,15 @@ function validityMeta(expirationDate: string | null | undefined): { className: s
   const exp = new Date(expirationDate);
   exp.setHours(0, 0, 0, 0);
   const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 3600 * 24));
-  if (diffDays < 0) return { className: "bg-red-100 text-red-800", text: "Vencido" };
+  if (diffDays < 0)
+    return { className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200", text: "Vencido" };
   if (diffDays <= 90)
-    return { className: "bg-orange-100 text-orange-900", text: `Vence em ${diffDays} dias` };
+    return {
+      className: "bg-orange-100 text-orange-900 dark:bg-orange-950/50 dark:text-orange-200",
+      text: `Vence em ${diffDays} dias`,
+    };
   return {
-    className: "bg-sky-100 text-sky-800",
+    className: "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200",
     text: `Válido até ${exp.toLocaleDateString("pt-BR")}`,
   };
 }
@@ -278,17 +282,17 @@ export function TaskEditModal({
       aria-labelledby="task-edit-title"
     >
       <div className="modal-panel flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden p-0">
-        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-4">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-4 dark:border-slate-700">
           <div>
-            <h2 id="task-edit-title" className="text-lg font-semibold text-slate-900">
+            <h2 id="task-edit-title" className="text-lg font-semibold text-slate-900 dark:text-slate-100">
               Detalhe da tarefa
             </h2>
-            <p className="mt-0.5 text-sm text-slate-500">Edite a descrição e consulte o histórico.</p>
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">Edite a descrição e consulte o histórico.</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
             aria-label="Fechar"
           >
             <X className="h-5 w-5" />
@@ -298,7 +302,7 @@ export function TaskEditModal({
         {loading || !task ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 py-20">
             <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-            <span className="text-sm text-slate-500">A carregar…</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">A carregar…</span>
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -307,15 +311,15 @@ export function TaskEditModal({
                 <span
                   className={cn(
                     "inline-flex rounded-full px-2 py-0.5 text-xs font-semibold",
-                    venc.className || "bg-slate-100 text-slate-700"
+                    venc.className || "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                   )}
                 >
                   {venc.text}
                 </span>
-                <span className="max-w-[min(100%,14rem)] text-right text-xs font-medium leading-snug text-slate-700">
+                <span className="max-w-[min(100%,14rem)] text-right text-xs font-medium leading-snug text-slate-700 dark:text-slate-300">
                   Estado: {textoEstadoNoModal(task.status, quadroColumn)}
                   {task.status === "pendente" && quadroColumn === "andamento" ? (
-                    <span className="mt-1 block text-[0.65rem] font-normal text-slate-500">
+                    <span className="mt-1 block text-[0.65rem] font-normal text-slate-500 dark:text-slate-400">
                       Na base de dados continua «pendente» até concluir a tarefa.
                     </span>
                   ) : null}
@@ -323,31 +327,31 @@ export function TaskEditModal({
               </div>
 
               <div>
-                <h3 className="text-base font-bold text-slate-900">{a?.name ?? "Tarefa de alvará"}</h3>
-                <p className="mt-1 flex items-center gap-1 text-emerald-800">
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">{a?.name ?? "Tarefa de alvará"}</h3>
+                <p className="mt-1 flex items-center gap-1 text-emerald-800 dark:text-emerald-300">
                   <Building2 className="h-4 w-4 shrink-0" />
                   {empresaHref ? (
-                    <Link href={empresaHref} className="font-medium hover:underline">
+                    <Link href={empresaHref} className="font-medium text-blue-700 hover:underline dark:text-blue-400">
                       {companyLabel(c)}
                     </Link>
                   ) : (
                     companyLabel(c)
                   )}
                 </p>
-                <p className="mt-0.5 text-sm text-slate-600">
+                <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
                   Responsável:{" "}
-                  <span className="font-medium text-slate-800">
+                  <span className="font-medium text-slate-800 dark:text-slate-200">
                     {(c?.responsible?.display_name ?? "").trim() || "—"}
                   </span>
                 </p>
               </div>
 
-              <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs text-slate-700">
+              <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200">
                 {ca?.numero ? `📄 ${ca.numero}` : `Grupo: ${g?.name ?? "Sem grupo"}`}
               </div>
 
-              <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-2 text-xs text-slate-800">
-                <span className="font-semibold text-violet-900">Data de criação da tarefa:</span>{" "}
+              <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-2 text-xs text-slate-800 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-slate-200">
+                <span className="font-semibold text-violet-900 dark:text-violet-300">Data de criação da tarefa:</span>{" "}
                 <span className="tabular-nums">{formatDate(task.created_at, { empty: "—" })}</span>
               </div>
 
@@ -358,11 +362,11 @@ export function TaskEditModal({
                 onToggle={(itemId, completed, comment, attachmentUrl) => void patchChecklistModal(itemId, completed, comment, attachmentUrl)}
               />
 
-              <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
-                <p className="mb-2 font-semibold text-slate-800">Datas do vínculo</p>
+              <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs dark:border-slate-600 dark:bg-slate-900/60">
+                <p className="mb-2 font-semibold text-slate-800 dark:text-slate-200">Datas do vínculo</p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block">
-                    <span className="form-label mb-1 block text-slate-700">Data de emissão</span>
+                    <span className="form-label mb-1 block text-slate-700 dark:text-slate-300">Data de emissão</span>
                     <div className="relative max-w-[11rem]">
                       <input
                         type="text"
@@ -388,7 +392,7 @@ export function TaskEditModal({
                       />
                       <button
                         type="button"
-                        className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                        className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                         aria-label="Abrir calendário"
                         title="Abrir calendário"
                         onClick={() => {
@@ -405,27 +409,27 @@ export function TaskEditModal({
                         <CalendarDays className="h-4 w-4 shrink-0" />
                       </button>
                     </div>
-                    <p className="mt-1 text-[0.65rem] text-slate-500">
+                    <p className="mt-1 text-[0.65rem] text-slate-500 dark:text-slate-400">
                       Digite a data — a máscara formata em dd/mm/aaaa — ou use o ícone à direita.
                     </p>
                   </label>
                   <div className="block">
-                    <span className="form-label mb-1 block text-slate-700">Prazo de início (1.º ciclo)</span>
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-800 tabular-nums">
+                    <span className="form-label mb-1 block text-slate-700 dark:text-slate-300">Prazo de início (1.º ciclo)</span>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-800 tabular-nums dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
                       {primeiroCicloModal || !hasEmissao ? (
                         formatDate(prazoInicioCalculado ?? task.inicio_obrigatorio_ate, { empty: "—" })
                       ) : (
-                        <span className="text-slate-400">—</span>
+                        <span className="text-slate-400 dark:text-slate-500">—</span>
                       )}
                     </div>
-                    <p className="mt-1.5 text-[0.7rem] leading-snug text-slate-500">
+                    <p className="mt-1.5 text-[0.7rem] leading-snug text-slate-500 dark:text-slate-400">
                       No 1.º ciclo fica registado com base na data de criação da tarefa mais{" "}
                       <strong>{a?.prazo_inicio_dias ?? 30}</strong> dias corridos (este valor mantém-se visível mesmo após
                       registar emissão). Nos ciclos seguintes só se usa o <strong>vencimento da tarefa</strong> abaixo.
                     </p>
                   </div>
                 </div>
-                <p className="mt-2 text-[0.7rem] leading-snug text-slate-500">
+                <p className="mt-2 text-[0.7rem] leading-snug text-slate-500 dark:text-slate-400">
                   O <strong>vencimento da tarefa</strong> (renovação) preenche-se automaticamente ao guardar a emissão,
                   pela periodicidade do tipo.
                 </p>
@@ -439,35 +443,35 @@ export function TaskEditModal({
                 </button>
               </div>
 
-              <div className="grid gap-2 rounded-xl bg-violet-50/50 p-3 text-xs text-slate-700 sm:grid-cols-2">
+              <div className="grid gap-2 rounded-xl bg-violet-50/50 p-3 text-xs text-slate-700 sm:grid-cols-2 dark:bg-violet-950/20 dark:text-slate-300">
                 <span className="flex items-start gap-1 sm:col-span-2">
-                  <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+                  <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-slate-400" />
                   <span>
-                    <span className="font-medium text-slate-600">Vencimento (tarefa):</span>{" "}
+                    <span className="font-medium text-slate-600 dark:text-slate-400">Vencimento (tarefa):</span>{" "}
                     {formatDate(task.due_date, {
                       empty: hasEmissao ? "—" : "(após registar emissão)",
                     })}
                   </span>
                 </span>
                 <span className="sm:col-span-2">
-                  <span className="font-medium text-slate-600">Periodicidade (tipo):</span>{" "}
+                  <span className="font-medium text-slate-600 dark:text-slate-400">Periodicidade (tipo):</span>{" "}
                   {a ? FREQUENCIA_LABELS[a.frequencia] ?? a.frequencia : "—"}
                 </span>
               </div>
 
-              <div className="flex flex-wrap items-start gap-2 text-xs text-slate-600">
+              <div className="flex flex-wrap items-start gap-2 text-xs text-slate-600 dark:text-slate-400">
                 <Paperclip className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="min-w-0 flex-1 space-y-1">
                   <p>
                     {ca?.arquivo_url ? (
-                      <span className="text-emerald-700">Documento associado ao vínculo.</span>
+                      <span className="text-emerald-700 dark:text-emerald-400">Documento associado ao vínculo.</span>
                     ) : (
                       <span>Sem documento no vínculo.</span>
                     )}
                     {exigeAnexoTipo ? (
-                      <span className="font-medium text-amber-900"> Este tipo exige anexo para concluir.</span>
+                      <span className="font-medium text-amber-900 dark:text-amber-300"> Este tipo exige anexo para concluir.</span>
                     ) : (
-                      <span className="text-slate-500"> Anexo opcional ao concluir.</span>
+                      <span className="text-slate-500 dark:text-slate-400"> Anexo opcional ao concluir.</span>
                     )}
                   </p>
                   <button
@@ -507,25 +511,25 @@ export function TaskEditModal({
               </div>
 
               <div className="card-portal overflow-hidden">
-                <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
-                  <History className="h-4 w-4 text-slate-500" />
-                  <h4 className="text-sm font-semibold text-slate-900">Histórico</h4>
+                <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
+                  <History className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                  <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Histórico</h4>
                 </div>
                 <div className="max-h-72 overflow-y-auto px-4 py-4">
                   {timeline.length === 0 ? (
-                    <p className="py-6 text-center text-xs text-slate-400">Sem registos ainda.</p>
+                    <p className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">Sem registos ainda.</p>
                   ) : (
-                    <div className="relative ms-2 border-l-2 border-violet-200 pl-6">
+                    <div className="relative ms-2 border-l-2 border-violet-200 pl-6 dark:border-violet-800/80">
                       {timeline.map((h) => (
                         <div key={h.id} className="relative pb-8 last:pb-1">
                           <span
-                            className="absolute -left-[calc(0.375rem+5px)] top-1.5 h-2.5 w-2.5 rounded-full bg-violet-500 ring-4 ring-white"
+                            className="absolute -left-[calc(0.375rem+5px)] top-1.5 h-2.5 w-2.5 rounded-full bg-violet-500 ring-4 ring-white dark:ring-slate-900"
                             aria-hidden
                           />
-                          <time className="block text-[0.7rem] font-medium tabular-nums text-slate-500">
+                          <time className="block text-[0.7rem] font-medium tabular-nums text-slate-500 dark:text-slate-400">
                             {formatDate(h.created_at, { empty: "—", includeTime: true })}
                           </time>
-                          <div className="mt-1.5 space-y-1 text-[0.8125rem] leading-snug text-slate-700">
+                          <div className="mt-1.5 space-y-1 text-[0.8125rem] leading-snug text-slate-700 dark:text-slate-300">
                             {linhasHistoricoTarefa(h).map((line, i) => (
                               <p key={i}>{line}</p>
                             ))}
@@ -537,7 +541,7 @@ export function TaskEditModal({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2 border-t border-slate-100 pt-4">
+              <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-700">
                 {task.status === "pendente" ? (
                   <>
                     <button
@@ -550,7 +554,7 @@ export function TaskEditModal({
                       Concluir tarefa
                     </button>
                     {!podeConcluirModal ? (
-                      <p className="text-xs text-amber-800">{motivoNaoConclusaoModal()}</p>
+                      <p className="text-xs text-amber-800 dark:text-amber-300">{motivoNaoConclusaoModal()}</p>
                     ) : null}
                     <button
                       type="button"
@@ -571,7 +575,7 @@ export function TaskEditModal({
                     </button>
                     <button
                       type="button"
-                      className="text-sm font-medium text-red-600 hover:text-red-700"
+                      className="text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       disabled={saving}
                       onClick={() => {
                         if (!confirm("Cancelar esta tarefa?")) return;

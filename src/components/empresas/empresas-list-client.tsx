@@ -568,7 +568,7 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
   return (
     <div
       className={
-        "space-y-6 text-slate-900 [color-scheme:light]" +
+        "space-y-6 text-slate-900 dark:text-slate-100" +
         (selectedCount > 0 ? " pb-28" : "")
       }
     >
