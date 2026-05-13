@@ -11,24 +11,29 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: [
-          "var(--font-geist-sans)",
+          "var(--font-inter)",
           "ui-sans-serif",
           "system-ui",
           "sans-serif",
-        ],
-        mono: [
-          "var(--font-geist-mono)",
-          "ui-monospace",
-          "monospace",
         ],
       },
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        primary: "#2F6BFF",
+        secondary: "#111827",
+        surface: "#131C2E",
+        accent: "#4DA3FF",
+        "text-primary": "#FFFFFF",
+        "text-secondary": "#9CA3AF",
+        success: "#22C55E",
+        "border-soft": "rgba(255,255,255,0.08)",
       },
       boxShadow: {
-        "portal": "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06)",
-        "portal-md": "0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05)",
+        "portal": "0 4px 20px -2px rgba(0, 0, 0, 0.4)",
+        "portal-md": "0 8px 30px -4px rgba(0, 0, 0, 0.5)",
+        "glow": "0 0 15px 0 rgba(47, 107, 255, 0.25)",
+        "glow-lg": "0 0 25px 0 rgba(47, 107, 255, 0.4)",
       },
     },
   },
