@@ -20,6 +20,7 @@ const nextConfig = {
       "connect-src 'self' https: wss:",
       "font-src 'self' data: https:",
       "upgrade-insecure-requests",
+      "block-all-mixed-content"
     ].join("; ");
 
     /** @type {{ key: string, value: string }[]} */
@@ -36,7 +37,7 @@ const nextConfig = {
     ];
 
     const hsts = isProd
-      ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" }]
+      ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" }]
       : [];
 
     return [
@@ -46,6 +47,7 @@ const nextConfig = {
       },
     ];
   },
+  poweredByHeader: false,
 };
 
 export default nextConfig;
