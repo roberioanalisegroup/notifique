@@ -44,10 +44,17 @@ export function getCronSignatureHeader(request: Request | NextRequest): string |
   return request.headers.get("x-notifique-signature");
 }
 
-async function sha256Hex(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  const bytes = new Uint8Array(digest);
+async function hmacSha256Hex(secret: string, input: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, enc.encode(input));
+  const bytes = new Uint8Array(signature);
   let out = "";
   for (const b of bytes) out += b.toString(16).padStart(2, "0");
   return out;
@@ -78,7 +85,7 @@ export async function isValidCronSignature(
   const now = Date.now();
   if (Math.abs(now - ts) > maxSkewMs) return false;
 
-  const expected = await sha256Hex(`${tsRaw}.${secret}`);
+  const expected = await hmacSha256Hex(secret, tsRaw);
   return constantTimeEqual(sig, expected);
 }
 

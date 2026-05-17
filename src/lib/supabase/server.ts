@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { COOKIE_OPTIONS } from "./client";
 
 const PLACEHOLDER_URL = "https://placeholder.local";
 const PLACEHOLDER_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGJ1Z2luLWJ1aWxkIn0.placeholder";
@@ -12,6 +13,7 @@ export async function createClient() {
     url,
     key,
     {
+      cookieOptions: COOKIE_OPTIONS,
       cookies: {
         getAll() {
           return cookieStore.getAll();
@@ -19,7 +21,7 @@ export async function createClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, { ...options, ...COOKIE_OPTIONS })
             );
           } catch {
             // ignore
