@@ -4,6 +4,10 @@ const isProd = process.env.NODE_ENV === "production";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async headers() {
+    const scriptSrc = isProd
+      ? "'self' 'unsafe-inline'"
+      : "'self' 'unsafe-inline' 'unsafe-eval'";
+
     const csp = [
       "default-src 'self'",
       "base-uri 'self'",
@@ -12,13 +16,11 @@ const nextConfig = {
       "form-action 'self'",
       "img-src 'self' data: blob: https:",
       "style-src 'self' 'unsafe-inline'",
-      // Next (especialmente em dev) pode precisar de inline/eval; manter aqui por compatibilidade.
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      `script-src ${scriptSrc}`,
       "connect-src 'self' https: wss:",
       "font-src 'self' data: https:",
       "upgrade-insecure-requests",
-    ]
-      .join("; ");
+    ].join("; ");
 
     /** @type {{ key: string, value: string }[]} */
     const base = [
