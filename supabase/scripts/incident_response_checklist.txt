@@ -1,0 +1,20 @@
+Plano P2/P3 — Resposta a incidentes LGPD (Res. ANPD 15/2024)
+=============================================================
+
+Descoberta
+[ ] Registrar data/hora, sistemas, tipos de dados, nº estimado de titulares
+[ ] Classificar risco (alto/médio/baixo) e acionar DPO/encarregado
+
+Contenção (horas)
+[ ] Revogar chaves comprometidas (Supabase → Settings → API → rotate)
+[ ] Desativar utilizadores suspeitos (profiles.is_active = false)
+[ ] Preservar audit_logs e logs Vercel/Supabase
+
+Comunicação
+[ ] ANPD: comunicação preliminar em até 72h (gov.br/anpd)
+[ ] Titulares: até 5 dias úteis quando aplicável
+[ ] Relatório completo em até 30 dias
+
+Remediação
+[ ] Causa raiz documentada; migrações/correções aplicadas
+[ ] Reexecutar supabase/scripts/audit_rls.sql

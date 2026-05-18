@@ -1,5 +1,6 @@
 -- P1 Supabase: RBAC (dono + responsável), políticas por operação em dados de tenant,
 -- índices RLS, view com security_invoker, is_admin respeita is_active.
+-- Idempotente: pode reexecutar (DROP POLICY IF EXISTS antes de cada CREATE).
 
 -- ---------------------------------------------------------------------------
 -- Funções de acesso (sem user_metadata)
@@ -121,6 +122,10 @@ create index if not exists idx_profiles_auth_lookup
 -- ---------------------------------------------------------------------------
 
 drop policy if exists "users_manage_own_companies" on public.companies;
+drop policy if exists "companies_select" on public.companies;
+drop policy if exists "companies_insert" on public.companies;
+drop policy if exists "companies_update" on public.companies;
+drop policy if exists "companies_delete" on public.companies;
 
 create policy "companies_select"
   on public.companies for select to authenticated
@@ -148,6 +153,10 @@ create policy "companies_delete"
 -- ---------------------------------------------------------------------------
 
 drop policy if exists "users_manage_own_company_alvaras" on public.company_alvaras;
+drop policy if exists "company_alvaras_select" on public.company_alvaras;
+drop policy if exists "company_alvaras_insert" on public.company_alvaras;
+drop policy if exists "company_alvaras_update" on public.company_alvaras;
+drop policy if exists "company_alvaras_delete" on public.company_alvaras;
 
 create policy "company_alvaras_select"
   on public.company_alvaras for select to authenticated
@@ -171,6 +180,10 @@ create policy "company_alvaras_delete"
 -- ---------------------------------------------------------------------------
 
 drop policy if exists "users_manage_own_alvara_tasks" on public.alvara_tasks;
+drop policy if exists "alvara_tasks_select" on public.alvara_tasks;
+drop policy if exists "alvara_tasks_insert" on public.alvara_tasks;
+drop policy if exists "alvara_tasks_update" on public.alvara_tasks;
+drop policy if exists "alvara_tasks_delete" on public.alvara_tasks;
 
 create policy "alvara_tasks_select"
   on public.alvara_tasks for select to authenticated
@@ -194,6 +207,10 @@ create policy "alvara_tasks_delete"
 -- ---------------------------------------------------------------------------
 
 drop policy if exists "users_manage_own_alvara_task_history" on public.alvara_task_history;
+drop policy if exists "alvara_task_history_select" on public.alvara_task_history;
+drop policy if exists "alvara_task_history_insert" on public.alvara_task_history;
+drop policy if exists "alvara_task_history_update" on public.alvara_task_history;
+drop policy if exists "alvara_task_history_delete" on public.alvara_task_history;
 
 create policy "alvara_task_history_select"
   on public.alvara_task_history for select to authenticated
@@ -217,6 +234,10 @@ create policy "alvara_task_history_delete"
 -- ---------------------------------------------------------------------------
 
 drop policy if exists "users_manage_own_checklist_progress" on public.alvara_task_checklist_progress;
+drop policy if exists "alvara_task_checklist_progress_select" on public.alvara_task_checklist_progress;
+drop policy if exists "alvara_task_checklist_progress_insert" on public.alvara_task_checklist_progress;
+drop policy if exists "alvara_task_checklist_progress_update" on public.alvara_task_checklist_progress;
+drop policy if exists "alvara_task_checklist_progress_delete" on public.alvara_task_checklist_progress;
 
 create policy "alvara_task_checklist_progress_select"
   on public.alvara_task_checklist_progress for select to authenticated

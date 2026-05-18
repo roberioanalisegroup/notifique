@@ -9,4 +9,12 @@ Checklist P1 — Supabase Auth (configurar no painel)
 [ ] Confirm email habilitado se registo público estiver ativo
 [ ] Backup automático ativo + teste de restauração documentado
 
-Referência: docs/.../Guia_Segurança_Supabase_LGPD_OWASP.md secção 1.3
+Data API (P2 — Settings → API)
+[ ] Expor apenas schema public (ou desativar Data API se 100% via Next.js)
+[ ] GraphQL desativado se não utilizado
+
+Testes
+[ ] Executar supabase/scripts/audit_rls.sql (0 falhas)
+[ ] Executar supabase/scripts/rls_smoke.sql com impersonation
+
+Referência: docs/.../Guia_Segurança_Supabase_LGPD_OWASP.md secções 1.3, 1.5, 1.6

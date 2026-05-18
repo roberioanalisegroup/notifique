@@ -1,5 +1,6 @@
 -- P0 Supabase (OWASP/LGPD): RLS em todas as tabelas, catálogo com escrita restrita,
 -- histórico por empresa, revogação anon e funções sem user_metadata.
+-- Idempotente: pode reexecutar (DROP POLICY IF EXISTS antes de cada CREATE).
 
 -- ---------------------------------------------------------------------------
 -- Funções auxiliares (apenas auth.uid / profiles / is_admin — nunca user_metadata)
@@ -88,6 +89,8 @@ grant usage on schema public to service_role;
 
 drop policy if exists "auth_select_company_history" on public.company_history;
 drop policy if exists "auth_insert_company_history" on public.company_history;
+drop policy if exists "company_history_select" on public.company_history;
+drop policy if exists "company_history_insert" on public.company_history;
 
 create policy "company_history_select"
   on public.company_history
@@ -121,6 +124,11 @@ drop policy if exists "everyone_read_alvaras" on public.alvaras;
 drop policy if exists "everyone_read_checklist_items" on public.alvara_checklist_items;
 
 -- alvara_groups
+drop policy if exists "alvara_groups_select" on public.alvara_groups;
+drop policy if exists "alvara_groups_insert" on public.alvara_groups;
+drop policy if exists "alvara_groups_update" on public.alvara_groups;
+drop policy if exists "alvara_groups_delete" on public.alvara_groups;
+
 create policy "alvara_groups_select"
   on public.alvara_groups for select to authenticated
   using (auth.role() = 'authenticated');
@@ -139,6 +147,11 @@ create policy "alvara_groups_delete"
   using (public.portal_has_edit('alvaras_grupos'));
 
 -- alvaras
+drop policy if exists "alvaras_select" on public.alvaras;
+drop policy if exists "alvaras_insert" on public.alvaras;
+drop policy if exists "alvaras_update" on public.alvaras;
+drop policy if exists "alvaras_delete" on public.alvaras;
+
 create policy "alvaras_select"
   on public.alvaras for select to authenticated
   using (auth.role() = 'authenticated');
@@ -173,6 +186,11 @@ create policy "alvaras_delete"
   );
 
 -- alvara_checklist_items
+drop policy if exists "alvara_checklist_items_select" on public.alvara_checklist_items;
+drop policy if exists "alvara_checklist_items_insert" on public.alvara_checklist_items;
+drop policy if exists "alvara_checklist_items_update" on public.alvara_checklist_items;
+drop policy if exists "alvara_checklist_items_delete" on public.alvara_checklist_items;
+
 create policy "alvara_checklist_items_select"
   on public.alvara_checklist_items for select to authenticated
   using (auth.role() = 'authenticated');

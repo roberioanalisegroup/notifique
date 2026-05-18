@@ -10,7 +10,8 @@ export type AuditEventType =
   | "authn_login_fail"
   | "authn_login_success"
   | "authz_fail"
-  | "csp_violation";
+  | "csp_violation"
+  | `db.${string}`;
 
 function sanitizeForSIEM(input: Record<string, any>) {
   // Mascara dados PII / Confidenciais comuns

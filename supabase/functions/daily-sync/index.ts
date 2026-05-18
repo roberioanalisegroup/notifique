@@ -4,7 +4,11 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
  * Agende no Supabase (Database → Cron ou Edge Functions) para rodar, por ex., `0 3 * * *`.
  * Chama a rota do Next com assinatura HMAC (sem service_role na Edge Function).
  */
-serve(async () => {
+serve(async (req) => {
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+
   const base = Deno.env.get("NEXT_PUBLIC_APP_URL")?.replace(/\/$/, "");
   const secret = Deno.env.get("CRON_HMAC_SECRET");
   if (!base || !secret) {
