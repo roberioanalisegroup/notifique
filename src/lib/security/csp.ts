@@ -1,3 +1,8 @@
+import {
+  CSP_REPORT_ENDPOINT_NAME,
+  getCspReportUrl,
+} from "@/lib/security/csp-reporting";
+
 /** Origens Supabase (REST + Realtime) para connect-src no browser. */
 export function getSupabaseConnectSources(): string[] {
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -8,18 +13,6 @@ export function getSupabaseConnectSources(): string[] {
   } catch {
     return [];
   }
-}
-
-function getCspReportUri(): string | undefined {
-  const app = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
-  if (app) {
-    try {
-      return new URL("/api/csp-report", app).href;
-    } catch {
-      /* ignore */
-    }
-  }
-  return undefined;
 }
 
 export type BuildCspOptions = {
@@ -63,9 +56,10 @@ export function buildContentSecurityPolicy(options: BuildCspOptions): string {
     directives.push("upgrade-insecure-requests", "block-all-mixed-content");
   }
 
-  const reportUri = getCspReportUri();
-  if (reportUri) {
-    directives.push(`report-uri ${reportUri}`);
+  const reportUrl = getCspReportUrl();
+  if (reportUrl) {
+    directives.push(`report-uri ${reportUrl}`);
+    directives.push(`report-to ${CSP_REPORT_ENDPOINT_NAME}`);
   }
 
   return directives.join("; ");

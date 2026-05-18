@@ -1,7 +1,7 @@
 import { PORTAL_SCREEN_DEFS } from "@/config/portal-screens";
 import { portalScreenRequiredForMutation } from "@/lib/api-mutation-portal-screen";
 import { accessForPortalPath, effectivePortalAccess } from "@/lib/portal-access";
-import { isAllowedBrowserOrigin } from "@/lib/request-origin";
+import { hasDisallowedCrossOrigin, isProtectedApiPath } from "@/lib/security/api-cors";
 import {
   applySecurityHeaders,
   createRequestNonce,
@@ -46,18 +46,42 @@ export async function middleware(request: NextRequest) {
     return secure(request, nonce, NextResponse.next({ request: { headers: forwardedHeaders } }));
   }
 
-  // Origin estrito para mutações em API (evita substring attacks no Host)
-  if (pathname.startsWith("/api/") && ["POST", "PATCH", "DELETE", "PUT"].includes(method)) {
-    if (!isAllowedBrowserOrigin(request)) {
+  if (isProtectedApiPath(pathname) && method === "OPTIONS") {
+    if (hasDisallowedCrossOrigin(request)) {
       return secure(
         request,
         nonce,
         NextResponse.json(
-          { error: "Solicitação bloqueada por segurança (Origin inválido)" },
+          { error: "Preflight bloqueado (Origin inválido)" },
           { status: 403 }
         )
       );
     }
+    return secure(
+      request,
+      nonce,
+      new NextResponse(null, { status: 204 })
+    );
+  }
+
+  if (hasDisallowedCrossOrigin(request)) {
+    console.warn(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        event_type: "security_blocked_origin",
+        path: pathname,
+        method,
+        origin: request.headers.get("origin"),
+      })
+    );
+    return secure(
+      request,
+      nonce,
+      NextResponse.json(
+        { error: "Solicitação bloqueada por segurança (Origin inválido)" },
+        { status: 403 }
+      )
+    );
   }
 
   const { user, supabaseResponse, supabase } = await updateSession(

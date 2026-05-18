@@ -1,4 +1,6 @@
+import { applyApiResponseHeaders } from "@/lib/security/api-cors";
 import { buildContentSecurityPolicy } from "@/lib/security/csp";
+import { getReportingEndpointsHeader } from "@/lib/security/csp-reporting";
 import { type NextRequest, NextResponse } from "next/server";
 
 export const NONCE_HEADER = "x-nonce";
@@ -27,6 +29,13 @@ export function applySecurityHeaders(
 
   response.headers.set("Content-Security-Policy", enforcing);
   response.headers.set("Content-Security-Policy-Report-Only", reportOnly);
+
+  const reportingEndpoints = getReportingEndpointsHeader();
+  if (reportingEndpoints) {
+    response.headers.set("Reporting-Endpoints", reportingEndpoints);
+  }
+
+  applyApiResponseHeaders(request, response);
 
   const existing = response.headers.get(NONCE_HEADER);
   if (!existing) {
