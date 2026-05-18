@@ -1,0 +1,12 @@
+Checklist P1 — Supabase Auth (configurar no painel)
+====================================================
+
+[ ] Site URL = URL de produção (ex.: valor de NEXT_PUBLIC_APP_URL)
+[ ] Redirect URLs explícitas (ex.: https://app/auth/callback, http://localhost:3000/auth/callback)
+[ ] Sem wildcards (*) em produção
+[ ] JWT expiry = 3600 segundos (1 hora) ou conforme política interna
+[ ] Password strength / leaked password protection ativados
+[ ] Confirm email habilitado se registo público estiver ativo
+[ ] Backup automático ativo + teste de restauração documentado
+
+Referência: docs/.../Guia_Segurança_Supabase_LGPD_OWASP.md secção 1.3
