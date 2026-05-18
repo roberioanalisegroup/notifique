@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { COOKIE_OPTIONS } from "./client";
+import { SERVER_AUTH_COOKIE_OPTIONS } from "./cookie-options";
 
 export async function updateSession(
   request: NextRequest,
@@ -21,7 +21,7 @@ export async function updateSession(
     url,
     key,
     {
-      cookieOptions: COOKIE_OPTIONS,
+      cookieOptions: SERVER_AUTH_COOKIE_OPTIONS,
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -34,7 +34,10 @@ export async function updateSession(
             request: { headers: reqHeaders },
           });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, { ...options, ...COOKIE_OPTIONS })
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              ...SERVER_AUTH_COOKIE_OPTIONS,
+            })
           );
         },
       },
