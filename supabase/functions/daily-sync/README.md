@@ -2,13 +2,12 @@
 
 Dispara a sincronização em lote do portal chamando `POST {NEXT_PUBLIC_APP_URL}/api/companies/sync-all` com **assinatura** (sem enviar a service role key).
 
-A rota Next verifica a tabela `sync_config`: se `sync_enabled` estiver falso, nada é processado (útil para o cron com service role).
+A rota Next verifica a tabela `sync_config`: se `sync_enabled` estiver falso, nada é processado.
 
 ## Variáveis de ambiente (Supabase)
 
 - `NEXT_PUBLIC_APP_URL` — URL pública do app (Vercel/Render)
-- `CRON_HMAC_SECRET` — segredo para assinar chamadas do cron (recomendado)
-- `SUPABASE_SERVICE_ROLE_KEY` — fallback opcional (compatibilidade; não recomendado para cron)
+- `CRON_HMAC_SECRET` — segredo para assinar chamadas do cron (**obrigatório**; não usar `SUPABASE_SERVICE_ROLE_KEY` na Edge Function)
 
 ## Agendamento
 
