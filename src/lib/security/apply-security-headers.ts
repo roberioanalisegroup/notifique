@@ -1,6 +1,10 @@
 import { applyApiResponseHeaders } from "@/lib/security/api-cors";
 import { buildContentSecurityPolicy } from "@/lib/security/csp";
 import { getReportingEndpointsHeader } from "@/lib/security/csp-reporting";
+import {
+  applyCrossOriginHeaders,
+  applyLegacyHardeningHeaders,
+} from "@/lib/security/cross-origin-headers";
 import { type NextRequest, NextResponse } from "next/server";
 
 export const NONCE_HEADER = "x-nonce";
@@ -36,6 +40,8 @@ export function applySecurityHeaders(
   }
 
   applyApiResponseHeaders(request, response);
+  applyCrossOriginHeaders(request, response);
+  applyLegacyHardeningHeaders(response);
 
   const existing = response.headers.get(NONCE_HEADER);
   if (!existing) {

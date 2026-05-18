@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "sri:hash": "node scripts/sri-hash.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",

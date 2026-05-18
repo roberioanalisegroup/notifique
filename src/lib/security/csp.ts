@@ -49,6 +49,8 @@ export function buildContentSecurityPolicy(options: BuildCspOptions): string {
     "img-src 'self' data: blob:",
     `connect-src ${connectSrc}`,
     "font-src 'self'",
+    "media-src 'self' blob:",
+    "manifest-src 'self'",
     "worker-src 'self' blob:",
   ];
 

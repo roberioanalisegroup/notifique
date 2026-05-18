@@ -186,6 +186,7 @@ export async function GET(request: NextRequest) {
     } else {
       const buf = buildEmpresasExportPdf(rows, byCompany);
       headers.set("Content-Type", "application/pdf");
+      headers.set("Cross-Origin-Resource-Policy", "cross-origin");
       body = buf;
     }
 
