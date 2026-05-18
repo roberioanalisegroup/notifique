@@ -2,10 +2,15 @@ import { PORTAL_SCREEN_DEFS } from "@/config/portal-screens";
 import { portalScreenRequiredForMutation } from "@/lib/api-mutation-portal-screen";
 import { accessForPortalPath, effectivePortalAccess } from "@/lib/portal-access";
 import { isAllowedBrowserOrigin } from "@/lib/request-origin";
+import {
+  applySecurityHeaders,
+  createRequestNonce,
+  requestHeadersWithNonce,
+} from "@/lib/security/apply-security-headers";
 import { parsePortalPermissionsFromDb } from "@/lib/sanitize-portal-permissions";
 import { canAccessSyncAll } from "@/lib/service-role-auth";
-import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { type NextRequest, NextResponse } from "next/server";
 
 const AUTH_PATHS = ["/auth/login", "/auth/register", "/auth/callback"];
 
@@ -23,38 +28,67 @@ function isSyncAllPost(request: NextRequest) {
   );
 }
 
+function secure(
+  request: NextRequest,
+  nonce: string,
+  response: NextResponse
+): NextResponse {
+  return applySecurityHeaders(request, response, nonce);
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const { method } = request;
+  const nonce = createRequestNonce();
+  const forwardedHeaders = requestHeadersWithNonce(request, nonce);
+
+  if (pathname === "/api/csp-report") {
+    return secure(request, nonce, NextResponse.next({ request: { headers: forwardedHeaders } }));
+  }
 
   // Origin estrito para mutações em API (evita substring attacks no Host)
   if (pathname.startsWith("/api/") && ["POST", "PATCH", "DELETE", "PUT"].includes(method)) {
     if (!isAllowedBrowserOrigin(request)) {
-      return NextResponse.json(
-        { error: "Solicitação bloqueada por segurança (Origin inválido)" },
-        { status: 403 }
+      return secure(
+        request,
+        nonce,
+        NextResponse.json(
+          { error: "Solicitação bloqueada por segurança (Origin inválido)" },
+          { status: 403 }
+        )
       );
     }
   }
 
-  const { user, supabaseResponse, supabase } = await updateSession(request);
+  const { user, supabaseResponse, supabase } = await updateSession(
+    request,
+    forwardedHeaders
+  );
 
   if (isSyncAllPost(request)) {
     if (!canAccessSyncAll(request, !!user)) {
-      return NextResponse.json(
-        {
-          error:
-            "Não autorizado. Inicie sessão no portal ou envie Authorization: Bearer (service role) para o cron.",
-        },
-        { status: 401 }
+      return secure(
+        request,
+        nonce,
+        NextResponse.json(
+          {
+            error:
+              "Não autorizado. Inicie sessão no portal ou envie Authorization: Bearer (service role) para o cron.",
+          },
+          { status: 401 }
+        )
       );
     }
-    return supabaseResponse;
+    return secure(request, nonce, supabaseResponse);
   }
 
   if (pathname.startsWith("/api/")) {
     if (!user) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+      return secure(
+        request,
+        nonce,
+        NextResponse.json({ error: "Não autenticado" }, { status: 401 })
+      );
     }
     if (["POST", "PATCH", "PUT", "DELETE"].includes(method)) {
       const screenKey = portalScreenRequiredForMutation(pathname);
@@ -72,14 +106,18 @@ export async function middleware(request: NextRequest) {
           adminOnlyScreen: def?.adminOnly === true,
         });
         if (access !== "edit") {
-          return NextResponse.json(
-            { error: "Sem permissão para esta operação nesta área do portal." },
-            { status: 403 }
+          return secure(
+            request,
+            nonce,
+            NextResponse.json(
+              { error: "Sem permissão para esta operação nesta área do portal." },
+              { status: 403 }
+            )
           );
         }
       }
     }
-    return supabaseResponse;
+    return secure(request, nonce, supabaseResponse);
   }
 
   if (pathname.startsWith("/portal")) {
@@ -87,12 +125,12 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = "/auth/login";
       url.searchParams.set("next", pathname);
-      return NextResponse.redirect(url);
+      return secure(request, nonce, NextResponse.redirect(url));
     }
     if (pathname === "/portal" || pathname === "/portal/") {
       const url = request.nextUrl.clone();
       url.pathname = "/portal/dashboard";
-      return NextResponse.redirect(url);
+      return secure(request, nonce, NextResponse.redirect(url));
     }
     if (!pathname.startsWith("/portal/sem-acesso")) {
       const { data: prof } = await supabase
@@ -107,22 +145,22 @@ export async function middleware(request: NextRequest) {
       if (accessForPortalPath(profile, pathname) === "none") {
         const url = request.nextUrl.clone();
         url.pathname = "/portal/sem-acesso";
-        return NextResponse.redirect(url);
+        return secure(request, nonce, NextResponse.redirect(url));
       }
     }
-    return supabaseResponse;
+    return secure(request, nonce, supabaseResponse);
   }
 
   if (isPublicPath(pathname)) {
     if (user && (pathname === "/auth/login" || pathname === "/auth/register")) {
       const url = request.nextUrl.clone();
       url.pathname = "/portal/dashboard";
-      return NextResponse.redirect(url);
+      return secure(request, nonce, NextResponse.redirect(url));
     }
-    return supabaseResponse;
+    return secure(request, nonce, supabaseResponse);
   }
 
-  return supabaseResponse;
+  return secure(request, nonce, supabaseResponse);
 }
 
 export const config = {

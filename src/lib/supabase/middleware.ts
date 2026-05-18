@@ -2,9 +2,14 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_OPTIONS } from "./client";
 
-export async function updateSession(request: NextRequest) {
+export async function updateSession(
+  request: NextRequest,
+  forwardedHeaders?: Headers
+) {
+  const reqHeaders = forwardedHeaders ?? request.headers;
+
   let supabaseResponse = NextResponse.next({
-    request,
+    request: { headers: reqHeaders },
   });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.local";
@@ -26,7 +31,7 @@ export async function updateSession(request: NextRequest) {
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({
-            request,
+            request: { headers: reqHeaders },
           });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, { ...options, ...COOKIE_OPTIONS })

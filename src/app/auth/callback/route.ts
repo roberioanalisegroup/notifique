@@ -1,4 +1,5 @@
 import { safeAuthCallbackNextPath } from "@/lib/safe-auth-redirect";
+import { COOKIE_OPTIONS } from "@/lib/supabase/client";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
   if (code) {
     const cookieStore = await cookies();
     const supabase = createServerClient(supabaseUrl, supabaseKey, {
+      cookieOptions: COOKIE_OPTIONS,
       cookies: {
         getAll() {
           return cookieStore.getAll();
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest) {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, { ...options, ...COOKIE_OPTIONS })
             );
           } catch {
             // ignore

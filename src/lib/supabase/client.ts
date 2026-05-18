@@ -10,7 +10,9 @@ const PLACEHOLDER_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdGJ1Z
 export const COOKIE_OPTIONS = {
   name: "__Secure-notifique-token",
   secure: true,
+  httpOnly: true,
   sameSite: "lax" as const,
+  path: "/",
 };
 
 export function createClient() {
