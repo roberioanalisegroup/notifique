@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { AccessibleModal } from "@/components/ui/accessible-modal";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { TaskCardChecklist } from "@/components/acompanhamento/task-card-checklist";
@@ -235,8 +236,6 @@ export function TaskEditModal({
     }
   }
 
-  if (!open) return null;
-
   const ca = task?.company_alvaras;
   const c = ca?.companies;
   const a = ca?.alvaras;
@@ -275,13 +274,13 @@ export function TaskEditModal({
   const empresaHref = c ? "/portal/empresas/" + c.id : null;
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal
-      aria-labelledby="task-edit-title"
+    <AccessibleModal
+      open={open}
+      onClose={onClose}
+      labelledBy="task-edit-title"
+      overlayClassName="z-[100]"
+      panelClassName="modal-panel flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden p-0"
     >
-      <div className="modal-panel flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden p-0">
         <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-4 dark:border-slate-700">
           <div>
             <h2 id="task-edit-title" className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -600,7 +599,6 @@ export function TaskEditModal({
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </AccessibleModal>
   );
 }

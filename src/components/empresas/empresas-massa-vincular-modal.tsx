@@ -2,6 +2,7 @@
 
 import { apiJson } from "@/lib/api-client";
 import type { Alvara, AlvaraGroup } from "@/types";
+import { AccessibleModal } from "@/components/ui/accessible-modal";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -74,8 +75,6 @@ export function EmpresasMassaVincularModal({
       el.indeterminate = n > 0 && n < ids.length;
     }
   }, [open, groups, alvarasByGroupId, selectedAlvaraIds]);
-
-  if (!open) return null;
 
   function toggleAlvara(id: string) {
     setSelectedAlvaraIds((prev) => {
@@ -156,16 +155,14 @@ export function EmpresasMassaVincularModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="empresas-massa-vincular-title"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !submitting) onClose();
-      }}
+    <AccessibleModal
+      open={open}
+      onClose={onClose}
+      closeOnBackdrop={!submitting}
+      closeOnEscape={!submitting}
+      labelledBy="empresas-massa-vincular-title"
+      panelClassName="modal-panel max-h-[min(90vh,44rem)] w-full max-w-xl overflow-hidden p-0 shadow-xl"
     >
-      <div className="modal-panel max-h-[min(90vh,44rem)] w-full max-w-xl overflow-hidden p-0 shadow-xl">
         <div className="border-b border-slate-100 px-4 py-3 sm:px-5 dark:border-slate-700">
           <h2 id="empresas-massa-vincular-title" className="text-lg font-semibold text-slate-900">
             Vincular tarefas em massa
@@ -281,7 +278,6 @@ export function EmpresasMassaVincularModal({
             {submitting ? "A aplicar…" : "Aplicar vínculos"}
           </button>
         </div>
-      </div>
-    </div>
+    </AccessibleModal>
   );
 }

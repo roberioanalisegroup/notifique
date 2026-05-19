@@ -9,6 +9,7 @@ import {
   normalizeDocumentoForTipo,
   onlyDigits,
 } from "@/lib/utils";
+import { AccessibleModal } from "@/components/ui/accessible-modal";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -110,8 +111,6 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
     }
     setReadOnly(null);
   }, [cadastroTipo]);
-
-  if (!open) return null;
 
   function setDocMasked(raw: string) {
     if (cadastroTipo === "cpf") setDocumento(maskCpf11(raw));
@@ -240,13 +239,15 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
     cadastroTipo !== "cnpj" || !consultarReceita;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal
+    <AccessibleModal
+      open={open}
+      onClose={onClose}
+      closeOnBackdrop={!saving}
+      closeOnEscape={!saving}
+      labelledBy="nova-empresa-title"
+      panelClassName="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-portal-md dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
     >
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-portal-md dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Nova empresa / cadastro</h2>
+        <h2 id="nova-empresa-title" className="text-lg font-semibold text-slate-900 dark:text-slate-50">Nova empresa / cadastro</h2>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           Escolha o tipo de identificação. <strong className="font-medium text-slate-700 dark:text-slate-300">CNPJ</strong> e{" "}
           <strong className="font-medium text-slate-700 dark:text-slate-300">MEI</strong> podem consultar a BrasilAPI; CAEPF, CPF e
@@ -539,7 +540,6 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
             {saving ? "Salvando…" : "Salvar"}
           </button>
         </div>
-      </div>
-    </div>
+    </AccessibleModal>
   );
 }

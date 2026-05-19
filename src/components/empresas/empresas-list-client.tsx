@@ -127,8 +127,6 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
   debouncedSearchRef.current = debouncedSearch;
   debouncedCnaeRef.current = debouncedCnaeInput;
   const selectedCount = Object.keys(selectedRowsById).length;
-  /** Evita que a barra fique por baixo da sidebar (z-50): alinha ao eixo do conteúdo principal. */
-  const [bulkBarLeftPx, setBulkBarLeftPx] = useState<number | undefined>(undefined);
 
   const citiesForUf = useMemo(() => {
     if (!uf || !filterOptions) return [];
@@ -242,30 +240,6 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
   }, [rows, selectedRowsById]);
 
   const allPageSelected = rows.length > 0 && rows.every((r) => !!selectedRowsById[r.id]);
-
-  useEffect(() => {
-    const aside = document.getElementById("portal-sidebar");
-    if (!aside || typeof ResizeObserver === "undefined") {
-      setBulkBarLeftPx(undefined);
-      return;
-    }
-    const mq = window.matchMedia("(min-width: 768px)");
-    const apply = () => {
-      if (!mq.matches) {
-        setBulkBarLeftPx(undefined);
-        return;
-      }
-      setBulkBarLeftPx(Math.round(aside.getBoundingClientRect().width));
-    };
-    const ro = new ResizeObserver(apply);
-    ro.observe(aside);
-    mq.addEventListener("change", apply);
-    apply();
-    return () => {
-      ro.disconnect();
-      mq.removeEventListener("change", apply);
-    };
-  }, []);
 
   useEffect(() => {
     if (!exportMenuOpen) return;
@@ -1168,11 +1142,7 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
 
       {selectedCount > 0 ? (
         <div
-          className={cn(
-            "fixed bottom-0 right-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur supports-[backdrop-filter]:bg-white/80",
-            bulkBarLeftPx === undefined && "left-0"
-          )}
-          style={bulkBarLeftPx != null ? { left: bulkBarLeftPx } : undefined}
+          className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:border-slate-700 dark:bg-slate-950/95 dark:supports-[backdrop-filter]:bg-slate-950/80"
         >
           <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">

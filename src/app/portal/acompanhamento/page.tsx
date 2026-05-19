@@ -27,11 +27,33 @@ import {
   UserCircle,
   XCircle,
 } from "lucide-react";
-import { AcompanhamentoCalendarView } from "@/components/acompanhamento/acompanhamento-calendar-view";
-import { AcompanhamentoListView } from "@/components/acompanhamento/acompanhamento-list-view";
 import type { AcompanhamentoTaskRow as TaskRow } from "@/components/acompanhamento/acompanhamento-task-type";
 import { TaskCardChecklist } from "@/components/acompanhamento/task-card-checklist";
-import { TaskEditModal } from "@/components/acompanhamento/task-edit-modal";
+import dynamic from "next/dynamic";
+
+const AcompanhamentoCalendarView = dynamic(
+  () =>
+    import("@/components/acompanhamento/acompanhamento-calendar-view").then((m) => ({
+      default: m.AcompanhamentoCalendarView,
+    })),
+  { loading: () => <div className="min-h-[320px] animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800/60" /> }
+);
+
+const AcompanhamentoListView = dynamic(
+  () =>
+    import("@/components/acompanhamento/acompanhamento-list-view").then((m) => ({
+      default: m.AcompanhamentoListView,
+    })),
+  { loading: () => <div className="min-h-[320px] animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800/60" /> }
+);
+
+const TaskEditModal = dynamic(
+  () =>
+    import("@/components/acompanhamento/task-edit-modal").then((m) => ({
+      default: m.TaskEditModal,
+    })),
+  { ssr: false }
+);
 import type { AlvaraTaskChecklistRow } from "@/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
