@@ -17,6 +17,7 @@ import type { Alvara, AlvaraGroup } from "@/types";
 import Link from "next/link";
 import { useCallback, useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { AccessibleModal } from "@/components/ui/accessible-modal";
 import { AlvarasTableSkeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
@@ -412,14 +413,14 @@ function AlvarasContent() {
           </table>
         </div>
       </div>
-      {modal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal
+      {modal ? (
+        <AccessibleModal
+          open
+          onClose={() => setModal(null)}
+          labelledBy="alvara-modal-title"
+          panelClassName="modal-panel max-h-[90vh] w-full max-w-xl overflow-y-auto p-6"
         >
-          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-portal-md">
-            <h3 className="text-lg font-semibold text-slate-900">
+            <h3 id="alvara-modal-title" className="text-lg font-semibold text-slate-900 dark:text-slate-50">
               {modal.id ? "Editar" : "Novo"} alvará
             </h3>
             <p className="mt-1 text-sm text-slate-500">
@@ -597,9 +598,8 @@ function AlvarasContent() {
                 Salvar
               </button>
             </div>
-          </div>
-        </div>
-      )}
+        </AccessibleModal>
+      ) : null}
     </div>
   );
 }

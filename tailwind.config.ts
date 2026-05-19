@@ -20,9 +20,10 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
-        primary: "#2F6BFF",
+        /** Tokens do portal (preferir em código novo em vez de hex soltos) */
+        primary: { DEFAULT: "#2F6BFF", foreground: "#FFFFFF" },
         secondary: "#111827",
-        surface: "#131C2E",
+        surface: { DEFAULT: "#131C2E", muted: "rgba(255,255,255,0.03)" },
         accent: "#4DA3FF",
         "text-primary": "#FFFFFF",
         "text-secondary": "#9CA3AF",

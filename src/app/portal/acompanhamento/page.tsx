@@ -575,13 +575,7 @@ export default function AcompanhamentoPage() {
     e.dataTransfer.dropEffect = "move";
   }
 
-  async function onDropColumn(e: React.DragEvent, target: ColumnId) {
-    e.preventDefault();
-    setDragTaskId(null);
-    const id = e.dataTransfer.getData("text/plain");
-    const task = tasks.find((x) => x.id === id);
-    if (!task) return;
-
+  async function moveTaskToColumn(task: TaskRow, target: ColumnId) {
     if (target === "concluido") {
       if (task.status === "concluida") return;
       if (!taskPodeConcluir(task)) {
@@ -595,15 +589,24 @@ export default function AcompanhamentoPage() {
     if (task.status === "concluida") {
       await reabrir(task);
       const lane: UiLane = target === "andamento" ? "andamento" : "pendente";
-      const next: Record<string, UiLane> = { ...laneMap, [id]: lane };
+      const next: Record<string, UiLane> = { ...laneMap, [task.id]: lane };
       persistLanes(next);
       return;
     }
 
     const lane: UiLane = target === "andamento" ? "andamento" : "pendente";
-    const next: Record<string, UiLane> = { ...laneMap, [id]: lane };
+    const next: Record<string, UiLane> = { ...laneMap, [task.id]: lane };
     persistLanes(next);
     toast.message(target === "andamento" ? "Movido para Em andamento" : "Movido para Pendente");
+  }
+
+  async function onDropColumn(e: React.DragEvent, target: ColumnId) {
+    e.preventDefault();
+    setDragTaskId(null);
+    const id = e.dataTransfer.getData("text/plain");
+    const task = tasks.find((x) => x.id === id);
+    if (!task) return;
+    await moveTaskToColumn(task, target);
   }
 
   const selectedYearsLabel =
@@ -819,14 +822,20 @@ export default function AcompanhamentoPage() {
       {/* Barra de filtros — estilo cartão do modelo */}
       <div className="card-portal flex flex-wrap items-end gap-6 p-5">
         <div ref={yearMenuRef} className="relative min-w-[200px] flex-1">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <label
+            id="filtro-anos-label"
+            htmlFor="filtro-anos-btn"
+            className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+          >
             Anos (vencimento da tarefa)
           </label>
           <button
+            id="filtro-anos-btn"
             type="button"
             className="input-field flex h-10 w-full items-center justify-between text-left"
             onClick={() => setYearMenuOpen((o) => !o)}
             aria-expanded={yearMenuOpen}
+            aria-labelledby="filtro-anos-label"
           >
             <span className="truncate">{selectedYearsLabel}</span>
             <ChevronDown className={cn("h-4 w-4 shrink-0 transition", yearMenuOpen && "rotate-180")} />
@@ -885,14 +894,20 @@ export default function AcompanhamentoPage() {
         </div>
 
         <div ref={companyMenuRef} className="relative min-w-[240px] flex-1">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <label
+            id="filtro-empresas-label"
+            htmlFor="filtro-empresas-btn"
+            className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+          >
             Empresas
           </label>
           <button
+            id="filtro-empresas-btn"
             type="button"
             className="input-field flex h-10 w-full items-center justify-between text-left"
             onClick={() => setCompanyMenuOpen((o) => !o)}
             aria-expanded={companyMenuOpen}
+            aria-labelledby="filtro-empresas-label"
           >
             <span className="truncate">{selectedCompaniesLabel}</span>
             <ChevronDown className={cn("h-4 w-4 shrink-0 transition", companyMenuOpen && "rotate-180")} />
@@ -961,14 +976,20 @@ export default function AcompanhamentoPage() {
         </div>
 
         <div ref={taskMenuRef} className="relative min-w-[240px] flex-1">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <label
+            id="filtro-tarefas-label"
+            htmlFor="filtro-tarefas-btn"
+            className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+          >
             Tipo de alvará (tarefa)
           </label>
           <button
+            id="filtro-tarefas-btn"
             type="button"
             className="input-field flex h-10 w-full items-center justify-between text-left"
             onClick={() => setTaskMenuOpen((o) => !o)}
             aria-expanded={taskMenuOpen}
+            aria-labelledby="filtro-tarefas-label"
           >
             <span className="truncate">{selectedAlvarasLabel}</span>
             <ChevronDown className={cn("h-4 w-4 shrink-0 transition", taskMenuOpen && "rotate-180")} />
@@ -1145,6 +1166,7 @@ export default function AcompanhamentoPage() {
                           onConcluir={() => void soConcluir(t)}
                           onReabrir={() => void reabrir(t)}
                           onCancelar={() => void cancelarTarefa(t)}
+                          onMoveToColumn={(target) => void moveTaskToColumn(t, target)}
                         />
                       </article>
                     ))
@@ -1161,7 +1183,7 @@ export default function AcompanhamentoPage() {
           Nenhuma tarefa no período com estes filtros. As tarefas são criadas{" "}
           <strong className="text-slate-700 dark:text-slate-300">automaticamente</strong> ao vincular alvarás às empresas. Se apagou
           entradas ou precisa de manutenção em massa, use{" "}
-          <strong className="text-slate-700 dark:text-slate-300">Configurações → Geração e manutenção</strong> no menu lateral.
+          <strong className="text-slate-700 dark:text-slate-300">Configurações → Geração e manutenção</strong> no menu superior.
         </p>
       ) : null}
 
@@ -1193,6 +1215,7 @@ function TaskCard({
   onConcluir,
   onReabrir,
   onCancelar,
+  onMoveToColumn,
 }: {
   task: TaskRow;
   uiColumn: ColumnId;
@@ -1204,6 +1227,7 @@ function TaskCard({
   onConcluir: () => void;
   onReabrir: () => void;
   onCancelar: () => void;
+  onMoveToColumn: (target: ColumnId) => void;
 }) {
   const ca = task.company_alvaras;
   const c = ca?.companies;
@@ -1352,6 +1376,30 @@ function TaskCard({
           <Upload className="h-3 w-3" />
           Adicionar anexo
         </button>
+      </div>
+
+      <div className="mt-3">
+        <label htmlFor={`mover-coluna-${task.id}`} className="sr-only">
+          Mover tarefa para outra coluna
+        </label>
+        <select
+          id={`mover-coluna-${task.id}`}
+          className="select-field h-9 w-full text-xs"
+          defaultValue=""
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            const target = e.target.value as ColumnId | "";
+            if (!target || target === uiColumn) return;
+            onMoveToColumn(target);
+            e.target.value = "";
+          }}
+          aria-label="Mover tarefa para outra coluna (alternativa ao arrastar)"
+        >
+          <option value="">Mover para coluna…</option>
+          {uiColumn !== "pendente" ? <option value="pendente">Pendente</option> : null}
+          {uiColumn !== "andamento" ? <option value="andamento">Em andamento</option> : null}
+          {uiColumn !== "concluido" ? <option value="concluido">Concluído</option> : null}
+        </select>
       </div>
 
       <TaskCardChecklist

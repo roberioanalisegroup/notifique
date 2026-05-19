@@ -4,6 +4,7 @@ import { apiFetch, apiJson } from "@/lib/api-client";
 import type { AlvaraGroup } from "@/types";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { AccessibleModal } from "@/components/ui/accessible-modal";
 import { AlvaraGruposGridSkeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
@@ -162,14 +163,16 @@ export default function AlvaraGruposPage() {
           </div>
         )}
       </div>
-      {modal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal
+      {modal ? (
+        <AccessibleModal
+          open
+          onClose={() => setModal(null)}
+          labelledBy="grupo-modal-title"
+          panelClassName="modal-panel"
         >
-          <div className="modal-panel">
-            <h3 className="text-lg font-semibold text-slate-900">{modal.id ? "Editar" : "Novo"} grupo</h3>
+            <h3 id="grupo-modal-title" className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+              {modal.id ? "Editar" : "Novo"} grupo
+            </h3>
             <p className="mt-1 text-sm text-slate-500">Campos com * são obrigatórios.</p>
             <div className="mt-5 space-y-4 text-sm">
               <div>
@@ -222,9 +225,8 @@ export default function AlvaraGruposPage() {
                 Salvar
               </button>
             </div>
-          </div>
-        </div>
-      )}
+        </AccessibleModal>
+      ) : null}
     </div>
   );
 }

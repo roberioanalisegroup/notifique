@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-md bg-slate-200/90", className)} />;
+  return <div className={cn("animate-pulse rounded-md bg-slate-200/90 dark:bg-slate-700/60", className)} />;
 }
 
 export function AlvarasTableSkeleton({ rows = 6 }: { rows?: number }) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { PORTAL_SCREEN_DEFS } from "@/config/portal-screens";
+import { AccessibleModal } from "@/components/ui/accessible-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiJson } from "@/lib/api-client";
 import { sanitizePortalPermissions } from "@/lib/sanitize-portal-permissions";
@@ -425,14 +426,17 @@ export default function UsuariosPage() {
         </div>
       </div>
 
-      {createOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal
-        >
-          <div className="modal-panel">
-            <h3 className="text-lg font-semibold text-slate-900">Novo utilizador</h3>
+      <AccessibleModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        closeOnBackdrop={!saving}
+        closeOnEscape={!saving}
+        labelledBy="usuario-create-title"
+        panelClassName="modal-panel"
+      >
+            <h3 id="usuario-create-title" className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+              Novo utilizador
+            </h3>
             <p className="mt-1 text-sm text-slate-500">
               Cria conta no Auth e a linha em <code className="text-xs">public.profiles</code>.
             </p>
@@ -543,18 +547,19 @@ export default function UsuariosPage() {
                 {saving ? "A guardar…" : "Criar"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </AccessibleModal>
 
-      {edit && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal
-        >
-          <div className="modal-panel">
-            <h3 className="text-lg font-semibold text-slate-900">Editar utilizador</h3>
+      <AccessibleModal
+        open={!!edit}
+        onClose={() => setEdit(null)}
+        closeOnBackdrop={!saving}
+        closeOnEscape={!saving}
+        labelledBy="usuario-edit-title"
+        panelClassName="modal-panel"
+      >
+            <h3 id="usuario-edit-title" className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+              Editar utilizador
+            </h3>
             <p className="mt-1 text-sm text-slate-500">
               Campos com * são obrigatórios quando aplicável. Não pode inativar-se nem remover o seu próprio
               administrador.
@@ -680,9 +685,7 @@ export default function UsuariosPage() {
                 {saving ? "A guardar…" : "Guardar"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </AccessibleModal>
     </div>
   );
 }

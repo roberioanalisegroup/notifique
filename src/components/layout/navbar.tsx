@@ -164,11 +164,12 @@ function NavItemDesktop({ item }: { item: Item }) {
           {allow(item.href) && item.parentNavigates ? (
             <Link
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={cn(
                 "flex items-center gap-2 rounded-l-full px-4 py-2 text-sm font-medium transition-colors",
                 active
-                  ? "bg-blue-600 text-white shadow-sm dark:bg-[#2F6BFF] dark:shadow-glow"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-[#9CA3AF] dark:hover:text-white dark:hover:bg-white/5"
+                  ? "bg-blue-600 text-white shadow-sm dark:bg-primary dark:shadow-glow"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-text-secondary dark:hover:text-white dark:hover:bg-white/5"
               )}
             >
               {item.icon}
@@ -189,26 +190,36 @@ function NavItemDesktop({ item }: { item: Item }) {
           )}
           <button
             type="button"
+            aria-expanded={flyoutOpen}
+            aria-haspopup="menu"
+            aria-controls={`nav-flyout-${item.id}`}
+            aria-label={`Submenu de ${item.label}`}
             className={cn(
               "flex items-center justify-center rounded-r-full px-2 py-2 transition-colors",
               active
-                ? "bg-blue-600 text-white shadow-sm dark:bg-[#2F6BFF] dark:shadow-glow"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-[#9CA3AF] dark:hover:bg-white/5 dark:hover:text-white"
+                ? "bg-blue-600 text-white shadow-sm dark:bg-primary dark:shadow-glow"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-text-secondary dark:hover:bg-white/5 dark:hover:text-white"
             )}
           >
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown className="h-4 w-4" aria-hidden />
           </button>
         </div>
 
         {flyoutOpen && (
-          <div className="absolute left-0 top-full pt-2 z-50">
-            <div className="min-w-[14rem] overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#131C2E] dark:shadow-portal-md dark:backdrop-blur-md">
+          <div className="absolute left-0 top-full z-50 pt-2">
+            <div
+              id={`nav-flyout-${item.id}`}
+              role="menu"
+              className="min-w-[14rem] overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-surface dark:shadow-portal-md dark:backdrop-blur-md"
+            >
               {childFiltered.map((c) => {
                 const cActive = pathname === c.href;
                 return (
                   <Link
                     key={c.href}
                     href={c.href}
+                    role="menuitem"
+                    aria-current={cActive ? "page" : undefined}
                     onClick={() => setFlyoutOpen(false)}
                     className={cn(
                       "block rounded-xl px-4 py-2.5 text-sm transition-all",
@@ -231,11 +242,12 @@ function NavItemDesktop({ item }: { item: Item }) {
   return (
     <Link
       href={item.href}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors",
         active
-          ? "bg-blue-600 text-white shadow-sm dark:bg-[#2F6BFF] dark:shadow-glow"
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-[#9CA3AF] dark:hover:bg-white/5 dark:hover:text-white"
+          ? "bg-blue-600 text-white shadow-sm dark:bg-primary dark:shadow-glow"
+          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-text-secondary dark:hover:bg-white/5 dark:hover:text-white"
       )}
     >
       {item.icon}
@@ -269,6 +281,7 @@ function NavItemMobile({ item, closeMenu }: { item: Item; closeMenu: () => void 
     <div className="mb-2">
       <Link
         href={allow(item.href) ? item.href : "#"}
+        aria-current={active ? "page" : undefined}
         onClick={allow(item.href) ? closeMenu : undefined}
         className={cn(
           "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors",
@@ -288,11 +301,12 @@ function NavItemMobile({ item, closeMenu }: { item: Item; closeMenu: () => void 
               <Link
                 key={c.href}
                 href={c.href}
+                aria-current={cActive ? "page" : undefined}
                 onClick={closeMenu}
                 className={cn(
                   "block rounded-lg px-3 py-2 text-sm transition-colors",
                   cActive
-                    ? "text-blue-700 font-medium bg-blue-50/50 dark:text-[#4DA3FF] dark:bg-[#2F6BFF]/5"
+                    ? "text-blue-700 font-medium bg-blue-50/50 dark:text-accent dark:bg-primary/10"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-[#9CA3AF] dark:hover:text-white dark:hover:bg-white/5"
                 )}
               >
@@ -335,7 +349,7 @@ export function Navbar() {
             </Link>
 
             {/* Desktop Nav */}
-            <nav className="hidden lg:flex items-center gap-1">
+            <nav className="hidden items-center gap-1 lg:flex" aria-label="Navegação principal">
               {items.map((item) => (
                 <NavItemDesktop key={item.id} item={item} />
               ))}
@@ -355,9 +369,12 @@ export function Navbar() {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 lg:hidden transition-colors dark:bg-white/5 dark:text-[#9CA3AF] dark:hover:text-white"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="portal-mobile-nav"
+              aria-label="Abrir menu de navegação"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:text-slate-900 lg:hidden dark:bg-white/5 dark:text-text-secondary dark:hover:text-white"
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="h-5 w-5" aria-hidden />
             </button>
           </div>
         </div>
@@ -365,7 +382,13 @@ export function Navbar() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-slate-50 lg:hidden dark:bg-[#050816]">
+        <div
+          id="portal-mobile-nav"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu de navegação"
+          className="fixed inset-0 z-50 flex flex-col bg-slate-50 lg:hidden dark:bg-background"
+        >
           <div className="flex h-16 items-center justify-between px-4 sm:px-6 border-b border-slate-200 dark:border-white/5">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 shadow-sm dark:bg-[#2F6BFF] dark:shadow-glow">
@@ -376,14 +399,15 @@ export function Navbar() {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors dark:bg-white/5 dark:text-[#9CA3AF] dark:hover:text-white"
+              aria-label="Fechar menu de navegação"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:text-slate-900 dark:bg-white/5 dark:text-text-secondary dark:hover:text-white"
             >
-              <X className="h-5 w-5" />
+              <X className="h-5 w-5" aria-hidden />
             </button>
           </div>
           
           <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-            <nav className="flex flex-col">
+            <nav className="flex flex-col" aria-label="Navegação principal">
               {items.map((item) => (
                 <NavItemMobile key={item.id} item={item} closeMenu={() => setMobileMenuOpen(false)} />
               ))}
