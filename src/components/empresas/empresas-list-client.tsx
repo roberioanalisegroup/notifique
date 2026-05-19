@@ -2,6 +2,8 @@
 
 import { EmpresasMassaVincularModal } from "@/components/empresas/empresas-massa-vincular-modal";
 import { NovaEmpresaModal } from "@/components/empresas/nova-empresa-modal";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ResponsiveTableShell } from "@/components/ui/responsive-table-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch, apiJson } from "@/lib/api-client";
 import { normalizeCnaeTokenList } from "@/lib/companies-cnae-filter";
@@ -32,9 +34,8 @@ function cnpj14ForSync(row: Row): string | null {
 
 function EmpresasTableLoading() {
   return (
-    <div className="card-portal overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="table-portal min-w-[920px]">
+    <ResponsiveTableShell label="Carregando lista de empresas">
+        <table className="table-portal table-portal-stack md:min-w-[920px]">
           <thead>
             <tr>
               <th className="w-10 px-2 py-2.5 align-middle" aria-label="Selecionar" />
@@ -88,8 +89,7 @@ function EmpresasTableLoading() {
             ))}
           </tbody>
         </table>
-      </div>
-    </div>
+    </ResponsiveTableShell>
   );
 }
 
@@ -819,9 +819,8 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
         <EmpresasTableLoading />
       ) : (
         <>
-          <div className="card-portal overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="table-portal min-w-[920px]">
+          <ResponsiveTableShell label={arquivadas ? "Empresas arquivadas" : "Lista de empresas"}>
+              <table className="table-portal table-portal-stack md:min-w-[920px]">
                 <thead>
                   <tr>
                     <th className="w-10 px-2 py-2.5 align-middle">
@@ -1037,7 +1036,7 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id}>
-                      <td className="w-10 px-2 py-2.5 align-middle">
+                      <td className="table-portal-cell-checkbox w-10 px-2 py-2.5 align-middle" data-label="">
                         <input
                           type="checkbox"
                           className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30"
@@ -1046,30 +1045,35 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
                           aria-label={"Selecionar " + (r.razao_social ?? r.id)}
                         />
                       </td>
-                      <td className="min-w-[15rem] whitespace-nowrap px-4 py-2.5 align-middle font-mono text-xs text-slate-800">
+                      <td
+                        data-label="Documento"
+                        className="min-w-[15rem] whitespace-nowrap px-4 py-2.5 align-middle font-mono text-xs text-slate-800 md:whitespace-nowrap"
+                      >
                         {formatCompanyDocumento(
                           r.cadastro_tipo ?? "cnpj",
                           r.numero_documento ?? r.cnpj ?? "",
                           r.cnpj
                         )}
                       </td>
-                      <td className="font-mono text-xs text-slate-800">
+                      <td data-label="Código" className="font-mono text-xs text-slate-800">
                         {r.codigo_empresa?.trim() ? r.codigo_empresa.trim() : "—"}
                       </td>
-                      <td className="font-medium text-slate-900">{r.razao_social ?? "—"}</td>
-                      <td>
+                      <td data-label="Razão social" className="font-medium text-slate-900">
+                        {r.razao_social ?? "—"}
+                      </td>
+                      <td data-label="Município/UF">
                         {r.municipio ?? "—"}/{r.uf ?? "—"}
                       </td>
-                      <td>{r.situacao_cadastral ?? "—"}</td>
-                      <td className="text-slate-600">
+                      <td data-label="Situação">{r.situacao_cadastral ?? "—"}</td>
+                      <td data-label="Última sync" className="text-slate-600">
                         {formatDate(r.last_sync_at, { empty: "—" })}
                       </td>
-                      <td>
-                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-700">
+                      <td data-label="Alvarás">
+                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                           {r.total_alvaras ?? 0}
                         </span>
                       </td>
-                      <td className="space-x-3 whitespace-nowrap">
+                      <td data-label="Ações" className="space-x-3 whitespace-nowrap">
                         <Link
                           className="text-sm font-medium text-blue-600 hover:text-blue-700"
                           href={"/portal/empresas/" + r.id}
@@ -1091,15 +1095,14 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
                   ))}
                   {rows.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-10 text-center text-slate-500">
+                      <td colSpan={9} className="table-portal-cell-empty py-10 text-center text-slate-500" data-label="">
                         {arquivadas ? "Nenhuma empresa arquivada" : "Nenhuma empresa"}
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
-            </div>
-          </div>
+          </ResponsiveTableShell>
           <div className="flex flex-col gap-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
             <span>
               Página {page} de {totalPages} ({count} total)

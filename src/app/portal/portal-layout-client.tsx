@@ -1,6 +1,8 @@
 "use client";
 
 import { Navbar } from "@/components/layout/navbar";
+import { PortalPathGuard } from "@/components/portal/portal-path-guard";
+import { PortalReadOnlyBanner } from "@/components/portal/portal-read-only-banner";
 import { PortalAccessProvider, type PortalProfileAccess } from "@/components/portal/portal-access-context";
 import type { ReactNode } from "react";
 
@@ -22,7 +24,12 @@ export function PortalLayoutClient({
         </a>
         <Navbar />
         <main id="portal-main-content" className="relative z-0 flex-1 w-full py-8" tabIndex={-1}>
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-12">{children}</div>
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-12">
+            <PortalPathGuard>
+              <PortalReadOnlyBanner />
+              {children}
+            </PortalPathGuard>
+          </div>
         </main>
       </div>
     </PortalAccessProvider>

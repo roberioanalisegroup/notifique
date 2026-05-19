@@ -2,6 +2,7 @@
 
 import { PORTAL_SCREEN_DEFS } from "@/config/portal-screens";
 import { AccessibleModal } from "@/components/ui/accessible-modal";
+import { ResponsiveTableShell } from "@/components/ui/responsive-table-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiJson } from "@/lib/api-client";
 import { sanitizePortalPermissions } from "@/lib/sanitize-portal-permissions";
@@ -129,9 +130,8 @@ function UsuariosSkeleton() {
         </div>
         <Skeleton className="h-10 w-44 shrink-0" />
       </div>
-      <div className="card-portal overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="table-portal min-w-[700px]">
+      <ResponsiveTableShell label="Lista de utilizadores">
+          <table className="table-portal table-portal-stack md:min-w-[700px]">
             <thead>
               <tr>
                 {["E-mail", "Nome", "Telefone", "Cargo", "Estado", "Último acesso", "Ações"].map((h) => (
@@ -167,8 +167,7 @@ function UsuariosSkeleton() {
               ))}
             </tbody>
           </table>
-        </div>
-      </div>
+      </ResponsiveTableShell>
     </div>
   );
 }
@@ -357,9 +356,8 @@ export default function UsuariosPage() {
         </button>
       </div>
 
-      <div className="card-portal overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="table-portal min-w-[700px]">
+      <ResponsiveTableShell label="Lista de utilizadores">
+          <table className="table-portal table-portal-stack md:min-w-[700px]">
             <thead>
               <tr>
                 <th>E-mail</th>
@@ -423,8 +421,7 @@ export default function UsuariosPage() {
               )}
             </tbody>
           </table>
-        </div>
-      </div>
+      </ResponsiveTableShell>
 
       <AccessibleModal
         open={createOpen}

@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { AccessibleModal } from "@/components/ui/accessible-modal";
+import { ResponsiveTableShell } from "@/components/ui/responsive-table-shell";
 import { AlvarasTableSkeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
@@ -324,9 +325,8 @@ function AlvarasContent() {
           ))}
         </select>
       </div>
-      <div className="card-portal overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="table-portal min-w-[1040px]">
+      <ResponsiveTableShell label="Lista de alvarás">
+          <table className="table-portal table-portal-stack md:min-w-[1040px]">
             <thead>
               <tr>
                 <th>Nome</th>
@@ -411,8 +411,7 @@ function AlvarasContent() {
               )}
             </tbody>
           </table>
-        </div>
-      </div>
+      </ResponsiveTableShell>
       {modal ? (
         <AccessibleModal
           open

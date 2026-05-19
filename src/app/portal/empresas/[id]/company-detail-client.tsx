@@ -18,6 +18,7 @@ import type {
 } from "@/types";
 import { differenceInCalendarDays } from "date-fns";
 import { AccessibleModal } from "@/components/ui/accessible-modal";
+import { ResponsiveTableShell } from "@/components/ui/responsive-table-shell";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -949,9 +950,8 @@ export function CompanyDetailClient() {
           >
             Vincular alvará
           </button>
-          <div className="card-portal overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="table-portal min-w-[800px]">
+          <ResponsiveTableShell label="Vínculos de alvarás">
+              <table className="table-portal table-portal-stack md:min-w-[800px]">
                 <thead>
                   <tr>
                     <th className="w-10 px-2 py-2.5 align-middle" aria-label="Selecionar">
@@ -1054,8 +1054,7 @@ export function CompanyDetailClient() {
                   )}
                 </tbody>
               </table>
-            </div>
-          </div>
+          </ResponsiveTableShell>
         </div>
       )}
       {tab === "historico" && (

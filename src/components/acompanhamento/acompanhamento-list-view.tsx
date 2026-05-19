@@ -2,6 +2,7 @@
 
 import type { AcompanhamentoTaskRow } from "@/components/acompanhamento/acompanhamento-task-type";
 import type { Company } from "@/types";
+import { ResponsiveTableShell } from "@/components/ui/responsive-table-shell";
 import { cn, formatDate } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 
@@ -54,9 +55,8 @@ export function AcompanhamentoListView({
   }
 
   return (
-    <div className="card-portal overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="table-portal min-w-[880px]">
+    <ResponsiveTableShell label="Lista de tarefas">
+        <table className="table-portal table-portal-stack md:min-w-[880px]">
           <thead>
             <tr>
               <th>Alvará</th>
@@ -118,7 +118,6 @@ export function AcompanhamentoListView({
             })}
           </tbody>
         </table>
-      </div>
-    </div>
+    </ResponsiveTableShell>
   );
 }

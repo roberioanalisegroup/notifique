@@ -1,6 +1,6 @@
 import { PORTAL_SCREEN_DEFS } from "@/config/portal-screens";
 import { portalScreenRequiredForMutation } from "@/lib/api-mutation-portal-screen";
-import { accessForPortalPath, effectivePortalAccess } from "@/lib/portal-access";
+import { accessForPortalPath, effectivePortalAccess, resolveMatchedScreen } from "@/lib/portal-access";
 import { hasDisallowedCrossOrigin, isProtectedApiPath } from "@/lib/security/api-cors";
 import {
   applySecurityHeaders,
@@ -169,6 +169,9 @@ export async function middleware(request: NextRequest) {
       if (accessForPortalPath(profile, pathname) === "none") {
         const url = request.nextUrl.clone();
         url.pathname = "/portal/sem-acesso";
+        const matched = resolveMatchedScreen(pathname);
+        if (matched?.label) url.searchParams.set("area", matched.label);
+        url.searchParams.set("from", pathname);
         return secure(request, nonce, NextResponse.redirect(url));
       }
     }

@@ -245,7 +245,7 @@ export function NovaEmpresaModal({ open, onClose, onSaved }: Props) {
       closeOnBackdrop={!saving}
       closeOnEscape={!saving}
       labelledBy="nova-empresa-title"
-      panelClassName="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-portal-md dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+      panelClassName="modal-panel max-h-[90vh] w-full max-w-xl overflow-y-auto p-6"
     >
         <h2 id="nova-empresa-title" className="text-lg font-semibold text-slate-900 dark:text-slate-50">Nova empresa / cadastro</h2>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
