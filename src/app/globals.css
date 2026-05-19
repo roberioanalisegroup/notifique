@@ -94,7 +94,11 @@ body {
     }
   }
   .card-portal {
-    @apply rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:shadow-md hover:border-blue-200 relative overflow-hidden;
+    @apply relative rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:border-blue-200 hover:shadow-md;
+  }
+  /** Use em cartões com tabelas/conteúdo que deve ser recortado nas bordas arredondadas */
+  .card-portal-clip {
+    @apply overflow-hidden;
   }
   .modal-panel {
     @apply w-full max-w-md rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-md p-6 shadow-xl text-slate-900;

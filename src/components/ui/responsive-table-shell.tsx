@@ -17,7 +17,7 @@ export function ResponsiveTableShell({
   mobileHint = "Em ecrãs pequenos, cada linha aparece em cartão. Em tablets, pode deslizar horizontalmente se necessário.",
 }: ResponsiveTableShellProps) {
   return (
-    <div className={cn("card-portal overflow-hidden", className)}>
+    <div className={cn("card-portal card-portal-clip overflow-hidden", className)}>
       <p className="border-b border-slate-100 px-4 py-2.5 text-xs leading-relaxed text-slate-500 md:hidden dark:border-slate-700 dark:text-slate-400">
         {mobileHint}
       </p>

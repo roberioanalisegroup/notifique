@@ -819,9 +819,13 @@ export default function AcompanhamentoPage() {
         </div>
       </div>
 
-      {/* Barra de filtros — estilo cartão do modelo */}
-      <div className="card-portal flex flex-wrap items-end gap-6 p-5">
-        <div ref={yearMenuRef} className="relative min-w-[200px] flex-1">
+      {/* Barra de filtros — overflow-visible para os popovers não ficarem cortados pelo card */}
+      <div className="relative z-30">
+        <div className="card-portal flex flex-wrap items-end gap-6 overflow-visible p-5">
+        <div
+          ref={yearMenuRef}
+          className={cn("relative min-w-[200px] flex-1", yearMenuOpen && "z-50")}
+        >
           <label
             id="filtro-anos-label"
             htmlFor="filtro-anos-btn"
@@ -841,7 +845,7 @@ export default function AcompanhamentoPage() {
             <ChevronDown className={cn("h-4 w-4 shrink-0 transition", yearMenuOpen && "rotate-180")} />
           </button>
           {yearMenuOpen ? (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 flex max-h-72 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800 dark:shadow-black/40">
+            <div className="absolute left-0 right-0 top-full z-[100] mt-1 flex max-h-72 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800 dark:shadow-black/40">
               <p className="px-2 py-1.5 text-[0.7rem] text-slate-500 dark:text-slate-400">
                 Nenhum marcado = todas as tarefas. Vários anos = intervalo do menor ao maior.
               </p>
@@ -893,7 +897,10 @@ export default function AcompanhamentoPage() {
           ) : null}
         </div>
 
-        <div ref={companyMenuRef} className="relative min-w-[240px] flex-1">
+        <div
+          ref={companyMenuRef}
+          className={cn("relative min-w-[240px] flex-1", companyMenuOpen && "z-50")}
+        >
           <label
             id="filtro-empresas-label"
             htmlFor="filtro-empresas-btn"
@@ -913,7 +920,7 @@ export default function AcompanhamentoPage() {
             <ChevronDown className={cn("h-4 w-4 shrink-0 transition", companyMenuOpen && "rotate-180")} />
           </button>
           {companyMenuOpen ? (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800 dark:shadow-black/40">
+            <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800 dark:shadow-black/40">
               <div className="border-b border-slate-100 p-2 dark:border-slate-700">
                 <input
                   type="search"
@@ -975,7 +982,10 @@ export default function AcompanhamentoPage() {
           ) : null}
         </div>
 
-        <div ref={taskMenuRef} className="relative min-w-[240px] flex-1">
+        <div
+          ref={taskMenuRef}
+          className={cn("relative min-w-[240px] flex-1", taskMenuOpen && "z-50")}
+        >
           <label
             id="filtro-tarefas-label"
             htmlFor="filtro-tarefas-btn"
@@ -995,7 +1005,7 @@ export default function AcompanhamentoPage() {
             <ChevronDown className={cn("h-4 w-4 shrink-0 transition", taskMenuOpen && "rotate-180")} />
           </button>
           {taskMenuOpen ? (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800 dark:shadow-black/40">
+            <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800 dark:shadow-black/40">
               <div className="border-b border-slate-100 p-2 dark:border-slate-700">
                 <input
                   type="search"
@@ -1065,6 +1075,7 @@ export default function AcompanhamentoPage() {
           <Eraser className="h-4 w-4" />
           Limpar filtros
         </button>
+        </div>
       </div>
 
       {/* Quadro: Kanban | Lista | Calendário */}
@@ -1088,7 +1099,7 @@ export default function AcompanhamentoPage() {
           onOpen={(t) => onOpenTaskDetail(t.id, getTaskUiColumn(t))}
         />
       ) : (
-        <div className="-mx-1 flex flex-col gap-5 overflow-x-auto pb-4 md:flex-row md:items-start">
+        <div className="relative z-0 -mx-1 flex flex-col gap-5 overflow-x-auto pb-4 md:flex-row md:items-start">
           {COLUMNS.map((col) => {
             const list =
               col.id === "pendente"
