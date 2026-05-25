@@ -229,7 +229,7 @@ export default function AcompanhamentoPage() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [checklistByTaskId, setChecklistByTaskId] = useState<Record<string, AlvaraTaskChecklistRow[]>>({});
   const [loading, setLoading] = useState(true);
-  const [selectedYears, setSelectedYears] = useState<number[]>([]);
+  const [selectedYears, setSelectedYears] = useState<number[]>(() => [new Date().getFullYear()]);
   const [companyQuery, setCompanyQuery] = useState("");
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [companyMenuOpen, setCompanyMenuOpen] = useState(false);

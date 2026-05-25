@@ -144,6 +144,18 @@ export function EmpresasMassaVincularModal({
           }
         }
       }
+
+      if (created > 0) {
+        try {
+          await apiJson("/api/alvara-tasks", {
+            method: "POST",
+            body: "{}",
+          });
+        } catch (errTask) {
+          console.error("Erro ao gerar tarefas pendentes:", errTask);
+        }
+      }
+
       toast.success(
         `Concluído: ${created} novos vínculos; ${dup} já existentes${errs ? `; ${errs} erros` : ""}`
       );
@@ -275,7 +287,7 @@ export function EmpresasMassaVincularModal({
             disabled={submitting || loadingData || companyIds.length === 0}
             onClick={() => void handleSubmit()}
           >
-            {submitting ? "A aplicar…" : "Aplicar vínculos"}
+            {submitting ? "A gerar…" : "Gerar alvarás"}
           </button>
         </div>
     </AccessibleModal>

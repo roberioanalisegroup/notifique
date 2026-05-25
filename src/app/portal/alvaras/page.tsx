@@ -15,7 +15,7 @@ import {
 } from "@/lib/alvara-frequency";
 import type { Alvara, AlvaraGroup } from "@/types";
 import Link from "next/link";
-import { useCallback, useEffect, useState, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { AccessibleModal } from "@/components/ui/accessible-modal";
 import { ResponsiveTableShell } from "@/components/ui/responsive-table-shell";
@@ -204,6 +204,20 @@ function AlvarasContent() {
   });
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredRows = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return rows;
+    return rows.filter((r) => {
+      return (
+        r.name.toLowerCase().includes(query) ||
+        (r.orgao_emissor ?? "").toLowerCase().includes(query) ||
+        (r.description ?? "").toLowerCase().includes(query) ||
+        (r.alvara_groups?.name ?? "").toLowerCase().includes(query)
+      );
+    });
+  }, [rows, searchQuery]);
 
   useEffect(() => {
     if (sp.get("sem_grupo") === "1") setGroupFilter(FILTER_SEM_GRUPO);
@@ -309,21 +323,33 @@ function AlvarasContent() {
           </button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="form-label">Filtrar por grupo</span>
-        <select
-          className="select-field max-w-xs"
-          value={groupFilter}
-          onChange={(e) => setGroupFilter(e.target.value)}
-        >
-          <option value="">Todos</option>
-          <option value={FILTER_SEM_GRUPO}>Sem grupo</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="form-label">Filtrar por grupo</span>
+          <select
+            className="select-field max-w-xs"
+            value={groupFilter}
+            onChange={(e) => setGroupFilter(e.target.value)}
+          >
+            <option value="">Todos</option>
+            <option value={FILTER_SEM_GRUPO}>Sem grupo</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2 flex-1 min-w-[240px] max-w-md">
+          <span className="form-label shrink-0">Buscar</span>
+          <input
+            type="search"
+            placeholder="Buscar por nome, órgão, grupo..."
+            className="input-field"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
       </div>
       <ResponsiveTableShell label="Lista de alvarás">
           <table className="table-portal table-portal-stack md:min-w-[1040px]">
@@ -342,7 +368,7 @@ function AlvarasContent() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {filteredRows.map((r) => (
                 <tr key={r.id}>
                   <td className="font-medium text-slate-900">{r.name}</td>
                   <td>
@@ -402,7 +428,7 @@ function AlvarasContent() {
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && (
+              {filteredRows.length === 0 && (
                 <tr>
                   <td colSpan={10} className="py-10 text-center text-slate-500">
                     Nenhum alvará
