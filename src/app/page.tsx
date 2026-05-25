@@ -30,26 +30,26 @@ const features = [
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
-      <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4">
-          <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white">
+    <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] dark:bg-[#1C1C1E] dark:text-[#F5F5F7] selection:bg-[#0071E3]/20 selection:text-[#0071E3] transition-colors duration-300">
+      <header className="sticky top-0 z-50 border-b border-black/5 bg-white/70 backdrop-blur-xl dark:border-white/5 dark:bg-[#1C1C1E]/70 transition-all duration-300">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
+          <Link href="/" className="flex items-center gap-3 text-lg font-semibold tracking-tight hover:opacity-90 transition-opacity">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-tr from-[#0071E3] to-[#4DA3FF] text-white shadow-sm shadow-[#0071E3]/20">
               <Users className="h-5 w-5" />
             </span>
-            Analise Alvará
+            <span className="font-bold">Analise <span className="text-[#0071E3]">Alvará</span></span>
           </Link>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-3 text-sm">
             <ThemeToggle compact className="mr-1" />
             <Link
               href="/auth/login"
-              className="rounded-lg px-3 py-2 font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="rounded-full px-4 py-2 font-medium text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-black/5 dark:text-[#AEAEB2] dark:hover:text-white dark:hover:bg-white/5 transition-all duration-200"
             >
               Entrar
             </Link>
             <Link
               href="/auth/register"
-              className="rounded-lg bg-slate-900 px-3 py-2 font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+              className="rounded-full bg-[#1d1d1f] px-5 py-2 font-medium text-white shadow-sm hover:opacity-90 active:scale-[0.98] dark:bg-[#f5f5f7] dark:text-[#1c1c1e] transition-all duration-150"
             >
               Criar conta
             </Link>
@@ -57,15 +57,14 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-16 sm:py-24">
-        <div className="max-w-2xl">
+      <main className="mx-auto max-w-5xl px-6 py-16 sm:py-24">
+        <div className="max-w-2xl animate-fade-up [animation-duration:600ms]">
           <HomeBrandIcon />
-          <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
-            Analise Alvará - Gestão de Alvarás
+          <h1 className="mt-6 text-4xl font-extrabold tracking-[-0.035em] text-[#1d1d1f] sm:text-5xl md:text-6xl dark:text-white leading-[1.08] text-balance bg-gradient-to-b from-[#1d1d1f] to-[#434347] bg-clip-text text-transparent dark:from-white dark:to-[#8E8E93]">
+            Analise Alvará — Gestão de Alvarás
           </h1>
-          <p className="mt-4 text-lg leading-relaxed text-slate-600 dark:text-slate-400">
-            Centralize o cadastro de CNPJ, acompanhe situação na Receita, organize
-            alvarás por grupo e nunca perca o prazo de vencimento.
+          <p className="mt-6 text-lg sm:text-xl leading-relaxed text-[#6E6E73] dark:text-[#AEAEB2] font-normal text-balance max-w-xl">
+            Centralize o cadastro de CNPJ, acompanhe a situação na Receita Federal, organize alvarás por grupo e nunca perca o prazo de vencimento.
           </p>
           <div className="mt-10">
             <SessionCta />
@@ -73,28 +72,31 @@ export default function HomePage() {
         </div>
 
         <ul className="mt-20 grid gap-6 sm:grid-cols-3">
-          {features.map((f) => (
+          {features.map((f, i) => (
             <li
               key={f.title}
-              className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-800/40"
+              className="card-portal p-6 group flex flex-col justify-between animate-fade-up"
+              style={{ animationDelay: `${(i + 1) * 100}ms`, animationFillMode: "both" }}
             >
-              <f.icon
-                className="h-9 w-9 text-blue-600 dark:text-blue-400"
-                strokeWidth={1.5}
-              />
-              <h2 className="mt-3 font-semibold text-slate-900 dark:text-white">
-                {f.title}
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-                {f.text}
-              </p>
+              <div>
+                <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#E8F0FE] text-[#0071E3] dark:bg-[#1C3050]/60 dark:text-[#4DA3FF] shadow-sm mb-4 transition-transform duration-300 group-hover:scale-105">
+                  <f.icon className="h-5 w-5" strokeWidth={1.75} />
+                </div>
+                <h2 className="text-lg font-semibold tracking-tight text-[#1D1D1F] dark:text-white">
+                  {f.title}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-[#6E6E73] dark:text-[#AEAEB2]">
+                  {f.text}
+                </p>
+              </div>
+              <div className="mt-4 h-1.5 w-0 rounded-full bg-[#0071E3] transition-all duration-300 group-hover:w-8" />
             </li>
           ))}
         </ul>
       </main>
 
-      <footer className="border-t border-slate-200 py-8 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-500">
-        Gestão de alvarás · dados consultados via BrasilAPI
+      <footer className="border-t border-black/5 py-12 text-center text-xs tracking-wider uppercase text-[#6E6E73] dark:border-white/5 dark:text-[#AEAEB2]/60 px-6 max-w-5xl mx-auto">
+        Gestão de alvarás · Dados sincronizados de forma segura via BrasilAPI
       </footer>
     </div>
   );
