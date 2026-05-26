@@ -23,6 +23,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 type LinkRow = CompanyAlvara & {
   alvaras: Alvara & { alvara_groups: AlvaraGroup };
@@ -163,6 +164,13 @@ export function CompanyDetailClient() {
   /** Seleção na tabela de vínculos (aba Alvarás) — mesmo padrão da lista de empresas. */
   const [selectedLinkIds, setSelectedLinkIds] = useState<Record<string, true>>({});
   const [bulkUnlinking, setBulkUnlinking] = useState(false);
+  const [askTasksModal, setAskTasksModal] = useState<{
+    open: boolean;
+    createdCount: number;
+    dupCount: number;
+    errCount?: number;
+  } | null>(null);
+  const [generatingTasks, setGeneratingTasks] = useState(false);
   const linkHeaderSelectRef = useRef<HTMLInputElement>(null);
   const groupIdsRef = useRef(vinc.groupIds);
   groupIdsRef.current = vinc.groupIds;
@@ -487,26 +495,58 @@ export function CompanyDetailClient() {
         toast.error(firstErr);
       }
       if (created > 0) {
-        if (skipped > 0) {
-          toast.success(`${created} vinculado(s); ${skipped} já estavam associados.`);
-        } else {
-          toast.success(created === 1 ? "Alvará vinculado" : `${created} alvarás vinculados`);
+        setAskTasksModal({
+          open: true,
+          createdCount: created,
+          dupCount: skipped,
+          errCount: failed,
+        });
+      } else {
+        if (failed === 0 && skipped > 0) {
+          toast.success("Nenhum vínculo novo: todos os selecionados já estavam associados.");
         }
-      } else if (failed === 0 && skipped > 0) {
-        toast.success("Nenhum vínculo novo: todos os selecionados já estavam associados.");
+        setVinc({
+          open: false,
+          groupIds: [],
+          alvarasSemGrupoIds: [],
+          observacoes: "",
+        });
+        setEditing(null);
+        resetVincModalFields();
+        void load();
       }
-      setVinc({
-        open: false,
-        groupIds: [],
-        alvarasSemGrupoIds: [],
-        observacoes: "",
-      });
-      setEditing(null);
-      resetVincModalFields();
-      void load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     }
+  }
+
+  async function handleGenerateTasksConfirm(yes: boolean) {
+    if (!askTasksModal) return;
+    if (yes) {
+      setGeneratingTasks(true);
+      try {
+        await apiJson("/api/alvara-tasks", { method: "POST", body: "{}" });
+        toast.success("Cards de tarefas criados com sucesso!");
+      } catch (e) {
+        toast.error("Erro ao criar cards de tarefas");
+      } finally {
+        setGeneratingTasks(false);
+      }
+    } else {
+      toast.success(
+        `Vínculos concluídos: ${askTasksModal.createdCount} novos vínculos; ${askTasksModal.dupCount} já existentes.`
+      );
+    }
+    setAskTasksModal(null);
+    setVinc({
+      open: false,
+      groupIds: [],
+      alvarasSemGrupoIds: [],
+      observacoes: "",
+    });
+    setEditing(null);
+    resetVincModalFields();
+    void load();
   }
 
   function toggleVincGroup(g: AlvaraGroup) {
@@ -1452,6 +1492,49 @@ export function CompanyDetailClient() {
             </div>
           </div>
         </div>
+      ) : null}
+      {askTasksModal?.open ? (
+        <AccessibleModal
+          open={askTasksModal.open}
+          onClose={() => void handleGenerateTasksConfirm(false)}
+          closeOnBackdrop={!generatingTasks}
+          closeOnEscape={!generatingTasks}
+          labelledBy="confirm-tasks-title"
+          panelClassName="modal-panel max-w-md overflow-hidden p-6 shadow-xl"
+        >
+          <h3 id="confirm-tasks-title" className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+            Criar cards de tarefas agora?
+          </h3>
+          <p className="mt-2 text-sm text-slate-500">
+            Foram criados <strong>{askTasksModal.createdCount}</strong> novo(s) vínculo(s) com sucesso. 
+            Deseja gerar os cards de tarefas pendentes no quadro de acompanhamento agora?
+          </p>
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              className="btn-secondary px-4 py-2"
+              disabled={generatingTasks}
+              onClick={() => void handleGenerateTasksConfirm(false)}
+            >
+              Não
+            </button>
+            <button
+              type="button"
+              className="btn-primary flex items-center gap-2 px-5 py-2"
+              disabled={generatingTasks}
+              onClick={() => void handleGenerateTasksConfirm(true)}
+            >
+              {generatingTasks ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  A gerar…
+                </>
+              ) : (
+                "Sim"
+              )}
+            </button>
+          </div>
+        </AccessibleModal>
       ) : null}
     </div>
   );

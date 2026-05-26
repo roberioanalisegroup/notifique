@@ -5,6 +5,7 @@ import type { Alvara, AlvaraGroup } from "@/types";
 import { AccessibleModal } from "@/components/ui/accessible-modal";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -26,6 +27,13 @@ export function EmpresasMassaVincularModal({
   const [alvarasByGroupId, setAlvarasByGroupId] = useState<Record<string, Alvara[] | undefined>>({});
   const [selectedAlvaraIds, setSelectedAlvaraIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
+  const [askTasksModal, setAskTasksModal] = useState<{
+    open: boolean;
+    createdCount: number;
+    dupCount: number;
+    errCount?: number;
+  } | null>(null);
+  const [generatingTasks, setGeneratingTasks] = useState(false);
   const groupCheckboxRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
@@ -146,28 +154,49 @@ export function EmpresasMassaVincularModal({
       }
 
       if (created > 0) {
-        try {
-          await apiJson("/api/alvara-tasks", {
-            method: "POST",
-            body: "{}",
-          });
-        } catch (errTask) {
-          console.error("Erro ao gerar tarefas pendentes:", errTask);
-        }
+        setAskTasksModal({
+          open: true,
+          createdCount: created,
+          dupCount: dup,
+          errCount: errs,
+        });
+      } else {
+        toast.success(
+          `Concluído: ${created} novos vínculos; ${dup} já existentes${errs ? `; ${errs} erros` : ""}`
+        );
+        onCompleted();
+        onClose();
       }
-
-      toast.success(
-        `Concluído: ${created} novos vínculos; ${dup} já existentes${errs ? `; ${errs} erros` : ""}`
-      );
-      onCompleted();
-      onClose();
     } finally {
       setSubmitting(false);
     }
   }
 
+  async function handleGenerateTasksConfirm(yes: boolean) {
+    if (!askTasksModal) return;
+    if (yes) {
+      setGeneratingTasks(true);
+      try {
+        await apiJson("/api/alvara-tasks", { method: "POST", body: "{}" });
+        toast.success("Cards de tarefas criados com sucesso!");
+      } catch (e) {
+        toast.error("Erro ao criar cards de tarefas");
+      } finally {
+        setGeneratingTasks(false);
+      }
+    } else {
+      toast.success(
+        `Vínculos concluídos: ${askTasksModal.createdCount} novos vínculos; ${askTasksModal.dupCount} já existentes.`
+      );
+    }
+    setAskTasksModal(null);
+    onCompleted();
+    onClose();
+  }
+
   return (
-    <AccessibleModal
+    <>
+      <AccessibleModal
       open={open}
       onClose={onClose}
       closeOnBackdrop={!submitting}
@@ -290,6 +319,50 @@ export function EmpresasMassaVincularModal({
             {submitting ? "A gerar…" : "Gerar alvarás"}
           </button>
         </div>
-    </AccessibleModal>
+      </AccessibleModal>
+      {askTasksModal?.open ? (
+        <AccessibleModal
+          open={askTasksModal.open}
+          onClose={() => void handleGenerateTasksConfirm(false)}
+          closeOnBackdrop={!generatingTasks}
+          closeOnEscape={!generatingTasks}
+          labelledBy="confirm-tasks-title-mass"
+          panelClassName="modal-panel max-w-md overflow-hidden p-6 shadow-xl"
+        >
+          <h3 id="confirm-tasks-title-mass" className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+            Criar cards de tarefas agora?
+          </h3>
+          <p className="mt-2 text-sm text-slate-500">
+            Foram criados <strong>{askTasksModal.createdCount}</strong> novo(s) vínculo(s) com sucesso. 
+            Deseja gerar os cards de tarefas pendentes no quadro de acompanhamento agora?
+          </p>
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              className="btn-secondary px-4 py-2"
+              disabled={generatingTasks}
+              onClick={() => void handleGenerateTasksConfirm(false)}
+            >
+              Não
+            </button>
+            <button
+              type="button"
+              className="btn-primary flex items-center gap-2 px-5 py-2"
+              disabled={generatingTasks}
+              onClick={() => void handleGenerateTasksConfirm(true)}
+            >
+              {generatingTasks ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  A gerar…
+                </>
+              ) : (
+                "Sim"
+              )}
+            </button>
+          </div>
+        </AccessibleModal>
+      ) : null}
+    </>
   );
 }
