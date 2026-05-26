@@ -39,6 +39,14 @@ export function AccessibleModal({
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
+  const onCloseRef = useRef(onClose);
+  const closeOnEscapeRef = useRef(closeOnEscape);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    closeOnEscapeRef.current = closeOnEscape;
+  }, [onClose, closeOnEscape]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -62,9 +70,9 @@ export function AccessibleModal({
     const focusTimer = window.setTimeout(focusFirst, 0);
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (closeOnEscape && e.key === "Escape") {
+      if (closeOnEscapeRef.current && e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !panel) return;
@@ -98,7 +106,7 @@ export function AccessibleModal({
       document.body.style.overflow = prevOverflow;
       previousFocusRef.current?.focus();
     };
-  }, [open, onClose, closeOnEscape]);
+  }, [open]);
 
   if (!open) return null;
 
