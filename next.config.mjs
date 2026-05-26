@@ -7,6 +7,9 @@ const PERMISSIONS_POLICY =
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    allowedDevOrigins: ["192.168.56.1", "192.168.56.1:3000", "localhost:3000"],
+  },
   async headers() {
     /** CSP dinâmica (nonce) é aplicada no middleware. */
     /** @type {{ key: string, value: string }[]} */
