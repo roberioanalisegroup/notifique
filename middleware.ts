@@ -89,6 +89,18 @@ export async function middleware(request: NextRequest) {
     forwardedHeaders
   );
 
+  if (pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? "/portal/dashboard" : "/auth/login";
+    return secure(request, nonce, NextResponse.redirect(url));
+  }
+
+  if (pathname === "/auth/register") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/login";
+    return secure(request, nonce, NextResponse.redirect(url));
+  }
+
   if (isSyncAllPost(request)) {
     if (!canAccessSyncAll(request, !!user)) {
       return secure(

@@ -93,11 +93,6 @@ export function LoginForm() {
           {loading ? "Entrando…" : "Entrar"}
         </button>
       </form>
-      <p className="mt-5 text-center text-sm">
-        <Link href="/auth/register" className="text-[#0071E3] font-medium hover:underline dark:text-[#4DA3FF]">
-          Criar conta (setup inicial)
-        </Link>
-      </p>
     </div>
   );
 }
