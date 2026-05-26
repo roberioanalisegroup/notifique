@@ -15,7 +15,7 @@ import {
 } from "@/lib/alvara-frequency";
 import type { Alvara, AlvaraGroup } from "@/types";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { AccessibleModal } from "@/components/ui/accessible-modal";
 import { ResponsiveTableShell } from "@/components/ui/responsive-table-shell";
@@ -205,6 +205,9 @@ function AlvarasContent() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRowsById, setSelectedRowsById] = useState<Record<string, Row>>({});
+  const [massBusy, setMassBusy] = useState(false);
+  const headerSelectRef = useRef<HTMLInputElement>(null);
 
   const filteredRows = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
@@ -218,6 +221,66 @@ function AlvarasContent() {
       );
     });
   }, [rows, searchQuery]);
+
+  const selectedCount = Object.keys(selectedRowsById).length;
+  const allPageSelected = filteredRows.length > 0 && filteredRows.every((r) => !!selectedRowsById[r.id]);
+
+  useEffect(() => {
+    const el = headerSelectRef.current;
+    if (!el) return;
+    const all = filteredRows.length > 0 && filteredRows.every((r) => !!selectedRowsById[r.id]);
+    const some = filteredRows.some((r) => !!selectedRowsById[r.id]);
+    el.indeterminate = some && !all;
+  }, [filteredRows, selectedRowsById]);
+
+  function toggleSelectRow(r: Row) {
+    setSelectedRowsById((prev) => {
+      if (prev[r.id]) {
+        const { [r.id]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [r.id]: r };
+    });
+  }
+
+  function toggleSelectAllOnPage() {
+    setSelectedRowsById((prev) => {
+      const allOnPage = filteredRows.length > 0 && filteredRows.every((r) => !!prev[r.id]);
+      const next = { ...prev };
+      if (allOnPage) {
+        for (const r of filteredRows) delete next[r.id];
+      } else {
+        for (const r of filteredRows) next[r.id] = r;
+      }
+      return next;
+    });
+  }
+
+  async function massDelete() {
+    const ids = Object.keys(selectedRowsById);
+    if (ids.length === 0) return;
+    if (!confirm(`Excluir ${ids.length} alvará(s)?\nA exclusão irá apagar os vínculos desses alvarás em todas as empresas. Esta ação não pode ser desfeita.`)) return;
+    
+    setMassBusy(true);
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const id of ids) {
+        try {
+          const res = await apiFetch(`/api/alvaras/${id}`, { method: "DELETE" });
+          if (!res.ok) throw new Error("Erro HTTP " + res.status);
+          ok++;
+        } catch {
+          fail++;
+        }
+      }
+      toast.success(`${ok} excluído(s)${fail ? `; ${fail} falha(s)` : ""}`);
+      setSelectedRowsById({});
+      void load();
+    } finally {
+      setMassBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (sp.get("sem_grupo") === "1") setGroupFilter(FILTER_SEM_GRUPO);
@@ -304,7 +367,7 @@ function AlvarasContent() {
   if (loading) return <AlvarasTableSkeleton />;
 
   return (
-    <div className="space-y-6 text-slate-900 dark:text-slate-100">
+    <div className={`space-y-6 text-slate-900 dark:text-slate-100 ${selectedCount > 0 ? "pb-24" : ""}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tipos de alvará</h1>
@@ -355,6 +418,15 @@ function AlvarasContent() {
           <table className="table-portal table-portal-stack md:min-w-[1040px]">
             <thead>
               <tr>
+                <th className="w-10 px-2 py-2.5 align-middle" aria-label="Selecionar">
+                  <input
+                    type="checkbox"
+                    ref={headerSelectRef}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30"
+                    checked={allPageSelected}
+                    onChange={toggleSelectAllOnPage}
+                  />
+                </th>
                 <th>Nome</th>
                 <th>Grupo</th>
                 <th>Órgão</th>
@@ -370,6 +442,14 @@ function AlvarasContent() {
             <tbody>
               {filteredRows.map((r) => (
                 <tr key={r.id}>
+                  <td className="w-10 px-2 py-2.5 align-middle">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30"
+                      checked={!!selectedRowsById[r.id]}
+                      onChange={() => toggleSelectRow(r)}
+                    />
+                  </td>
                   <td className="font-medium text-slate-900">{r.name}</td>
                   <td>
                     {r.alvara_groups ? (
@@ -430,7 +510,7 @@ function AlvarasContent() {
               ))}
               {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="py-10 text-center text-slate-500">
+                  <td colSpan={11} className="py-10 text-center text-slate-500">
                     Nenhum alvará
                   </td>
                 </tr>
@@ -625,6 +705,32 @@ function AlvarasContent() {
             </div>
         </AccessibleModal>
       ) : null}
+
+      {selectedCount > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 shadow-[0_-4px_6px_-1px_rgb(0,0,0,0.05)] sm:px-6 md:left-[16rem] dark:border-slate-800 dark:bg-slate-900">
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            {selectedCount} selecionado(s)
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+              onClick={() => setSelectedRowsById({})}
+              disabled={massBusy}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={massDelete}
+              disabled={massBusy}
+              className="inline-flex shrink-0 items-center justify-center rounded-lg border border-red-700 bg-red-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:border-red-800 hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:ring-offset-1 disabled:opacity-50"
+            >
+              {massBusy ? "Excluindo…" : "Excluir em massa"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
