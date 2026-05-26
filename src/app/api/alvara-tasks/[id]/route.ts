@@ -358,7 +358,7 @@ export async function PATCH(
   if (newStatus === "concluida") {
     const { data: caLink } = await supabase
       .from("company_alvaras")
-      .select("data_emissao, alvara_id, frequencia_override, dias_frequencia_personalizada")
+      .select("data_emissao, data_vencimento, alvara_id, frequencia_override, dias_frequencia_personalizada")
       .eq("id", taskRow.company_alvara_id)
       .single();
 
@@ -375,6 +375,7 @@ export async function PATCH(
           ? caLink.dias_frequencia_personalizada
           : alv.dias_frequencia_personalizada;
 
+        let nextVencimento: string | null = null;
         if (activeFreq === "personalizada") {
           const prazoDias = Math.min(3650, Math.max(1, Number(alv.prazo_inicio_dias ?? 30) || 30));
           const dt = new Date();
@@ -395,22 +396,54 @@ export async function PATCH(
             })
             .eq("id", taskRow.company_alvara_id);
         } else {
-          try {
-            nextDue = computeDataVencimentoISO(
-              String(caLink.data_emissao).slice(0, 10),
-              activeFreq as AlvaraFrequencia,
-              alv.weekend_adjust,
-              {
-                legal_dia: alv.legal_dia,
-                legal_mes: alv.legal_mes,
-                legal_dia_semana: alv.legal_dia_semana,
-                legal_dias_uteis: alv.legal_dias_uteis,
-              },
-              activeDias
-            );
-          } catch {
-            nextDue = null;
+          // 1. Calculate nextVencimento = data_vencimento_anterior + frequency
+          const baseVenc = caLink.data_vencimento || caLink.data_emissao;
+          if (baseVenc) {
+            try {
+              nextVencimento = computeDataVencimentoISO(
+                String(baseVenc).slice(0, 10),
+                activeFreq as AlvaraFrequencia,
+                alv.weekend_adjust,
+                {
+                  legal_dia: alv.legal_dia,
+                  legal_mes: alv.legal_mes,
+                  legal_dia_semana: alv.legal_dia_semana,
+                  legal_dias_uteis: alv.legal_dias_uteis,
+                },
+                activeDias
+              );
+            } catch {
+              nextVencimento = null;
+            }
           }
+
+          // 2. Calculate nextDue (task renewal deadline) = data_vencimento_anterior - 30 days
+          if (caLink.data_vencimento) {
+            try {
+              const dt = new Date(caLink.data_vencimento + "T00:00:00");
+              dt.setDate(dt.getDate() - 30);
+              const y = dt.getFullYear();
+              const m = String(dt.getMonth() + 1).padStart(2, "0");
+              const d = String(dt.getDate()).padStart(2, "0");
+              nextDue = `${y}-${m}-${d}`;
+            } catch {
+              nextDue = null;
+            }
+          } else if (caLink.data_emissao) {
+            // Fallback if previous vencimento is null
+            nextDue = nextVencimento;
+          }
+
+          // 3. Update the link to reset emission and set next validity for the next cycle
+          await supabase
+            .from("company_alvaras")
+            .update({
+              data_emissao: null,
+              data_vencimento: nextVencimento,
+              status: "pendente",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", taskRow.company_alvara_id);
         }
 
         const { error: insE } = await supabase.from("alvara_tasks").insert({

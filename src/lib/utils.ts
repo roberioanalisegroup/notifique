@@ -202,6 +202,32 @@ export function getTaskStatusMeta(task: TaskRowForStatus | null | undefined, hoj
   const hasEmissao = ca?.data_emissao != null && String(ca.data_emissao).trim() !== "";
 
   if (!hasEmissao) {
+    if (task.due_date) {
+      const limitDate = task.due_date.slice(0, 10);
+      if (limitDate < hoje) {
+        return {
+          className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200",
+          text: "Pendente - Vencida (Prazo de renovação esgotado)",
+        };
+      }
+
+      const today = new Date(hoje + "T00:00:00");
+      const limit = new Date(limitDate + "T00:00:00");
+      const diffDays = Math.ceil((limit.getTime() - today.getTime()) / (1000 * 3600 * 24));
+
+      if (diffDays <= 90) {
+        return {
+          className: "bg-orange-100 text-orange-950 dark:bg-orange-950/50 dark:text-orange-200",
+          text: `Vence em ${diffDays} dias`,
+        };
+      }
+
+      return {
+        className: "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200",
+        text: `Válido até ${limit.toLocaleDateString("pt-BR")}`,
+      };
+    }
+
     const prazoDias = ca?.alvaras?.prazo_inicio_dias ?? 30;
     const baseDia = task.created_at.slice(0, 10);
     const n = Math.min(3650, Math.max(1, Number(prazoDias ?? 30) || 30));
