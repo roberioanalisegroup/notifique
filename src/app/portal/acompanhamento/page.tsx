@@ -3,7 +3,7 @@
 import { apiJson } from "@/lib/api-client";
 import { FREQUENCIA_LABELS } from "@/lib/alvara-frequency";
 import { prazoInicioPrimeiroCiclo } from "@/lib/alvara-task-generation";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, getTaskStatusMeta } from "@/lib/utils";
 import type { Company } from "@/types";
 import { format } from "date-fns";
 import {
@@ -145,25 +145,7 @@ function yearFromIso(d: string | null | undefined): number | null {
   return Number.isFinite(y) ? y : null;
 }
 
-function validityMeta(expirationDate: string | null | undefined): { className: string; text: string } {
-  if (!expirationDate) return { className: "", text: "Sem validade no vínculo" };
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const exp = new Date(expirationDate);
-  exp.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 3600 * 24));
-  if (diffDays < 0)
-    return { className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200", text: "Vencido" };
-  if (diffDays <= 90)
-    return {
-      className: "bg-orange-100 text-orange-900 dark:bg-orange-950/50 dark:text-orange-200",
-      text: `Vence em ${diffDays} dias`,
-    };
-  return {
-    className: "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200",
-    text: `Válido até ${exp.toLocaleDateString("pt-BR")}`,
-  };
-}
+
 
 function companyLabel(c: Company | null | undefined): string {
   if (!c) return "—";
@@ -1243,14 +1225,8 @@ function TaskCard({
   const ca = task.company_alvaras;
   const c = ca?.companies;
   const a = ca?.alvaras;
-  const g = a?.alvara_groups;
-  const freq = a ? (FREQUENCIA_LABELS[a.frequencia] ?? a.frequencia) : "—";
-  const venc = validityMeta(ca?.data_vencimento);
+  const venc = getTaskStatusMeta(task, hoje);
   const temEm = vinculoTemEmissao(ca);
-  /** Na API só o 1.º ciclo tem esta data; renovações seguintes ficam null — assim distinguimos cartões. */
-  const primeiroCiclo = Boolean(
-    task.inicio_obrigatorio_ate && String(task.inicio_obrigatorio_ate).trim() !== ""
-  );
   const dataPrazoPrimeiroCiclo =
     prazoInicioPrimeiroCiclo(task.created_at, a?.prazo_inicio_dias) ??
     task.inicio_obrigatorio_ate?.slice(0, 10) ??
@@ -1259,8 +1235,6 @@ function TaskCard({
   const atrasoInicio = taskAtrasoInicio(task, uiColumn, hoje);
   const atrasoVenc = taskAtrasoVencimento(task, hoje);
   const atrasada = atrasoInicio || atrasoVenc;
-  const hasFile = Boolean(ca?.arquivo_url);
-  const podeConcluir = taskPodeConcluir(task);
 
   return (
     <>
@@ -1309,16 +1283,7 @@ function TaskCard({
         <span className="truncate">{companyLabel(c)}</span>
       </p>
 
-      <div className="mt-2 rounded-xl bg-slate-50 px-2.5 py-1.5 text-[0.7rem] text-slate-700 dark:bg-slate-800/80 dark:text-slate-200">
-        {ca?.numero ? `📄 ${ca.numero}` : `Grupo: ${g?.name ?? "Sem grupo"}`}
-      </div>
-
-      <div className="mt-2 flex items-center gap-1 rounded-lg border border-slate-100 bg-white px-2 py-1.5 text-[0.7rem] font-medium text-slate-800 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
-        <CalendarDays className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
-        <span>Criação da tarefa: {formatDate(task.created_at, { empty: "—" })}</span>
-      </div>
-
-      <div className="mt-2 rounded-xl bg-violet-50/60 px-2 py-2 text-[0.7rem] text-slate-700 dark:bg-violet-950/25 dark:text-slate-200">
+      <div className="mt-3 rounded-xl bg-violet-50/60 px-2.5 py-2 text-[0.7rem] text-slate-700 dark:bg-violet-950/25 dark:text-slate-200">
         <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
           <span className="flex items-center gap-1">
             <CalendarDays className="h-3 w-3 shrink-0 text-slate-500 dark:text-slate-400" />
@@ -1332,139 +1297,17 @@ function TaskCard({
               : formatDate(prazoInicioGrid ?? ca?.data_vencimento ?? null, { empty: "—" })}
           </span>
         </div>
-        {temEm && primeiroCiclo ? (
-          <p className="mt-2 border-t border-violet-200/80 pt-2 text-[0.7rem] leading-snug text-slate-700 dark:border-violet-800/60 dark:text-slate-300">
-            <span className="font-medium text-slate-600 dark:text-slate-400">Prazo de início (1.º ciclo):</span>{" "}
-            <span className="tabular-nums">{formatDate(dataPrazoPrimeiroCiclo, { empty: "—" })}</span>
-          </p>
-        ) : null}
       </div>
 
-      <p className="mt-2 text-[0.7rem] text-slate-600 dark:text-slate-400">
-        <span className="font-medium text-slate-500 dark:text-slate-400">Vencimento (tarefa):</span>{" "}
-        {task.due_date != null && String(task.due_date).trim() !== "" ? (
-          <>
-            {formatDate(task.due_date, { empty: "—" })}
-            {atrasoVenc ? " · atrasada" : ""}
-          </>
-        ) : (
-          <span className="text-slate-500 dark:text-slate-400">
-            —
-            {!temEm ? (
-              <span className="text-slate-400 dark:text-slate-500"> (sem data até à primeira emissão)</span>
-            ) : null}
-          </span>
-        )}
-      </p>
-
-      <p className="mt-1 text-[0.7rem] text-slate-600 dark:text-slate-400">Periodicidade: {freq}</p>
-
-      <div className="mt-2 text-[0.7rem] text-slate-600 dark:text-slate-400">
+      <div className="mt-3 text-[0.7rem] text-slate-600 dark:text-slate-400">
         <span className="font-medium text-slate-500 dark:text-slate-400">Responsável (empresa):</span>{" "}
         {(c?.responsible?.display_name ?? "").trim() || "—"}
       </div>
 
-      <div className="mt-1 flex items-center gap-1 text-[0.75rem] text-slate-600 dark:text-slate-400">
+      <div className="mt-1.5 flex items-center gap-1 text-[0.7rem] text-slate-600 dark:text-slate-400">
         <UserCircle className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
         <span className="truncate">{task.notes?.slice(0, 80) || "Sem notas na tarefa"}</span>
       </div>
-
-      <div className="mt-3 flex items-center justify-between gap-2 text-[0.72rem]">
-        <span className={cn("flex items-center gap-1", hasFile ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400")}>
-          <Paperclip className="h-3.5 w-3.5" />
-          {hasFile ? "Comprovante no vínculo" : "Sem anexo no vínculo"}
-        </span>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[0.65rem] font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
-          onClick={(e) => {
-            e.stopPropagation();
-            toast.message("Upload de anexo em breve", {
-              description: "Abra a tarefa para mais opções.",
-            });
-          }}
-        >
-          <Upload className="h-3 w-3" />
-          Adicionar anexo
-        </button>
-      </div>
-
-      <div className="mt-3">
-        <label htmlFor={`mover-coluna-${task.id}`} className="sr-only">
-          Mover tarefa para outra coluna
-        </label>
-        <select
-          id={`mover-coluna-${task.id}`}
-          className="select-field h-9 w-full text-xs"
-          defaultValue=""
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) => {
-            const target = e.target.value as ColumnId | "";
-            if (!target || target === uiColumn) return;
-            onMoveToColumn(target);
-            e.target.value = "";
-          }}
-          aria-label="Mover tarefa para outra coluna (alternativa ao arrastar)"
-        >
-          <option value="">Mover para coluna…</option>
-          {uiColumn !== "pendente" ? <option value="pendente">Pendente</option> : null}
-          {uiColumn !== "andamento" ? <option value="andamento">Em andamento</option> : null}
-          {uiColumn !== "concluido" ? <option value="concluido">Concluído</option> : null}
-        </select>
-      </div>
-
-      <TaskCardChecklist
-        idPrefix={task.id}
-        items={checklistRows}
-        readOnly={task.status !== "pendente"}
-        onToggle={onChecklistToggle}
-      />
-
-      {task.status === "pendente" ? (
-        <>
-          <button
-            type="button"
-            className={cn(
-              "mt-3 w-full rounded-full py-2 text-[0.75rem] font-semibold transition",
-              podeConcluir
-                ? "bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:hover:bg-emerald-900/60"
-                : "cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
-            )}
-            disabled={!podeConcluir}
-            title={!podeConcluir ? taskMotivoNaoConclusao(task) : undefined}
-            onClick={(e) => {
-              e.stopPropagation();
-              onConcluir();
-            }}
-          >
-            Concluir tarefa
-          </button>
-          <button
-            type="button"
-            className="mt-2 w-full rounded-full border border-slate-200 py-2 text-[0.72rem] font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-            onClick={(e) => {
-              e.stopPropagation();
-              onBaixa();
-            }}
-          >
-            Dar baixa no vínculo
-          </button>
-        </>
-      ) : (
-        <button
-          type="button"
-          className="mt-3 w-full rounded-full border border-slate-200 py-2 text-[0.72rem] font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
-          onClick={(e) => {
-            e.stopPropagation();
-            onReabrir();
-          }}
-        >
-          <span className="inline-flex items-center justify-center gap-1">
-            <XCircle className="h-3.5 w-3.5" />
-            Reabrir tarefa
-          </span>
-        </button>
-      )}
     </>
   );
 }

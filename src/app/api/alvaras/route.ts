@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
     prazo_inicio_dias?: number;
     anexo_obrigatorio?: boolean;
     is_active?: boolean;
+    dias_frequencia_personalizada?: number | null;
   };
   try {
     body = await request.json();
@@ -106,6 +107,10 @@ export async function POST(request: NextRequest) {
   }
   if (!isWeekendAdjust(weekend_adjust)) {
     return NextResponse.json({ error: "Ajuste de fim de semana inválido" }, { status: 400 });
+  }
+
+  if (frequencia === "personalizada" && (body.dias_frequencia_personalizada == null || body.dias_frequencia_personalizada <= 0)) {
+    return NextResponse.json({ error: "Frequência personalizada exige preenchimento da quantidade de dias." }, { status: 400 });
   }
 
   let prazo_inicio = 30;
@@ -146,6 +151,7 @@ export async function POST(request: NextRequest) {
     legal_dias_uteis: legal.legal_dias_uteis,
     prazo_inicio_dias: prazo_inicio,
     is_active: body.is_active ?? true,
+    dias_frequencia_personalizada: frequencia === "personalizada" ? body.dias_frequencia_personalizada : null,
   };
 
   const selectAlvara = `*, alvara_groups ( id, name, color )`;

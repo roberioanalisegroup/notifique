@@ -1,10 +1,10 @@
 "use client";
 
 import { apiJson } from "@/lib/api-client";
-import { FREQUENCIA_LABELS } from "@/lib/alvara-frequency";
+import { FREQUENCIA_LABELS, type AlvaraFrequencia } from "@/lib/alvara-frequency";
 import { prazoInicioPrimeiroCiclo } from "@/lib/alvara-task-generation";
 import { linhasHistoricoTarefa } from "@/lib/alvara-task-history-present";
-import { cn, formatDate, formatIsoDateParaBR, maskDataBRInput, parseDataBRParaIso } from "@/lib/utils";
+import { cn, formatDate, formatIsoDateParaBR, getTaskStatusMeta, maskDataBRInput, parseDataBRParaIso } from "@/lib/utils";
 import type {
   Alvara,
   AlvaraGroup,
@@ -57,26 +57,6 @@ function textoEstadoNoModal(
   return status;
 }
 
-function validityMeta(expirationDate: string | null | undefined): { className: string; text: string } {
-  if (!expirationDate) return { className: "", text: "Sem validade no vínculo" };
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const exp = new Date(expirationDate);
-  exp.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 3600 * 24));
-  if (diffDays < 0)
-    return { className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200", text: "Vencido" };
-  if (diffDays <= 90)
-    return {
-      className: "bg-orange-100 text-orange-900 dark:bg-orange-950/50 dark:text-orange-200",
-      text: `Vence em ${diffDays} dias`,
-    };
-  return {
-    className: "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200",
-    text: `Válido até ${exp.toLocaleDateString("pt-BR")}`,
-  };
-}
-
 export function TaskEditModal({
   taskId,
   open,
@@ -97,8 +77,14 @@ export function TaskEditModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [emissaoDraft, setEmissaoDraft] = useState("");
+  const [vencimentoDraft, setVencimentoDraft] = useState("");
   const [checklistRows, setChecklistRows] = useState<AlvaraTaskChecklistRow[]>([]);
   const emissaoDatePickerRef = useRef<HTMLInputElement>(null);
+  const vencimentoDatePickerRef = useRef<HTMLInputElement>(null);
+  const [isEditingFreq, setIsEditingFreq] = useState(false);
+  const [overrideFreq, setOverrideFreq] = useState<string>("inherit");
+  const [overrideDias, setOverrideDias] = useState<number | "">("");
+  const [regerando, setRegerando] = useState(false);
 
   const load = useCallback(async () => {
     if (!taskId) return;
@@ -125,15 +111,28 @@ export function TaskEditModal({
       setHistory([]);
       setNotes("");
       setEmissaoDraft("");
+      setVencimentoDraft("");
     }
   }, [open, taskId, load]);
 
   useEffect(() => {
     if (!task?.company_alvaras) {
       setEmissaoDraft("");
+      setVencimentoDraft("");
       return;
     }
     setEmissaoDraft(formatIsoDateParaBR(task.company_alvaras.data_emissao ?? null));
+    setVencimentoDraft(formatIsoDateParaBR(task.company_alvaras.data_vencimento ?? null));
+  }, [task]);
+
+  useEffect(() => {
+    if (task?.company_alvaras) {
+      setOverrideFreq(task.company_alvaras.frequencia_override ?? "inherit");
+      setOverrideDias(task.company_alvaras.dias_frequencia_personalizada ?? "");
+    } else {
+      setOverrideFreq("inherit");
+      setOverrideDias("");
+    }
   }, [task]);
 
   useEffect(() => {
@@ -177,9 +176,14 @@ export function TaskEditModal({
   async function saveVinculo() {
     const caId = task?.company_alvaras?.id;
     if (!caId || !taskId) return;
-    const iso = parseDataBRParaIso(emissaoDraft);
-    if (emissaoDraft.trim() !== "" && iso === null) {
+    const isoEm = parseDataBRParaIso(emissaoDraft);
+    if (emissaoDraft.trim() !== "" && isoEm === null) {
       toast.error("Data de emissão inválida. Use o formato dia/mês/ano (dd/mm/aaaa).");
+      return;
+    }
+    const isoVenc = parseDataBRParaIso(vencimentoDraft);
+    if (vencimentoDraft.trim() !== "" && isoVenc === null) {
+      toast.error("Data de vencimento inválida. Use o formato dia/mês/ano (dd/mm/aaaa).");
       return;
     }
     setSaving(true);
@@ -187,16 +191,69 @@ export function TaskEditModal({
       await apiJson("/api/company-alvaras/" + caId, {
         method: "PATCH",
         body: JSON.stringify({
-          data_emissao: iso,
+          data_emissao: isoEm,
+          data_vencimento: isoVenc,
         }),
       });
-      toast.success("Emissão do vínculo atualizada");
+      toast.success("Datas do vínculo atualizadas");
       await load();
       onSaved();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function savePeriodicidadeLocal() {
+    const caId = task?.company_alvaras?.id;
+    if (!caId || !taskId) return;
+
+    if (overrideFreq === "personalizada" && (!overrideDias || overrideDias <= 0)) {
+      toast.error("Para frequência personalizada, defina a quantidade de dias.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await apiJson("/api/company-alvaras/" + caId, {
+        method: "PATCH",
+        body: JSON.stringify({
+          frequencia_override: overrideFreq === "inherit" ? null : overrideFreq,
+          dias_frequencia_personalizada: overrideFreq === "personalizada" ? Number(overrideDias) : null,
+        }),
+      });
+      toast.success("Periodicidade do cartão atualizada!");
+      setIsEditingFreq(false);
+      await load();
+      onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar periodicidade");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function regerarDatas() {
+    const caId = task?.company_alvaras?.id;
+    if (!caId || !taskId) return;
+    
+    if (!confirm("Tem a certeza que deseja regerar as datas deste cartão com base nas regras de periodicidade atuais?")) {
+      return;
+    }
+
+    setRegerando(true);
+    try {
+      const res = await apiJson<{ ok: boolean; summary: string }>("/api/company-alvaras/" + caId + "/regerar", {
+        method: "POST"
+      });
+      toast.success(res.summary || "Datas regeradas com sucesso!");
+      await load();
+      onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao regerar datas");
+    } finally {
+      setRegerando(false);
     }
   }
 
@@ -270,7 +327,7 @@ export function TaskEditModal({
   const timeline = [...history].sort(
     (x, y) => new Date(x.created_at).getTime() - new Date(y.created_at).getTime()
   );
-  const venc = validityMeta(ca?.data_vencimento);
+  const venc = getTaskStatusMeta(task, new Date().toISOString().slice(0, 10));
   const empresaHref = c ? "/portal/empresas/" + c.id : null;
 
   return (
@@ -278,7 +335,7 @@ export function TaskEditModal({
       open={open}
       onClose={onClose}
       labelledBy="task-edit-title"
-      overlayClassName="z-[100]"
+      overlayClassName="z-[9999]"
       panelClassName="modal-panel flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden p-0"
     >
         <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-4 dark:border-slate-700">
@@ -315,14 +372,6 @@ export function TaskEditModal({
                 >
                   {venc.text}
                 </span>
-                <span className="max-w-[min(100%,14rem)] text-right text-xs font-medium leading-snug text-slate-700 dark:text-slate-300">
-                  Estado: {textoEstadoNoModal(task.status, quadroColumn)}
-                  {task.status === "pendente" && quadroColumn === "andamento" ? (
-                    <span className="mt-1 block text-[0.65rem] font-normal text-slate-500 dark:text-slate-400">
-                      Na base de dados continua «pendente» até concluir a tarefa.
-                    </span>
-                  ) : null}
-                </span>
               </div>
 
               <div>
@@ -346,7 +395,7 @@ export function TaskEditModal({
               </div>
 
               <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200">
-                {ca?.numero ? `📄 ${ca.numero}` : `Grupo: ${g?.name ?? "Sem grupo"}`}
+                {ca?.numero ? `📄 ${ca.numero}` : `Grupo de Alvarás: ${g?.name ?? "Sem grupo"}`}
               </div>
 
               <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-2 text-xs text-slate-800 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-slate-200">
@@ -409,28 +458,61 @@ export function TaskEditModal({
                       </button>
                     </div>
                     <p className="mt-1 text-[0.65rem] text-slate-500 dark:text-slate-400">
-                      Digite a data — a máscara formata em dd/mm/aaaa — ou use o ícone à direita.
+                      Digite a data de emissão.
                     </p>
                   </label>
-                  <div className="block">
-                    <span className="form-label mb-1 block text-slate-700 dark:text-slate-300">Prazo de início (1.º ciclo)</span>
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-800 tabular-nums dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
-                      {primeiroCicloModal || !hasEmissao ? (
-                        formatDate(prazoInicioCalculado ?? task.inicio_obrigatorio_ate, { empty: "—" })
-                      ) : (
-                        <span className="text-slate-400 dark:text-slate-500">—</span>
-                      )}
+                  
+                  <label className="block">
+                    <span className="form-label mb-1 block text-slate-700 dark:text-slate-300">Data de vencimento</span>
+                    <div className="relative max-w-[11rem]">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="dd/mm/aaaa"
+                        className="input-field w-full pr-10"
+                        value={vencimentoDraft}
+                        onChange={(e) => setVencimentoDraft(maskDataBRInput(e.target.value))}
+                      />
+                      <input
+                        ref={vencimentoDatePickerRef}
+                        type="date"
+                        lang="pt-BR"
+                        aria-hidden="true"
+                        tabIndex={-1}
+                        className="sr-only"
+                        value={parseDataBRParaIso(vencimentoDraft) ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setVencimentoDraft(v ? formatIsoDateParaBR(v) : "");
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                        aria-label="Abrir calendário"
+                        title="Abrir calendário"
+                        onClick={() => {
+                          const el = vencimentoDatePickerRef.current;
+                          if (!el) return;
+                          if (typeof el.showPicker === "function") {
+                            void el.showPicker();
+                          } else {
+                            el.focus();
+                            el.click();
+                          }
+                        }}
+                      >
+                        <CalendarDays className="h-4 w-4 shrink-0" />
+                      </button>
                     </div>
-                    <p className="mt-1.5 text-[0.7rem] leading-snug text-slate-500 dark:text-slate-400">
-                      No 1.º ciclo fica registado com base na data de criação da tarefa mais{" "}
-                      <strong>{a?.prazo_inicio_dias ?? 30}</strong> dias corridos (este valor mantém-se visível mesmo após
-                      registar emissão). Nos ciclos seguintes só se usa o <strong>vencimento da tarefa</strong> abaixo.
+                    <p className="mt-1 text-[0.65rem] text-slate-500 dark:text-slate-400">
+                      Vencimento manual (obrigatório para frequência Personalizada).
                     </p>
-                  </div>
+                  </label>
                 </div>
                 <p className="mt-2 text-[0.7rem] leading-snug text-slate-500 dark:text-slate-400">
-                  O <strong>vencimento da tarefa</strong> (renovação) preenche-se automaticamente ao guardar a emissão,
-                  pela periodicidade do tipo.
+                  O <strong>vencimento da tarefa</strong> (renovação) preenche-se automaticamente ao guardar a emissão (exceto para frequências Personalizadas, onde deve ser definido manualmente).
                 </p>
                 <button
                   type="button"
@@ -438,24 +520,119 @@ export function TaskEditModal({
                   disabled={saving || !ca?.id}
                   onClick={() => void saveVinculo()}
                 >
-                  Guardar emissão no vínculo
+                  Guardar datas no vínculo
                 </button>
               </div>
 
-              <div className="grid gap-2 rounded-xl bg-violet-50/50 p-3 text-xs text-slate-700 sm:grid-cols-2 dark:bg-violet-950/20 dark:text-slate-300">
-                <span className="flex items-start gap-1 sm:col-span-2">
-                  <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-slate-400" />
-                  <span>
-                    <span className="font-medium text-slate-600 dark:text-slate-400">Vencimento (tarefa):</span>{" "}
-                    {formatDate(task.due_date, {
-                      empty: hasEmissao ? "—" : "(após registar emissão)",
-                    })}
-                  </span>
-                </span>
-                <span className="sm:col-span-2">
-                  <span className="font-medium text-slate-600 dark:text-slate-400">Periodicidade (tipo):</span>{" "}
-                  {a ? FREQUENCIA_LABELS[a.frequencia] ?? a.frequencia : "—"}
-                </span>
+              <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-3.5 text-xs text-slate-700 dark:border-violet-900/30 dark:bg-violet-950/20 dark:text-slate-300">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="flex items-center gap-1.5 font-semibold text-violet-900 dark:text-violet-300">
+                      <CalendarDays className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                      Periodicidade do cartão:
+                    </p>
+                    <p className="mt-1 text-slate-800 dark:text-slate-200">
+                      {ca?.frequencia_override ? (
+                        <>
+                          <span className="font-semibold text-violet-700 dark:text-violet-400">
+                            {ca.frequencia_override === "personalizada"
+                              ? `Personalizada (+${ca.dias_frequencia_personalizada} dias)`
+                              : FREQUENCIA_LABELS[ca.frequencia_override as AlvaraFrequencia] ?? ca.frequencia_override}
+                          </span>{" "}
+                          <span className="text-[0.65rem] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded font-medium">
+                            Sobrescrito local
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span>
+                            {a?.frequencia === "personalizada"
+                              ? `Personalizada (+${a.dias_frequencia_personalizada} dias)`
+                              : a ? FREQUENCIA_LABELS[a.frequencia] ?? a.frequencia : "—"}
+                          </span>{" "}
+                          <span className="text-[0.65rem] text-slate-500 dark:text-slate-400">
+                            (herdado do tipo)
+                          </span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      className="btn-secondary py-1 px-2.5 text-[0.7rem]"
+                      disabled={saving || regerando}
+                      onClick={() => setIsEditingFreq(!isEditingFreq)}
+                    >
+                      {isEditingFreq ? "Cancelar" : "Editar"}
+                    </button>
+                    {task.status === "pendente" && (
+                      <button
+                        type="button"
+                        className="btn-secondary inline-flex items-center gap-1 bg-violet-100 hover:bg-violet-200 text-violet-800 dark:bg-violet-900 dark:hover:bg-violet-850 dark:text-violet-200 py-1 px-2.5 text-[0.7rem]"
+                        disabled={saving || regerando}
+                        onClick={() => void regerarDatas()}
+                        title="Recalcula o vencimento com base na frequência atual e emissão do vínculo."
+                      >
+                        {regerando ? "A regerar…" : "Regerar datas"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {isEditingFreq && (
+                  <div className="mt-3.5 border-t border-violet-100/60 pt-3.5 space-y-3 dark:border-violet-900/40">
+                    <p className="font-semibold text-slate-800 dark:text-slate-200">
+                      Alterar periodicidade (apenas para esta empresa e ciclos futuros)
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="form-label mb-1 block text-slate-700 dark:text-slate-300">Frequência</span>
+                        <select
+                          className="select-field w-full text-xs py-1"
+                          value={overrideFreq}
+                          onChange={(e) => setOverrideFreq(e.target.value)}
+                        >
+                          <option value="inherit">Herdar do tipo de alvará</option>
+                          <option value="diaria">Diária</option>
+                          <option value="semanal">Semanal</option>
+                          <option value="decendial">Decendial</option>
+                          <option value="mensal">Mensal</option>
+                          <option value="bimestral">Bimestral</option>
+                          <option value="trimestral">Trimestral</option>
+                          <option value="semestral">Semestral</option>
+                          <option value="anual">Anual</option>
+                          <option value="personalizada">Personalizada</option>
+                        </select>
+                      </label>
+
+                      {overrideFreq === "personalizada" && (
+                        <label className="block">
+                          <span className="form-label mb-1 block text-slate-700 dark:text-slate-300">Frequência (dias)</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={3650}
+                            placeholder="Ex: 7 ou 700"
+                            className="input-field w-full text-xs py-1"
+                            value={overrideDias}
+                            onChange={(e) => setOverrideDias(e.target.value === "" ? "" : Number(e.target.value))}
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn-primary text-[0.7rem] py-1 px-3 mt-1"
+                      disabled={saving}
+                      onClick={() => void savePeriodicidadeLocal()}
+                    >
+                      {saving ? "A guardar…" : "Salvar periodicidade"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-wrap items-start gap-2 text-xs text-slate-600 dark:text-slate-400">

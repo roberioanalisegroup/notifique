@@ -20,6 +20,7 @@ export const ALVARA_FREQUENCIAS = [
   "trimestral",
   "semestral",
   "anual",
+  "personalizada",
 ] as const;
 
 export type AlvaraFrequencia = (typeof ALVARA_FREQUENCIAS)[number];
@@ -33,6 +34,7 @@ export const FREQUENCIA_LABELS: Record<AlvaraFrequencia, string> = {
   trimestral: "Trimestral",
   semestral: "Semestral",
   anual: "Anual",
+  personalizada: "Personalizada",
 };
 
 export const WEEKEND_ADJUSTS = ["none", "postpone", "anticipate"] as const;
@@ -192,7 +194,8 @@ export function computeVencimentoDate(
   dataEmissao: string | Date,
   frequencia: AlvaraFrequencia,
   weekendAdjust: WeekendAdjust,
-  legal: AlvaraLegalDates
+  legal: AlvaraLegalDates,
+  diasPersonalizados?: number | null
 ): Date {
   const emission = parseDateOnly(dataEmissao);
   if (Number.isNaN(emission.getTime())) {
@@ -225,6 +228,12 @@ export function computeVencimentoDate(
       next = addMonths(emission, n);
       break;
     }
+    case "personalizada":
+      if (diasPersonalizados == null || diasPersonalizados <= 0) {
+        throw new Error("Frequência personalizada exige preenchimento da quantidade de dias.");
+      }
+      next = addDays(emission, diasPersonalizados);
+      break;
   }
 
   const normalized = new Date(next.getFullYear(), next.getMonth(), next.getDate());
@@ -235,13 +244,18 @@ export function computeDataVencimentoISO(
   dataEmissao: string | Date,
   frequencia: AlvaraFrequencia,
   weekendAdjust: WeekendAdjust,
-  legal: AlvaraLegalDates
+  legal: AlvaraLegalDates,
+  diasPersonalizados?: number | null
 ): string {
-  return format(computeVencimentoDate(dataEmissao, frequencia, weekendAdjust, legal), "yyyy-MM-dd");
+  return format(computeVencimentoDate(dataEmissao, frequencia, weekendAdjust, legal, diasPersonalizados), "yyyy-MM-dd");
 }
 
 /** Resumo curto para tabelas (ex.: "15/mar" ou "Segunda"). */
-export function formatLegalSummary(frequencia: AlvaraFrequencia, legal: AlvaraLegalDates): string {
+export function formatLegalSummary(
+  frequencia: AlvaraFrequencia,
+  legal: AlvaraLegalDates,
+  diasPersonalizados?: number | null
+): string {
   switch (frequencia) {
     case "diaria":
       return "—";
@@ -261,6 +275,8 @@ export function formatLegalSummary(frequencia: AlvaraFrequencia, legal: AlvaraLe
       return "+12 meses (emissão)";
     case "decendial":
       return "+10 dias (emissão)";
+    case "personalizada":
+      return diasPersonalizados ? `Personalizada (+${diasPersonalizados} dias)` : "Definido manualmente";
     default:
       return "—";
   }

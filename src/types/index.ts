@@ -144,7 +144,8 @@ export type AlvaraFrequenciaSlug =
   | "bimestral"
   | "trimestral"
   | "semestral"
-  | "anual";
+  | "anual"
+  | "personalizada";
 
 /** Valores de `alvaras.weekend_adjust` */
 export type AlvaraWeekendAdjust = "none" | "postpone" | "anticipate";
@@ -171,6 +172,7 @@ export interface Alvara {
   /** Se verdadeiro, concluir a tarefa exige documento em `company_alvaras.arquivo_url`. */
   anexo_obrigatorio?: boolean;
   is_active: boolean;
+  dias_frequencia_personalizada?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -224,6 +226,8 @@ export interface CompanyAlvara {
   status: string;
   observacoes: string | null;
   arquivo_url: string | null;
+  frequencia_override?: string | null;
+  dias_frequencia_personalizada?: number | null;
   created_at: string;
   updated_at: string;
 }

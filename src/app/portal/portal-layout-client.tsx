@@ -23,7 +23,7 @@ export function PortalLayoutClient({
           Saltar para o conteúdo
         </a>
         <Navbar />
-        <main id="portal-main-content" className="relative z-0 flex-1 w-full py-8" tabIndex={-1}>
+        <main id="portal-main-content" className="relative flex-1 w-full py-8" tabIndex={-1}>
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-12">
             <PortalPathGuard>
               <PortalReadOnlyBanner />

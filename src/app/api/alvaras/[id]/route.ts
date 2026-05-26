@@ -59,7 +59,7 @@ export async function PATCH(
 
   const { data: current, error: curErr } = await supabase
     .from("alvaras")
-    .select("frequencia, legal_dia, legal_mes, legal_dia_semana, legal_dias_uteis")
+    .select("frequencia, legal_dia, legal_mes, legal_dia_semana, legal_dias_uteis, dias_frequencia_personalizada")
     .eq("id", id)
     .maybeSingle();
 
@@ -83,6 +83,15 @@ export async function PATCH(
   const mergedFreq = (body.frequencia ?? current.frequencia) as string;
   if (!isAlvaraFrequencia(mergedFreq)) {
     return NextResponse.json({ error: "Frequência inválida" }, { status: 400 });
+  }
+
+  if (mergedFreq === "personalizada") {
+    const dias = body.dias_frequencia_personalizada !== undefined
+      ? body.dias_frequencia_personalizada
+      : (current as any).dias_frequencia_personalizada;
+    if (dias == null || dias <= 0) {
+      return NextResponse.json({ error: "Frequência personalizada exige preenchimento da quantidade de dias." }, { status: 400 });
+    }
   }
 
   const legal: AlvaraLegalDates = {
@@ -109,6 +118,9 @@ export async function PATCH(
   const ts = new Date().toISOString();
 
   let updatePayload: Record<string, unknown> = { ...patchBody, updated_at: ts };
+  if (body.frequencia && body.frequencia !== "personalizada") {
+    updatePayload.dias_frequencia_personalizada = null;
+  }
   let { data, error } = await supabase
     .from("alvaras")
     .update(updatePayload)

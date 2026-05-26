@@ -172,3 +172,91 @@ export function sanitizeText(text: string | null | undefined): string {
 export function cn(...classes: ClassValue[]) {
   return clsx(classes);
 }
+
+import type { AlvaraTask, CompanyAlvara, Alvara } from "@/types";
+
+type TaskRowForStatus = AlvaraTask & {
+  company_alvaras: (CompanyAlvara & {
+    alvaras: (Alvara & { alvara_groups: any }) | null;
+  }) | null;
+};
+
+export function getTaskStatusMeta(task: TaskRowForStatus | null | undefined, hoje: string): { className: string; text: string } {
+  if (!task) {
+    return { className: "", text: "Sem validade no vínculo" };
+  }
+  if (task.status === "concluida") {
+    return {
+      className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200",
+      text: "Concluída",
+    };
+  }
+  if (task.status === "cancelada") {
+    return {
+      className: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
+      text: "Cancelada",
+    };
+  }
+
+  const ca = task.company_alvaras;
+  const hasEmissao = ca?.data_emissao != null && String(ca.data_emissao).trim() !== "";
+
+  if (!hasEmissao) {
+    const prazoDias = ca?.alvaras?.prazo_inicio_dias ?? 30;
+    const baseDia = task.created_at.slice(0, 10);
+    const n = Math.min(3650, Math.max(1, Number(prazoDias ?? 30) || 30));
+    
+    let prazoInicio: string | null = task.inicio_obrigatorio_ate ? task.inicio_obrigatorio_ate.slice(0, 10) : null;
+    if (!prazoInicio && baseDia) {
+      const dt = new Date(baseDia + "T00:00:00");
+      dt.setDate(dt.getDate() + n);
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, "0");
+      const d = String(dt.getDate()).padStart(2, "0");
+      prazoInicio = `${y}-${m}-${d}`;
+    }
+
+    if (prazoInicio && prazoInicio < hoje) {
+      return {
+        className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200",
+        text: "Pendente - Vencida (Prazo de definição esgotado)",
+      };
+    }
+
+    return {
+      className: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200",
+      text: "Pendente - Não definida",
+    };
+  }
+
+  const due = task.due_date ? task.due_date.slice(0, 10) : (ca?.data_vencimento ? ca.data_vencimento.slice(0, 10) : null);
+  if (!due) {
+    return {
+      className: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200",
+      text: "Pendente - Não definida",
+    };
+  }
+
+  if (due < hoje) {
+    return {
+      className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200",
+      text: "Pendente - Vencida",
+    };
+  }
+
+  const today = new Date(hoje + "T00:00:00");
+  const exp = new Date(due + "T00:00:00");
+  const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 3600 * 24));
+
+  if (diffDays <= 90) {
+    return {
+      className: "bg-orange-100 text-orange-950 dark:bg-orange-950/50 dark:text-orange-200",
+      text: `Vence em ${diffDays} dias`,
+    };
+  }
+
+  return {
+    className: "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200",
+    text: `Válido até ${exp.toLocaleDateString("pt-BR")}`,
+  };
+}

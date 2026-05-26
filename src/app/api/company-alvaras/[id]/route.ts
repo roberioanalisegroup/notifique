@@ -4,6 +4,7 @@ import {
   computeDataVencimentoISO,
   isAlvaraFrequencia,
   isWeekendAdjust,
+  type AlvaraFrequencia,
 } from "@/lib/alvara-frequency";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -33,40 +34,73 @@ export async function PATCH(
     )
     .eq("id", id)
     .single();
-
   const patch: Record<string, unknown> = { ...body, updated_at: new Date().toISOString() };
 
   const vencimentoExplicito = Object.prototype.hasOwnProperty.call(body, "data_vencimento");
-  if (body.data_emissao && typeof body.data_emissao === "string" && !vencimentoExplicito) {
+  const isFreqChanged = Object.prototype.hasOwnProperty.call(body, "frequencia_override") || 
+                        Object.prototype.hasOwnProperty.call(body, "dias_frequencia_personalizada");
+  
+  let shouldRecalculate = false;
+  let activeEmissao = "";
+
+  if (body.data_emissao && typeof body.data_emissao === "string") {
+    shouldRecalculate = !vencimentoExplicito;
+    activeEmissao = body.data_emissao;
+  } else if (isFreqChanged && !vencimentoExplicito) {
+    const { data: currentLink } = await supabase
+      .from("company_alvaras")
+      .select("data_emissao")
+      .eq("id", id)
+      .single();
+    if (currentLink?.data_emissao) {
+      shouldRecalculate = true;
+      activeEmissao = currentLink.data_emissao;
+    }
+  }
+
+  if (shouldRecalculate) {
     const { data: row, error: rowErr } = await supabase
       .from("company_alvaras")
-      .select("alvara_id")
+      .select("alvara_id, frequencia_override, dias_frequencia_personalizada")
       .eq("id", id)
       .single();
     if (!rowErr && row?.alvara_id) {
       const { data: av } = await supabase
         .from("alvaras")
-        .select("frequencia, weekend_adjust, legal_dia, legal_mes, legal_dia_semana, legal_dias_uteis")
+        .select("frequencia, weekend_adjust, legal_dia, legal_mes, legal_dia_semana, legal_dias_uteis, dias_frequencia_personalizada")
         .eq("id", row.alvara_id)
         .single();
-      if (av && isAlvaraFrequencia(av.frequencia) && isWeekendAdjust(av.weekend_adjust)) {
-        try {
-          patch.data_vencimento = computeDataVencimentoISO(
-            body.data_emissao,
-            av.frequencia,
-            av.weekend_adjust,
-            {
-              legal_dia: av.legal_dia ?? null,
-              legal_mes: av.legal_mes ?? null,
-              legal_dia_semana: av.legal_dia_semana ?? null,
-              legal_dias_uteis: av.legal_dias_uteis ?? null,
-            }
-          );
-        } catch (e) {
-          return NextResponse.json(
-            { error: e instanceof Error ? e.message : "Data de emissão inválida" },
-            { status: 400 }
-          );
+      if (av && isWeekendAdjust(av.weekend_adjust)) {
+        const freq = (Object.prototype.hasOwnProperty.call(body, "frequencia_override") 
+          ? body.frequencia_override 
+          : (row.frequencia_override || av.frequencia)) as AlvaraFrequencia;
+        
+        const dias = freq === "personalizada" 
+          ? (Object.prototype.hasOwnProperty.call(body, "dias_frequencia_personalizada") 
+              ? (body.dias_frequencia_personalizada as number | null)
+              : (row.frequencia_override ? row.dias_frequencia_personalizada : av.dias_frequencia_personalizada))
+          : null;
+
+        if (isAlvaraFrequencia(freq)) {
+          try {
+            patch.data_vencimento = computeDataVencimentoISO(
+              activeEmissao,
+              freq,
+              av.weekend_adjust,
+              {
+                legal_dia: av.legal_dia ?? null,
+                legal_mes: av.legal_mes ?? null,
+                legal_dia_semana: av.legal_dia_semana ?? null,
+                legal_dias_uteis: av.legal_dias_uteis ?? null,
+              },
+              dias
+            );
+          } catch (e) {
+            return NextResponse.json(
+              { error: e instanceof Error ? e.message : "Data de emissão inválida" },
+              { status: 400 }
+            );
+          }
         }
       }
     }

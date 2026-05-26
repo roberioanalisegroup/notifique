@@ -40,6 +40,7 @@ type ModalState = {
   legal_dias_uteis: number;
   prazo_inicio_dias: number;
   anexo_obrigatorio: boolean;
+  dias_frequencia_personalizada?: number | null;
 };
 
 function defaultModal(): ModalState {
@@ -56,6 +57,7 @@ function defaultModal(): ModalState {
     legal_dias_uteis: 5,
     prazo_inicio_dias: 30,
     anexo_obrigatorio: false,
+    dias_frequencia_personalizada: null,
   };
 }
 
@@ -74,6 +76,7 @@ function rowToModal(r: Row): ModalState {
     legal_dias_uteis: r.legal_dias_uteis ?? 5,
     prazo_inicio_dias: r.prazo_inicio_dias ?? 30,
     anexo_obrigatorio: r.anexo_obrigatorio === true,
+    dias_frequencia_personalizada: r.dias_frequencia_personalizada ?? null,
   };
 }
 
@@ -180,6 +183,34 @@ function LegalFieldsEditor({
             </option>
           ))}
         </select>
+      </div>
+    );
+  }
+
+  if (f === "personalizada") {
+    return (
+      <div className="grid gap-2 sm:grid-cols-[minmax(7rem,9.5rem)_1fr] sm:items-center">
+        <label className="text-sm font-semibold text-slate-800" htmlFor="dias-personalizados">
+          Frequência (dias) <span className="text-red-600">*</span>
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            id="dias-personalizados"
+            type="number"
+            min={1}
+            max={3650}
+            className="input-field max-w-[10rem]"
+            value={modal.dias_frequencia_personalizada ?? ""}
+            onChange={(e) =>
+              setModal({
+                ...modal,
+                dias_frequencia_personalizada: Number(e.target.value) || null,
+              })
+            }
+            placeholder="Ex: 7 ou 700"
+          />
+          <span className="text-xs text-slate-500">dias</span>
+        </div>
       </div>
     );
   }
@@ -316,6 +347,10 @@ function AlvarasContent() {
       toast.error("Preencha o nome");
       return;
     }
+    if (modal.frequencia === "personalizada" && (modal.dias_frequencia_personalizada == null || modal.dias_frequencia_personalizada <= 0)) {
+      toast.error("Para frequência personalizada, defina a quantidade de dias.");
+      return;
+    }
     const legal = toLegalPayload(modal);
     const legalErr = validateLegalForFrequencia(modal.frequencia, legal);
     if (legalErr) {
@@ -336,6 +371,7 @@ function AlvarasContent() {
         legal_dias_uteis: legal.legal_dias_uteis,
         prazo_inicio_dias: modal.prazo_inicio_dias,
         anexo_obrigatorio: modal.anexo_obrigatorio,
+        dias_frequencia_personalizada: modal.frequencia === "personalizada" ? modal.dias_frequencia_personalizada : null,
       };
       if (modal.id) {
         await apiJson("/api/alvaras/" + modal.id, { method: "PATCH", body: JSON.stringify(body) });
@@ -476,7 +512,7 @@ function AlvarasContent() {
                       legal_mes: r.legal_mes ?? null,
                       legal_dia_semana: r.legal_dia_semana ?? null,
                       legal_dias_uteis: r.legal_dias_uteis ?? null,
-                    })}
+                    }, r.dias_frequencia_personalizada)}
                   </td>
                   <td className="max-w-[12rem] text-xs text-slate-600">
                     {WEEKEND_ADJUST_LABELS[r.weekend_adjust] ?? r.weekend_adjust}

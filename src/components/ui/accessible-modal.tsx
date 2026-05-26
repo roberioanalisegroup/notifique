@@ -113,8 +113,8 @@ export function AccessibleModal({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm",
-        overlayClassName
+        "fixed inset-0 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm",
+        overlayClassName || "z-50"
       )}
       onMouseDown={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose();

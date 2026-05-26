@@ -4,6 +4,7 @@ import {
   computeDataVencimentoISO,
   isAlvaraFrequencia,
   isWeekendAdjust,
+  type AlvaraFrequencia,
 } from "@/lib/alvara-frequency";
 import { proximoVencimentoISOFromEmissao } from "@/lib/alvara-task-generation";
 import { sanitizeText } from "@/lib/utils";
@@ -178,6 +179,12 @@ export async function PATCH(
     }
 
     const a = alvara as Alvara;
+    if (a.frequencia === "personalizada") {
+      return NextResponse.json(
+        { error: "Frequência personalizada exige preenchimento manual das datas de emissão e vencimento no card." },
+        { status: 400 }
+      );
+    }
     if (!isAlvaraFrequencia(a.frequencia) || !isWeekendAdjust(a.weekend_adjust)) {
       return NextResponse.json(
         { error: "Frequência / ajuste de fim de semana inválidos no tipo" },
@@ -351,7 +358,7 @@ export async function PATCH(
   if (newStatus === "concluida") {
     const { data: caLink } = await supabase
       .from("company_alvaras")
-      .select("data_emissao, alvara_id")
+      .select("data_emissao, alvara_id, frequencia_override, dias_frequencia_personalizada")
       .eq("id", taskRow.company_alvara_id)
       .single();
 
@@ -360,14 +367,60 @@ export async function PATCH(
       const alv = alvFull as Alvara | null;
 
       if (alv?.is_active) {
-        const nextDue = proximoVencimentoISOFromEmissao(String(caLink.data_emissao).slice(0, 10), alv);
+        let nextDue: string | null = null;
+        let inicioOb: string | null = null;
+
+        const activeFreq = caLink.frequencia_override || alv.frequencia;
+        const activeDias = caLink.frequencia_override
+          ? caLink.dias_frequencia_personalizada
+          : alv.dias_frequencia_personalizada;
+
+        if (activeFreq === "personalizada") {
+          const prazoDias = Math.min(3650, Math.max(1, Number(alv.prazo_inicio_dias ?? 30) || 30));
+          const dt = new Date();
+          dt.setDate(dt.getDate() + prazoDias);
+          const y = dt.getFullYear();
+          const m = String(dt.getMonth() + 1).padStart(2, "0");
+          const d = String(dt.getDate()).padStart(2, "0");
+          inicioOb = `${y}-${m}-${d}`;
+
+          // Reset the link dates and status for the next cycle
+          await supabase
+            .from("company_alvaras")
+            .update({
+              data_emissao: null,
+              data_vencimento: inicioOb,
+              status: "pendente",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", taskRow.company_alvara_id);
+        } else {
+          try {
+            nextDue = computeDataVencimentoISO(
+              String(caLink.data_emissao).slice(0, 10),
+              activeFreq as AlvaraFrequencia,
+              alv.weekend_adjust,
+              {
+                legal_dia: alv.legal_dia,
+                legal_mes: alv.legal_mes,
+                legal_dia_semana: alv.legal_dia_semana,
+                legal_dias_uteis: alv.legal_dias_uteis,
+              },
+              activeDias
+            );
+          } catch {
+            nextDue = null;
+          }
+        }
+
         const { error: insE } = await supabase.from("alvara_tasks").insert({
           company_alvara_id: taskRow.company_alvara_id,
           due_date: nextDue,
-          inicio_obrigatorio_ate: null,
+          inicio_obrigatorio_ate: inicioOb,
           status: "pendente",
           title: null,
         });
+
         if (!insE) {
           await insertHistory(
             supabase,
@@ -375,8 +428,8 @@ export async function PATCH(
             "system",
             nextDue
               ? `Próxima tarefa criada com vencimento ${nextDue} (a partir da emissão do ciclo).`
-              : "Próxima tarefa criada.",
-            { proxima_data: nextDue }
+              : `Próxima tarefa criada (frequência personalizada - prazo de definição até ${inicioOb ? format(new Date(inicioOb + "T00:00:00"), "dd/MM/yyyy") : "—"}).`,
+            { proxima_data: nextDue, inicio_obrigatorio_ate: inicioOb }
           );
         } else if (!isPgUniqueViolation(insE)) {
           console.warn("[alvara-tasks] próxima instância:", insE.message);
