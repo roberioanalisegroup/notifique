@@ -429,7 +429,7 @@ export default function UsuariosPage() {
         closeOnBackdrop={!saving}
         closeOnEscape={!saving}
         labelledBy="usuario-create-title"
-        panelClassName="modal-panel"
+        panelClassName="modal-panel max-h-[90vh] w-full max-w-xl overflow-y-auto p-6"
       >
             <h3 id="usuario-create-title" className="text-lg font-semibold text-slate-900 dark:text-slate-50">
               Novo utilizador
@@ -552,7 +552,7 @@ export default function UsuariosPage() {
         closeOnBackdrop={!saving}
         closeOnEscape={!saving}
         labelledBy="usuario-edit-title"
-        panelClassName="modal-panel"
+        panelClassName="modal-panel max-h-[90vh] w-full max-w-xl overflow-y-auto p-6"
       >
             <h3 id="usuario-edit-title" className="text-lg font-semibold text-slate-900 dark:text-slate-50">
               Editar utilizador

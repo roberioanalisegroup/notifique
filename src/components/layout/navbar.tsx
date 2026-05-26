@@ -98,6 +98,7 @@ function UserMenuTopBar() {
   async function signOut() {
     setLoading(true);
     try {
+      await fetch("/api/auth/logout", { method: "POST" });
       await supabase.auth.signOut();
       window.location.href = "/auth/login";
     } catch {
