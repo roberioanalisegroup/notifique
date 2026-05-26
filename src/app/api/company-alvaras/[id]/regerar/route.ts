@@ -98,7 +98,7 @@ export async function POST(
     const d = String(dt.getDate()).padStart(2, "0");
     
     updatedInicioOb = `${y}-${m}-${d}`;
-    updatedVencimento = updatedInicioOb; // In "Não definida", company_alvaras.data_vencimento holds the definition limit
+    updatedVencimento = null; // Do not fill expiration date in the vínculo until manually set
     logSummary = `Datas regeradas (vínculo sem emissão): limite de definição configurado até ${format(new Date(updatedInicioOb + "T00:00:00"), "dd/MM/yyyy")}.`;
   }
 

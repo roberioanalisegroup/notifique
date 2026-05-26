@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
       await supabase
         .from("company_alvaras")
         .update({
-          data_vencimento: inicioOb,
+          data_vencimento: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", ca.id);

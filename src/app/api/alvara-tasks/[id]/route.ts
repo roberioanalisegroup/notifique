@@ -389,7 +389,7 @@ export async function PATCH(
             .from("company_alvaras")
             .update({
               data_emissao: null,
-              data_vencimento: inicioOb,
+              data_vencimento: null, // Keep expiration empty initially for next cycle
               status: "pendente",
               updated_at: new Date().toISOString(),
             })
