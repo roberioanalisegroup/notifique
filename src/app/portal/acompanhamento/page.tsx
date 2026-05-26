@@ -1226,12 +1226,6 @@ function TaskCard({
   const c = ca?.companies;
   const a = ca?.alvaras;
   const venc = getTaskStatusMeta(task, hoje);
-  const temEm = vinculoTemEmissao(ca);
-  const dataPrazoPrimeiroCiclo =
-    prazoInicioPrimeiroCiclo(task.created_at, a?.prazo_inicio_dias) ??
-    task.inicio_obrigatorio_ate?.slice(0, 10) ??
-    null;
-  const prazoInicioGrid = !temEm ? dataPrazoPrimeiroCiclo : null;
   const atrasoInicio = taskAtrasoInicio(task, uiColumn, hoje);
   const atrasoVenc = taskAtrasoVencimento(task, hoje);
   const atrasada = atrasoInicio || atrasoVenc;
@@ -1291,10 +1285,7 @@ function TaskCard({
           </span>
           <span className={cn("flex items-center gap-1", atrasada && "font-semibold text-amber-800 dark:text-amber-300")}>
             <CalendarDays className="h-3 w-3 shrink-0 text-slate-500 dark:text-slate-400" />
-            {temEm ? "Validade (vínculo):" : "Prazo de início:"}{" "}
-            {temEm
-              ? formatDate(ca?.data_vencimento ?? null, { empty: "—" })
-              : formatDate(prazoInicioGrid ?? ca?.data_vencimento ?? null, { empty: "—" })}
+            Validade (vínculo): {formatDate(ca?.data_vencimento ?? null, { empty: "—" })}
           </span>
         </div>
       </div>

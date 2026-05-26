@@ -216,10 +216,25 @@ export function getTaskStatusMeta(task: TaskRowForStatus | null | undefined, hoj
       prazoInicio = `${y}-${m}-${d}`;
     }
 
-    if (prazoInicio && prazoInicio < hoje) {
+    if (prazoInicio) {
+      if (prazoInicio < hoje) {
+        return {
+          className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200",
+          text: "Pendente - Vencida (Prazo de definição esgotado)",
+        };
+      }
+
+      const today = new Date(hoje + "T00:00:00");
+      const limitDate = new Date(prazoInicio + "T00:00:00");
+      const diffDays = Math.ceil((limitDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+
+      const diasRestantesText = diffDays === 0
+        ? "hoje é o limite"
+        : (diffDays === 1 ? "resta 1 dia" : `restam ${diffDays} dias`);
+
       return {
-        className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200",
-        text: "Pendente - Vencida (Prazo de definição esgotado)",
+        className: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200",
+        text: `Não definida (${diasRestantesText})`,
       };
     }
 
