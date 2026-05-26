@@ -52,12 +52,7 @@ export function SessionCta() {
         Entrar
         <ChevronRight className="h-4 w-4" />
       </Link>
-      <Link
-        href="/auth/register"
-        className="inline-flex h-12 items-center justify-center rounded-full border border-black/10 bg-white px-6 text-sm font-medium text-[#1D1D1F] transition duration-150 hover:bg-[#F5F5F7] active:scale-[0.98] dark:border-white/10 dark:bg-white/5 dark:text-[#F5F5F7] dark:hover:bg-white/10"
-      >
-        Criar conta
-      </Link>
+
     </div>
   );
 }

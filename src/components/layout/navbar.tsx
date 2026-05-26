@@ -99,8 +99,7 @@ function UserMenuTopBar() {
     setLoading(true);
     try {
       await supabase.auth.signOut();
-      router.push("/auth/login");
-      router.refresh();
+      window.location.href = "/auth/login";
     } catch {
       // ignore
     } finally {
