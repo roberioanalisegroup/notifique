@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
 
   const groupId = request.nextUrl.searchParams.get("group_id");
   const semGrupo = request.nextUrl.searchParams.get("sem_grupo");
+  const onlyActive = request.nextUrl.searchParams.get("only_active") === "true";
   let q = supabase
     .from("alvaras")
     .select(
@@ -29,6 +30,10 @@ export async function GET(request: NextRequest) {
     q = q.is("group_id", null);
   } else if (groupId) {
     q = q.eq("group_id", groupId);
+  }
+
+  if (onlyActive) {
+    q = q.eq("is_active", true);
   }
 
   const { data, error } = await q;

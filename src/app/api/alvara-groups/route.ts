@@ -7,10 +7,17 @@ export async function GET(request: NextRequest) {
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
 
-  const { data, error } = await supabase
+  const onlyActive = request.nextUrl.searchParams.get("only_active") === "true";
+  let q = supabase
     .from("alvara_groups")
     .select("*")
     .order("name", { ascending: true });
+
+  if (onlyActive) {
+    q = q.eq("is_active", true);
+  }
+
+  const { data, error } = await q;
 
   if (error) {
     return NextResponse.json({ error: error.message, groups: [] }, { status: 500 });

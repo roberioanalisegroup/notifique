@@ -19,6 +19,7 @@ export default function AlvaraGruposPage() {
     name: string;
     description: string;
     color: string;
+    is_active: boolean;
   } | null>(null);
 
   const load = useCallback(async () => {
@@ -59,6 +60,7 @@ export default function AlvaraGruposPage() {
             name: modal.name,
             description: modal.description || null,
             color: modal.color,
+            is_active: modal.is_active,
           }),
         });
         toast.success("Grupo atualizado");
@@ -69,6 +71,7 @@ export default function AlvaraGruposPage() {
             name: modal.name,
             description: modal.description || null,
             color: modal.color,
+            is_active: modal.is_active,
           }),
         });
         toast.success("Grupo criado");
@@ -105,7 +108,7 @@ export default function AlvaraGruposPage() {
         <button
           type="button"
           onClick={() =>
-            setModal({ name: "", description: "", color: SWATCH[0] })
+            setModal({ name: "", description: "", color: SWATCH[0], is_active: true })
           }
           className="btn-primary shrink-0"
         >
@@ -120,14 +123,31 @@ export default function AlvaraGruposPage() {
             {groups.map((g) => (
               <div
                 key={g.id}
-                className="rounded-lg border border-slate-200/90 bg-slate-50/40 p-4 transition-colors hover:bg-slate-50/80"
+                className={
+                  "rounded-lg border p-4 transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-900/30 " +
+                  (!g.is_active
+                    ? "border-slate-200/60 bg-slate-50/10 text-slate-500"
+                    : "border-slate-200/90 bg-slate-50/40")
+                }
                 style={{ borderLeftWidth: 4, borderLeftColor: g.color }}
               >
-                <h2 className="font-semibold text-slate-900">{g.name}</h2>
-                <p className="text-sm text-slate-500">{g.description || "—"}</p>
+                <div className="flex items-center justify-between">
+                  <h2 className={`font-semibold ${!g.is_active ? "text-slate-400 dark:text-slate-500 line-through" : "text-slate-900 dark:text-slate-100"}`}>{g.name}</h2>
+                  <span
+                    className={
+                      "inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium " +
+                      (g.is_active
+                        ? "bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/10 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20"
+                        : "bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-500/10 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20")
+                    }
+                  >
+                    {g.is_active ? "Ativo" : "Inativo"}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-500 mt-1">{g.description || "—"}</p>
                 <p className="mt-1 text-sm text-slate-600">
                   Tipos de alvará no grupo:{" "}
-                  <span className="font-medium tabular-nums text-slate-900">{counts[g.id] ?? 0}</span>
+                  <span className="font-medium tabular-nums text-slate-900 dark:text-slate-100">{counts[g.id] ?? 0}</span>
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
@@ -138,6 +158,7 @@ export default function AlvaraGruposPage() {
                         name: g.name,
                         description: g.description ?? "",
                         color: g.color,
+                        is_active: g.is_active,
                       })
                     }
                     className="text-sm font-medium text-blue-600 hover:text-blue-700"
@@ -197,6 +218,18 @@ export default function AlvaraGruposPage() {
                   onChange={(e) => setModal({ ...modal, description: e.target.value })}
                   rows={2}
                 />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="grp-active"
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-800"
+                  checked={modal.is_active}
+                  onChange={(e) => setModal({ ...modal, is_active: e.target.checked })}
+                />
+                <label className="form-label cursor-pointer select-none font-medium text-slate-700 dark:text-slate-300" htmlFor="grp-active">
+                  Grupo ativo
+                </label>
               </div>
               <div>
                 <span className="form-label">Cor</span>

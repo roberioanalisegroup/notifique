@@ -45,8 +45,8 @@ export function EmpresasMassaVincularModal({
       setLoadingData(true);
       try {
         const [gRes, aRes] = await Promise.all([
-          apiJson<{ groups: AlvaraGroup[] }>("/api/alvara-groups"),
-          apiJson<{ alvaras: Alvara[] }>("/api/alvaras?sem_grupo=1"),
+          apiJson<{ groups: AlvaraGroup[] }>("/api/alvara-groups?only_active=true"),
+          apiJson<{ alvaras: Alvara[] }>("/api/alvaras?sem_grupo=1&only_active=true"),
         ]);
         if (cancelled) return;
         setGroups(gRes.groups ?? []);
@@ -98,7 +98,7 @@ export function EmpresasMassaVincularModal({
     if (list === undefined) {
       try {
         const res = await apiJson<{ alvaras: Alvara[] }>(
-          "/api/alvaras?group_id=" + encodeURIComponent(gId)
+          "/api/alvaras?group_id=" + encodeURIComponent(gId) + "&only_active=true"
         );
         list = res.alvaras ?? [];
         list.sort((x, y) => (x.name ?? "").localeCompare(y.name ?? "", "pt"));

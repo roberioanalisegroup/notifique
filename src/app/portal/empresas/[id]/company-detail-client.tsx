@@ -308,7 +308,7 @@ export function CompanyDetailClient() {
   useEffect(() => {
     (async () => {
       try {
-        const g = await apiJson<{ groups: AlvaraGroup[] }>("/api/alvara-groups");
+        const g = await apiJson<{ groups: AlvaraGroup[] }>("/api/alvara-groups?only_active=true");
         setGroups(g.groups);
       } catch {
         // ignore
@@ -324,7 +324,7 @@ export function CompanyDetailClient() {
       try {
         const { alvaras } = await apiJson<{
           alvaras: (Alvara & { alvara_groups: AlvaraGroup })[];
-        }>("/api/alvaras?sem_grupo=1");
+        }>("/api/alvaras?sem_grupo=1&only_active=true");
         const sorted = [...alvaras].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
         setAlvarasSemGrupo(sorted);
         setVinc((p) => {
@@ -570,7 +570,7 @@ export function CompanyDetailClient() {
       try {
         const { alvaras: raw } = await apiJson<{
           alvaras: (Alvara & { alvara_groups: AlvaraGroup })[];
-        }>("/api/alvaras?group_id=" + encodeURIComponent(g.id));
+        }>("/api/alvaras?group_id=" + encodeURIComponent(g.id) + "&only_active=true");
         if (!groupIdsRef.current.includes(g.id)) {
           return;
         }

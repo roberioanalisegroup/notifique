@@ -41,6 +41,7 @@ type ModalState = {
   prazo_inicio_dias: number;
   anexo_obrigatorio: boolean;
   dias_frequencia_personalizada?: number | null;
+  is_active: boolean;
 };
 
 function defaultModal(): ModalState {
@@ -58,6 +59,7 @@ function defaultModal(): ModalState {
     prazo_inicio_dias: 30,
     anexo_obrigatorio: false,
     dias_frequencia_personalizada: null,
+    is_active: true,
   };
 }
 
@@ -77,6 +79,7 @@ function rowToModal(r: Row): ModalState {
     prazo_inicio_dias: r.prazo_inicio_dias ?? 30,
     anexo_obrigatorio: r.anexo_obrigatorio === true,
     dias_frequencia_personalizada: r.dias_frequencia_personalizada ?? null,
+    is_active: r.is_active,
   };
 }
 
@@ -371,6 +374,7 @@ function AlvarasContent() {
         legal_dias_uteis: legal.legal_dias_uteis,
         prazo_inicio_dias: modal.prazo_inicio_dias,
         anexo_obrigatorio: modal.anexo_obrigatorio,
+        is_active: modal.is_active,
         dias_frequencia_personalizada: modal.frequencia === "personalizada" ? modal.dias_frequencia_personalizada : null,
       };
       if (modal.id) {
@@ -486,7 +490,16 @@ function AlvarasContent() {
                       onChange={() => toggleSelectRow(r)}
                     />
                   </td>
-                  <td className="font-medium text-slate-900">{r.name}</td>
+                  <td className="font-medium">
+                    <span className={!r.is_active ? "text-slate-400 dark:text-slate-500 line-through" : "text-slate-900 dark:text-slate-100"}>
+                      {r.name}
+                    </span>
+                    {!r.is_active && (
+                      <span className="ml-2 inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/20">
+                        Inativo
+                      </span>
+                    )}
+                  </td>
                   <td>
                     {r.alvara_groups ? (
                       <span
@@ -727,6 +740,24 @@ function AlvarasContent() {
                   <p className="text-xs text-slate-500">
                     Se for obrigatório, o utilizador só pode concluir a tarefa com um ficheiro associado ao vínculo
                     empresa–alvará.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-[minmax(7rem,9.5rem)_1fr] sm:items-start">
+                <span className="pt-2.5 text-sm font-semibold text-slate-800">Status</span>
+                <div className="space-y-2">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800 mt-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-800"
+                      checked={modal.is_active}
+                      onChange={(e) => setModal({ ...modal, is_active: e.target.checked })}
+                    />
+                    Alvará ativo
+                  </label>
+                  <p className="text-xs text-slate-500">
+                    Alvarás inativos não geram novas tarefas no quadro de acompanhamento e não podem ser vinculados a novas empresas.
                   </p>
                 </div>
               </div>
