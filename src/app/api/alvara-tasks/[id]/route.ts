@@ -430,7 +430,7 @@ export async function PATCH(
             .from("company_alvaras")
             .update({
               data_emissao: null,
-              data_vencimento: nextVencimento,
+              data_vencimento: null,
               status: "pendente",
               updated_at: new Date().toISOString(),
             })
