@@ -1224,13 +1224,14 @@ export default function AcompanhamentoPage() {
                         draggable
                         onDragStart={(e) => onDragStart(e, t.id)}
                         onDragEnd={onDragEnd}
+                        onClick={() => onOpenTaskDetail(t.id, col.id)}
                         className={cn(
-                          "group cursor-grab rounded-2xl bg-white p-4 shadow-sm transition active:cursor-grabbing dark:bg-slate-800/90 dark:shadow-black/20",
+                          "group cursor-pointer rounded-2xl bg-white p-4 shadow-sm transition-all duration-150 hover:shadow-md dark:bg-slate-800/90 dark:shadow-black/20 border border-slate-100 dark:border-slate-700/80 hover:border-slate-200/90 dark:hover:border-slate-600/90",
                           col.id === "concluido" &&
-                            "border-4 border-emerald-500/60 shadow-emerald-50 dark:border-emerald-500/50 dark:shadow-emerald-950/30",
+                            "border-4 border-emerald-500/60 shadow-emerald-50 hover:shadow-emerald-100 dark:border-emerald-500/50 dark:shadow-emerald-950/30",
                           col.id === "andamento" &&
-                            "border-2 border-amber-500/60 shadow-amber-50 dark:border-amber-500/50 dark:shadow-amber-950/20",
-                          col.id === "pendente" && "border-0 border-transparent shadow-sm",
+                            "border-2 border-amber-500/60 shadow-amber-50 hover:shadow-amber-100 dark:border-amber-500/50 dark:shadow-amber-950/20",
+                          col.id === "pendente" && "shadow-sm",
                           dragTaskId === t.id && "opacity-60"
                         )}
                       >
@@ -1329,18 +1330,10 @@ function TaskCard({
         >
           {venc.text}
         </span>
-        <div className="flex shrink-0 items-center gap-1 text-slate-400 dark:text-slate-500">
-          <button
-            type="button"
-            className="rounded p-1 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-            title="Detalhes e histórico"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenDetail();
-            }}
-          >
-            <Pencil className="h-4 w-4" />
-          </button>
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          className="flex shrink-0 items-center gap-1 text-slate-400 dark:text-slate-500"
+        >
           <button
             type="button"
             className="rounded p-1 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-700 dark:hover:text-red-400"
