@@ -417,18 +417,9 @@ export async function PATCH(
             }
           }
 
-          // 2. Calculate nextDue (task renewal deadline) = data_vencimento_anterior - 30 days
+          // 2. Calculate nextDue (task renewal deadline) = exactly data_vencimento_anterior
           if (caLink.data_vencimento) {
-            try {
-              const dt = new Date(caLink.data_vencimento + "T00:00:00");
-              dt.setDate(dt.getDate() - 30);
-              const y = dt.getFullYear();
-              const m = String(dt.getMonth() + 1).padStart(2, "0");
-              const d = String(dt.getDate()).padStart(2, "0");
-              nextDue = `${y}-${m}-${d}`;
-            } catch {
-              nextDue = null;
-            }
+            nextDue = String(caLink.data_vencimento).slice(0, 10);
           } else if (caLink.data_emissao) {
             // Fallback if previous vencimento is null
             nextDue = nextVencimento;

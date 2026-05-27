@@ -1281,11 +1281,11 @@ function TaskCard({
         <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
           <span className="flex items-center gap-1">
             <CalendarDays className="h-3 w-3 shrink-0 text-slate-500 dark:text-slate-400" />
-            Emissão: {formatDate(ca?.data_emissao ?? null, { empty: "—" })}
+            Emissão: {formatDate(task.status === "concluida" ? (task.completed_at ? task.completed_at.slice(0, 10) : ca?.data_emissao) : (ca?.data_emissao ?? null), { empty: "—" })}
           </span>
           <span className={cn("flex items-center gap-1", atrasada && "font-semibold text-amber-800 dark:text-amber-300")}>
             <CalendarDays className="h-3 w-3 shrink-0 text-slate-500 dark:text-slate-400" />
-            Validade (vínculo): {formatDate(ca?.data_vencimento ?? null, { empty: "—" })}
+            Validade: {formatDate(task.status === "concluida" ? (task.due_date ?? ca?.data_vencimento) : (ca?.data_vencimento ?? null), { empty: "—" })}
           </span>
         </div>
       </div>

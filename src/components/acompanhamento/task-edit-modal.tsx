@@ -121,8 +121,13 @@ export function TaskEditModal({
       setVencimentoDraft("");
       return;
     }
-    setEmissaoDraft(formatIsoDateParaBR(task.company_alvaras.data_emissao ?? null));
-    setVencimentoDraft(formatIsoDateParaBR(task.company_alvaras.data_vencimento ?? null));
+    if (task.status === "concluida") {
+      setEmissaoDraft(formatIsoDateParaBR(task.completed_at ? task.completed_at.slice(0, 10) : (task.company_alvaras.data_emissao ?? null)));
+      setVencimentoDraft(formatIsoDateParaBR(task.due_date ?? (task.company_alvaras.data_vencimento ?? null)));
+    } else {
+      setEmissaoDraft(formatIsoDateParaBR(task.company_alvaras.data_emissao ?? null));
+      setVencimentoDraft(formatIsoDateParaBR(task.company_alvaras.data_vencimento ?? null));
+    }
   }, [task]);
 
   useEffect(() => {
@@ -423,6 +428,7 @@ export function TaskEditModal({
                         placeholder="dd/mm/aaaa"
                         className="input-field w-full pr-10"
                         value={emissaoDraft}
+                        disabled={task.status !== "pendente"}
                         onChange={(e) => setEmissaoDraft(maskDataBRInput(e.target.value))}
                       />
                       <input
@@ -440,7 +446,8 @@ export function TaskEditModal({
                       />
                       <button
                         type="button"
-                        className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                        disabled={task.status !== "pendente"}
+                        className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 disabled:opacity-50 disabled:pointer-events-none"
                         aria-label="Abrir calendário"
                         title="Abrir calendário"
                         onClick={() => {
@@ -472,6 +479,7 @@ export function TaskEditModal({
                         placeholder="dd/mm/aaaa"
                         className="input-field w-full pr-10"
                         value={vencimentoDraft}
+                        disabled={task.status !== "pendente"}
                         onChange={(e) => setVencimentoDraft(maskDataBRInput(e.target.value))}
                       />
                       <input
@@ -489,7 +497,8 @@ export function TaskEditModal({
                       />
                       <button
                         type="button"
-                        className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                        disabled={task.status !== "pendente"}
+                        className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 disabled:opacity-50 disabled:pointer-events-none"
                         aria-label="Abrir calendário"
                         title="Abrir calendário"
                         onClick={() => {
@@ -517,7 +526,7 @@ export function TaskEditModal({
                 <button
                   type="button"
                   className="btn-secondary mt-3 text-xs"
-                  disabled={saving || !ca?.id}
+                  disabled={saving || !ca?.id || task.status !== "pendente"}
                   onClick={() => void saveVinculo()}
                 >
                   Guardar datas no vínculo
