@@ -74,6 +74,7 @@ export function TaskEditModal({
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [history, setHistory] = useState<AlvaraTaskHistory[]>([]);
   const [notes, setNotes] = useState("");
+  const [protocolo, setProtocolo] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [emissaoDraft, setEmissaoDraft] = useState("");
@@ -96,6 +97,7 @@ export function TaskEditModal({
       setTask(d.task);
       setHistory(d.history);
       setNotes(d.task.notes ?? "");
+      setProtocolo(d.task.protocolo ?? "");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao carregar tarefa");
       onClose();
@@ -110,6 +112,7 @@ export function TaskEditModal({
       setTask(null);
       setHistory([]);
       setNotes("");
+      setProtocolo("");
       setEmissaoDraft("");
       setVencimentoDraft("");
     }
@@ -271,6 +274,24 @@ export function TaskEditModal({
         body: JSON.stringify({ notes: notes.trim() || null }),
       });
       toast.success("Descrição guardada");
+      await load();
+      onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveProtocolo() {
+    if (!taskId) return;
+    setSaving(true);
+    try {
+      await apiJson("/api/alvara-tasks/" + taskId, {
+        method: "PATCH",
+        body: JSON.stringify({ protocolo: protocolo.trim() || null }),
+      });
+      toast.success("Protocolo guardado");
       await load();
       onSaved();
     } catch (e) {
@@ -679,25 +700,52 @@ export function TaskEditModal({
                 </div>
               </div>
 
-              <div>
-                <label className="form-label mb-1.5 block" htmlFor="task-notes">
-                  Descrição / comentário
-                </label>
-                <textarea
-                  id="task-notes"
-                  className="textarea-field min-h-[6rem]"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Notas internas sobre esta tarefa…"
-                />
-                <button
-                  type="button"
-                  className="btn-primary mt-2"
-                  disabled={saving || notes === (task.notes ?? "")}
-                  onClick={() => void saveNotes()}
-                >
-                  {saving ? "A guardar…" : "Guardar descrição"}
-                </button>
+              <div className="space-y-4">
+                <div>
+                  <label className="form-label mb-1.5 block" htmlFor="task-protocolo">
+                    Número de protocolo
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="task-protocolo"
+                      type="text"
+                      className="input-field max-w-sm text-xs py-1.5"
+                      value={protocolo}
+                      disabled={task.status !== "pendente"}
+                      onChange={(e) => setProtocolo(e.target.value)}
+                      placeholder="Ex: 2026/12345-AB..."
+                    />
+                    <button
+                      type="button"
+                      className="btn-primary text-xs py-1.5 px-3 shrink-0"
+                      disabled={saving || task.status !== "pendente" || protocolo === (task.protocolo ?? "")}
+                      onClick={() => void saveProtocolo()}
+                    >
+                      {saving ? "A guardar…" : "Guardar protocolo"}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label mb-1.5 block" htmlFor="task-notes">
+                    Descrição / comentário
+                  </label>
+                  <textarea
+                    id="task-notes"
+                    className="textarea-field min-h-[6rem]"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Notas internas sobre esta tarefa…"
+                  />
+                  <button
+                    type="button"
+                    className="btn-primary mt-2"
+                    disabled={saving || notes === (task.notes ?? "")}
+                    onClick={() => void saveNotes()}
+                  >
+                    {saving ? "A guardar…" : "Guardar descrição"}
+                  </button>
+                </div>
               </div>
 
               <div className="card-portal overflow-hidden">

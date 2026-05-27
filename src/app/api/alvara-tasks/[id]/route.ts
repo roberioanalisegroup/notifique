@@ -27,6 +27,7 @@ type Body = {
   notes?: string | null;
   registrarBaixaNoVinculo?: boolean;
   arquivo_url?: string | null;
+  protocolo?: string | null;
 };
 
 function isPgUniqueViolation(err: { code?: string; message?: string } | null) {
@@ -115,7 +116,7 @@ export async function PATCH(
 
   const { data: taskRow, error: tErr } = await supabase
     .from("alvara_tasks")
-    .select("id, company_alvara_id, status, notes, due_date")
+    .select("id, company_alvara_id, status, notes, due_date, protocolo")
     .eq("id", id)
     .single();
 
@@ -348,7 +349,12 @@ export async function PATCH(
     patch.notes = sanitizeText(body.notes);
   }
 
-  const needsTaskUpdate = newStatus != null || hasNotes;
+  const hasProtocolo = Object.prototype.hasOwnProperty.call(body, "protocolo");
+  if (hasProtocolo) {
+    patch.protocolo = sanitizeText(body.protocolo);
+  }
+
+  const needsTaskUpdate = newStatus != null || hasNotes || hasProtocolo;
 
   if (needsTaskUpdate) {
     const { error: u2 } = await supabase.from("alvara_tasks").update(patch).eq("id", id);
@@ -365,6 +371,12 @@ export async function PATCH(
       await insertHistory(supabase, id, "notes", "Descrição / comentário atualizado", {
         anterior: taskRow.notes,
         novo: body.notes,
+      });
+    }
+    if (hasProtocolo && body.protocolo !== taskRow.protocolo) {
+      await insertHistory(supabase, id, "system", "Número de protocolo atualizado", {
+        anterior: taskRow.protocolo,
+        novo: body.protocolo,
       });
     }
   }

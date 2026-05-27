@@ -210,6 +210,7 @@ export interface AlvaraTask {
   title: string | null;
   completed_at: string | null;
   notes: string | null;
+  protocolo?: string | null;
   created_at: string;
   updated_at: string;
 }

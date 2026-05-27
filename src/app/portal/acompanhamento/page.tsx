@@ -411,18 +411,38 @@ export default function AcompanhamentoPage() {
   }, [tasks]);
 
   const uniqueCompanies = useMemo(() => {
-    const names = new Set<string>();
+    const map = new Map<string, { id: string; label: string; cnpj: string; codigo: string; name: string }>();
     tasks.forEach((t) => {
-      const label = companyLabel(t.company_alvaras?.companies);
-      if (label !== "—") names.add(label);
+      const c = t.company_alvaras?.companies;
+      if (!c || !c.id) return;
+      const name = (c.razao_social ?? c.nome_fantasia ?? "—").trim() || "—";
+      const cnpj = c.cnpj || c.numero_documento || "";
+      const formattedCnpj = cnpj.length === 14 ? cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : cnpj;
+      const codigo = c.codigo_empresa || "";
+      
+      let label = name;
+      const details: string[] = [];
+      if (formattedCnpj) details.push(`CNPJ: ${formattedCnpj}`);
+      if (codigo) details.push(`Cód: ${codigo}`);
+      if (details.length > 0) {
+        label += ` (${details.join(" - ")})`;
+      }
+      
+      map.set(c.id, {
+        id: c.id,
+        label,
+        cnpj: formattedCnpj,
+        codigo,
+        name
+      });
     });
-    return Array.from(names).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [tasks]);
 
   const filteredCompaniesList = useMemo(() => {
     const q = companyQuery.trim().toLowerCase();
     if (!q) return uniqueCompanies;
-    return uniqueCompanies.filter((c) => c.toLowerCase().includes(q));
+    return uniqueCompanies.filter((c) => c.label.toLowerCase().includes(q));
   }, [uniqueCompanies, companyQuery]);
 
   const filteredAlvaraNamesList = useMemo(() => {
@@ -438,8 +458,8 @@ export default function AcompanhamentoPage() {
 
     return tasks.filter((t) => {
       if (selectedCompanies.length > 0) {
-        const label = companyLabel(t.company_alvaras?.companies);
-        if (!selectedCompanies.includes(label)) return false;
+        const companyId = t.company_alvaras?.companies?.id;
+        if (!companyId || !selectedCompanies.includes(companyId)) return false;
       }
       if (selectedAlvaraNames.length > 0) {
         const an = t.company_alvaras?.alvaras?.name?.trim() ?? "";
@@ -643,12 +663,14 @@ export default function AcompanhamentoPage() {
     return yearsStr;
   }, [selectedYears]);
 
-  const selectedCompaniesLabel =
-    selectedCompanies.length === 0
-      ? "Todas empresas"
-      : selectedCompanies.length === 1
-        ? selectedCompanies[0]
-        : `${selectedCompanies.length} empresas selecionadas`;
+  const selectedCompaniesLabel = useMemo(() => {
+    if (selectedCompanies.length === 0) return "Todas empresas";
+    if (selectedCompanies.length === 1) {
+      const found = uniqueCompanies.find((c) => c.id === selectedCompanies[0]);
+      return found ? found.name : "1 empresa";
+    }
+    return `${selectedCompanies.length} empresas selecionadas`;
+  }, [selectedCompanies, uniqueCompanies]);
 
   const selectedAlvarasLabel =
     selectedAlvaraNames.length === 0
@@ -984,7 +1006,7 @@ export default function AcompanhamentoPage() {
                     className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/80 dark:text-slate-200 dark:hover:bg-slate-600"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedCompanies(uniqueCompanies.slice());
+                      setSelectedCompanies(uniqueCompanies.map((uc) => uc.id));
                     }}
                   >
                     Marcar todos
@@ -1005,21 +1027,21 @@ export default function AcompanhamentoPage() {
                 {filteredCompaniesList.length === 0 ? (
                   <li className="px-3 py-2 text-sm text-slate-500">Nenhuma empresa encontrada</li>
                 ) : (
-                  filteredCompaniesList.map((name) => {
-                    const checked = selectedCompanies.includes(name);
+                  filteredCompaniesList.map((c) => {
+                    const checked = selectedCompanies.includes(c.id);
                     return (
-                      <li key={name}>
+                      <li key={c.id}>
                         <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/80">
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={(e) => {
                               setSelectedCompanies((prev) =>
-                                e.target.checked ? [...prev, name] : prev.filter((x) => x !== name)
+                                e.target.checked ? [...prev, c.id] : prev.filter((x) => x !== c.id)
                               );
                             }}
                           />
-                          <span className="truncate">{name}</span>
+                          <span className="truncate" title={c.label}>{c.label}</span>
                         </label>
                       </li>
                     );
@@ -1190,7 +1212,7 @@ export default function AcompanhamentoPage() {
                   </span>
                 </header>
 
-                <div className="flex min-h-[360px] flex-col gap-3">
+                <div className="flex max-h-[620px] min-h-[360px] flex-col gap-3 overflow-y-auto pr-1">
                   {list.length === 0 ? (
                     <p className="rounded-xl border border-dashed border-slate-200 bg-white/80 px-3 py-8 text-center text-sm text-slate-400 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-500">
                       Nenhum item
@@ -1343,6 +1365,24 @@ function TaskCard({
         <span className="truncate">{companyLabel(c)}</span>
       </p>
 
+      {c && (c.cnpj || c.numero_documento || c.codigo_empresa) ? (
+        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[0.65rem] text-slate-500 dark:text-slate-400">
+          {(c.cnpj || c.numero_documento) && (
+            <span>
+              CNPJ: {(() => {
+                const raw = c.cnpj || c.numero_documento || "";
+                return raw.length === 14 ? raw.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : raw;
+              })()}
+            </span>
+          )}
+          {c.codigo_empresa && (
+            <span className="rounded bg-slate-100 px-1 py-0.2 text-[0.6rem] font-medium dark:bg-slate-800">
+              Cód: {c.codigo_empresa}
+            </span>
+          )}
+        </div>
+      ) : null}
+
       <div className="mt-3 rounded-xl bg-violet-50/60 px-2.5 py-2 text-[0.7rem] text-slate-700 dark:bg-violet-950/25 dark:text-slate-200">
         <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
           <span className="flex items-center gap-1">
@@ -1356,6 +1396,13 @@ function TaskCard({
         </div>
       </div>
 
+      {task.protocolo && (
+        <div className="mt-2.5 rounded-lg border border-indigo-100 bg-indigo-50/50 px-2 py-1 text-[0.7rem] font-medium text-indigo-900 dark:border-indigo-950 dark:bg-indigo-950/20 dark:text-indigo-200 flex items-center gap-1">
+          <FileSignature className="h-3 w-3 shrink-0 text-indigo-700 dark:text-indigo-400" />
+          <span>Protocolo: {task.protocolo}</span>
+        </div>
+      )}
+
       <div className="mt-3 text-[0.7rem] text-slate-600 dark:text-slate-400">
         <span className="font-medium text-slate-500 dark:text-slate-400">Responsável (empresa):</span>{" "}
         {(c?.responsible?.display_name ?? "").trim() || "—"}
@@ -1368,4 +1415,3 @@ function TaskCard({
     </>
   );
 }
-
