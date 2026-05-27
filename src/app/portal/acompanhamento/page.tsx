@@ -23,6 +23,8 @@ import {
   Loader2,
   Paperclip,
   Pencil,
+  Plus,
+  SlidersHorizontal,
   Trash2,
   Upload,
   UserCircle,
@@ -225,6 +227,37 @@ function getTaskYear(t: TaskRow): number {
   return cy;
 }
 
+export type FilterCondition = {
+  id: string;
+  field: "cidade" | "uf" | "codigo_empresa" | "frequencia" | "nome_alvara" | "protocolo" | "nome_empresa";
+  operator: "equals" | "contains" | "starts_with" | "ends_with";
+  value: string;
+};
+
+function matchesCondition(t: TaskRow, cond: FilterCondition): boolean {
+  let val = "";
+  if (cond.field === "cidade") val = t.company_alvaras?.companies?.municipio ?? "";
+  else if (cond.field === "uf") val = t.company_alvaras?.companies?.uf ?? "";
+  else if (cond.field === "codigo_empresa") val = t.company_alvaras?.companies?.codigo_empresa ?? "";
+  else if (cond.field === "nome_empresa") {
+    val = (t.company_alvaras?.companies?.razao_social ?? "") + " " + (t.company_alvaras?.companies?.nome_fantasia ?? "");
+  }
+  else if (cond.field === "nome_alvara") val = t.company_alvaras?.alvaras?.name ?? "";
+  else if (cond.field === "frequencia") {
+    val = t.company_alvaras?.frequencia_override ?? t.company_alvaras?.alvaras?.frequencia ?? "";
+  }
+  else if (cond.field === "protocolo") val = t.protocolo ?? "";
+
+  const nVal = val.trim().toLowerCase();
+  const nCond = cond.value.trim().toLowerCase();
+
+  if (cond.operator === "equals") return nVal === nCond;
+  if (cond.operator === "contains") return nVal.includes(nCond);
+  if (cond.operator === "starts_with") return nVal.startsWith(nCond);
+  if (cond.operator === "ends_with") return nVal.endsWith(nCond);
+  return false;
+}
+
 export default function AcompanhamentoPage() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [checklistByTaskId, setChecklistByTaskId] = useState<Record<string, AlvaraTaskChecklistRow[]>>({});
@@ -232,6 +265,9 @@ export default function AcompanhamentoPage() {
   const [selectedYears, setSelectedYears] = useState<(number | "ocultos")[]>(() => [new Date().getFullYear()]);
   const [companyQuery, setCompanyQuery] = useState("");
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
+  const [conditions, setConditions] = useState<FilterCondition[]>([]);
+  const [logicalOperator, setLogicalOperator] = useState<"and" | "or">("and");
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [companyMenuOpen, setCompanyMenuOpen] = useState(false);
   const [yearMenuOpen, setYearMenuOpen] = useState(false);
   const [laneMap, setLaneMap] = useState<Record<string, UiLane>>({});
@@ -475,9 +511,17 @@ export default function AcompanhamentoPage() {
         const tYear = getTaskYear(t);
         if (!numericYears.includes(tYear)) return false;
       }
+      // Filtros Personalizados Lógicos (E/OU)
+      if (conditions.length > 0) {
+        const results = conditions.map((cond) => matchesCondition(t, cond));
+        const matched = logicalOperator === "and"
+          ? results.every((r) => r === true)
+          : results.some((r) => r === true);
+        if (!matched) return false;
+      }
       return true;
     });
-  }, [tasks, selectedCompanies, selectedAlvaraNames, selectedYears, hoje]);
+  }, [tasks, selectedCompanies, selectedAlvaraNames, selectedYears, hoje, conditions, logicalOperator]);
 
   const tasksByColumn = useMemo(() => {
     const pendente: TaskRow[] = [];
@@ -592,6 +636,7 @@ export default function AcompanhamentoPage() {
     setSelectedAlvaraNames([]);
     setCompanyQuery("");
     setTaskQuery("");
+    setConditions([]);
     toast.message("Filtros limpos");
   }
 
@@ -880,7 +925,7 @@ export default function AcompanhamentoPage() {
             htmlFor="filtro-anos-btn"
             className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
           >
-            Anos (vencimento da tarefa)
+            Vencimento
           </label>
           <button
             id="filtro-anos-btn"
@@ -1061,7 +1106,7 @@ export default function AcompanhamentoPage() {
             htmlFor="filtro-tarefas-btn"
             className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
           >
-            Tipo de alvará (tarefa)
+            Tarefas
           </label>
           <button
             id="filtro-tarefas-btn"
@@ -1139,6 +1184,18 @@ export default function AcompanhamentoPage() {
 
         <button
           type="button"
+          onClick={() => setAdvancedFiltersOpen((o) => !o)}
+          className={cn(
+            "btn-secondary inline-flex items-center gap-2 self-end",
+            advancedFiltersOpen && "bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-300"
+          )}
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          Filtros Avançados
+        </button>
+
+        <button
+          type="button"
           onClick={clearFilters}
           className="btn-secondary inline-flex items-center gap-2 self-end"
         >
@@ -1146,6 +1203,146 @@ export default function AcompanhamentoPage() {
           Limpar filtros
         </button>
         </div>
+
+        {/* Painel de Filtros Avançados / Query Builder */}
+        {advancedFiltersOpen && (
+          <div className="card-portal mt-4 border border-emerald-100 bg-emerald-50/10 dark:border-emerald-900/20 dark:bg-slate-900/30 p-5 space-y-4 rounded-2xl shadow-sm transition-all duration-300">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-emerald-950 dark:text-emerald-100 flex items-center gap-1.5">
+                  <SlidersHorizontal className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                  Pesquisa Personalizada Lógica
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Combine regras personalizadas das empresas, alvarás e tarefas.</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">Satisfazer:</span>
+                <select
+                  className="select-field text-xs py-1 px-2.5 max-w-[12rem] bg-white border border-slate-200"
+                  value={logicalOperator}
+                  onChange={(e) => setLogicalOperator(e.target.value as "and" | "or")}
+                >
+                  <option value="and">TODAS as condições (E)</option>
+                  <option value="or">QUALQUER uma (OU)</option>
+                </select>
+              </div>
+            </div>
+
+            {conditions.length === 0 ? (
+              <p className="text-xs text-slate-400 dark:text-slate-500 py-2 border-t border-slate-100 dark:border-slate-800">
+                Nenhuma condição lógica ativa. Adicione regras abaixo para refinar sua busca.
+              </p>
+            ) : (
+              <div className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+                {conditions.map((cond, idx) => (
+                  <div key={cond.id} className="flex flex-wrap items-center gap-3 bg-white/40 dark:bg-slate-900/10 p-2.5 rounded-xl border border-slate-100/50 dark:border-slate-800/40">
+                    <span className="text-xs text-slate-400 font-semibold tabular-nums w-4">
+                      #{idx + 1}
+                    </span>
+
+                    <select
+                      className="select-field text-xs py-1 px-2 bg-white"
+                      value={cond.field}
+                      onChange={(e) => {
+                        const nextField = e.target.value as FilterCondition["field"];
+                        setConditions((prev) =>
+                          prev.map((c) => (c.id === cond.id ? { ...c, field: nextField } : c))
+                        );
+                      }}
+                    >
+                      <option value="cidade">Empresa: Cidade</option>
+                      <option value="uf">Empresa: UF</option>
+                      <option value="codigo_empresa">Empresa: Código</option>
+                      <option value="nome_empresa">Empresa: Nome (Razão/Fantasia)</option>
+                      <option value="nome_alvara">Alvará: Nome / Tipo</option>
+                      <option value="frequencia">Alvará: Frequência</option>
+                      <option value="protocolo">Tarefa: Protocolo</option>
+                    </select>
+
+                    <select
+                      className="select-field text-xs py-1 px-2 bg-white"
+                      value={cond.operator}
+                      onChange={(e) => {
+                        const nextOp = e.target.value as FilterCondition["operator"];
+                        setConditions((prev) =>
+                          prev.map((c) => (c.id === cond.id ? { ...c, operator: nextOp } : c))
+                        );
+                      }}
+                    >
+                      <option value="contains">Contém</option>
+                      <option value="equals">Igual a</option>
+                      <option value="starts_with">Começa com</option>
+                      <option value="ends_with">Termina com</option>
+                    </select>
+
+                    <input
+                      type="text"
+                      className="input-field text-xs py-1 px-3 flex-1 min-w-[120px]"
+                      value={cond.value}
+                      placeholder={
+                        cond.field === "frequencia"
+                          ? "Ex: anual, mensal, personalizada..."
+                          : cond.field === "uf"
+                            ? "Ex: SP, RJ, MG..."
+                            : "Digite o valor da busca..."
+                      }
+                      onChange={(e) => {
+                        const nextVal = e.target.value;
+                        setConditions((prev) =>
+                          prev.map((c) => (c.id === cond.id ? { ...c, value: nextVal } : c))
+                        );
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      className="text-slate-400 hover:text-red-500 p-1.5 rounded transition hover:bg-red-50 dark:hover:bg-red-950/20"
+                      title="Excluir regra"
+                      onClick={() => {
+                        setConditions((prev) => prev.filter((c) => c.id !== cond.id));
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+              <button
+                type="button"
+                className="btn-primary inline-flex items-center gap-1.5 text-xs py-1.5 px-3 bg-emerald-800 hover:bg-emerald-900 border-none text-white shadow-sm"
+                onClick={() => {
+                  setConditions((prev) => [
+                    ...prev,
+                    {
+                      id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 9),
+                      field: "cidade",
+                      operator: "contains",
+                      value: "",
+                    },
+                  ]);
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Adicionar regra
+              </button>
+
+              {conditions.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-1 text-xs py-1.5 px-3 text-red-600 hover:bg-red-50 border-red-200 dark:text-red-400 dark:hover:bg-red-950/10 dark:border-red-900/30"
+                  onClick={() => setConditions([])}
+                >
+                  <Eraser className="h-4 w-4" />
+                  Limpar regras
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quadro: Kanban | Lista | Calendário */}
