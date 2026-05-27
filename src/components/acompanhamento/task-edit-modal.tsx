@@ -307,7 +307,7 @@ export function TaskEditModal({
   const exigeAnexoTipo = a?.anexo_obrigatorio === true;
   const temAnexo = Boolean(ca?.arquivo_url && String(ca.arquivo_url).trim());
   const okAnexo = !exigeAnexoTipo || temAnexo;
-  const podeConcluirModal = Boolean(task && hasEmissao && hasVencimentoTarefa && okAnexo);
+  const podeConcluirModal = Boolean(task && hasEmissao && hasVencimentoTarefa && okAnexo && notes.trim() !== "");
   const primeiroCicloModal = Boolean(
     task?.inicio_obrigatorio_ate && String(task.inicio_obrigatorio_ate).trim() !== ""
   );
@@ -317,11 +317,14 @@ export function TaskEditModal({
 
   function motivoNaoConclusaoModal(): string {
     if (!task) return "";
+    if (notes.trim() === "") {
+      return "A descrição / comentário é obrigatória para concluir a tarefa.";
+    }
     if (!hasEmissao) {
-      return "Registe a data de emissão no vínculo para preencher o vencimento da tarefa, ou use «Dar baixa no vínculo».";
+      return "Registe a data de emissão no vínculo para poder concluir.";
     }
     if (!hasVencimentoTarefa) {
-      return "O vencimento da tarefa é definido ao registar a emissão.";
+      return "A data de vencimento no vínculo é obrigatória para concluir.";
     }
     if (exigeAnexoTipo && !temAnexo) {
       return "Este tipo exige documento anexado ao vínculo.";
@@ -521,7 +524,7 @@ export function TaskEditModal({
                   </label>
                 </div>
                 <p className="mt-2 text-[0.7rem] leading-snug text-slate-500 dark:text-slate-400">
-                  O <strong>vencimento da tarefa</strong> (renovação) preenche-se automaticamente ao guardar a emissão (exceto para frequências Personalizadas, onde deve ser definido manualmente).
+                  A <strong>data de emissão</strong> e a <strong>data de vencimento</strong> devem ser preenchidas manualmente conforme o documento real.
                 </p>
                 <button
                   type="button"
@@ -576,6 +579,7 @@ export function TaskEditModal({
                     >
                       {isEditingFreq ? "Cancelar" : "Editar"}
                     </button>
+                    {/*
                     {task.status === "pendente" && (
                       <button
                         type="button"
@@ -587,6 +591,7 @@ export function TaskEditModal({
                         {regerando ? "A regerar…" : "Regerar datas"}
                       </button>
                     )}
+                    */}
                   </div>
                 </div>
 
@@ -741,6 +746,7 @@ export function TaskEditModal({
                     {!podeConcluirModal ? (
                       <p className="text-xs text-amber-800 dark:text-amber-300">{motivoNaoConclusaoModal()}</p>
                     ) : null}
+                    {/*
                     <button
                       type="button"
                       className="btn-secondary"
@@ -758,6 +764,7 @@ export function TaskEditModal({
                     >
                       Dar baixa no vínculo e concluir
                     </button>
+                    */}
                     <button
                       type="button"
                       className="text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"

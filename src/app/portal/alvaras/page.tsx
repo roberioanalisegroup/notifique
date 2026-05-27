@@ -22,7 +22,7 @@ import { ResponsiveTableShell } from "@/components/ui/responsive-table-shell";
 import { AlvarasTableSkeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
-type Row = Alvara & { alvara_groups: AlvaraGroup | null; vinculados: number };
+type Row = Alvara & { alvara_groups: AlvaraGroup | null; groups?: AlvaraGroup[]; group_ids?: string[]; vinculados: number };
 
 const FILTER_SEM_GRUPO = "__sem_grupo__";
 
@@ -30,6 +30,8 @@ type ModalState = {
   id?: string;
   name: string;
   group_id: string;
+  group_ids?: string[];
+  groups?: AlvaraGroup[];
   description: string;
   orgao_emissor: string;
   frequencia: AlvaraFrequencia;
@@ -48,6 +50,7 @@ function defaultModal(): ModalState {
   return {
     name: "",
     group_id: "",
+    group_ids: [],
     description: "",
     orgao_emissor: "",
     frequencia: "mensal",
@@ -68,6 +71,7 @@ function rowToModal(r: Row): ModalState {
     id: r.id,
     name: r.name,
     group_id: r.group_id ?? "",
+    group_ids: r.group_ids ?? (r.groups ? r.groups.map((g) => g.id) : r.group_id ? [r.group_id] : []),
     description: r.description ?? "",
     orgao_emissor: r.orgao_emissor ?? "",
     frequencia: r.frequencia,
@@ -363,7 +367,8 @@ function AlvarasContent() {
     try {
       const body = {
         name: modal.name,
-        group_id: modal.group_id.trim() ? modal.group_id.trim() : null,
+        group_id: modal.group_ids && modal.group_ids.length > 0 ? modal.group_ids[0] : null,
+        group_ids: modal.group_ids || [],
         description: modal.description || null,
         orgao_emissor: modal.orgao_emissor || null,
         frequencia: modal.frequencia,
@@ -501,12 +506,27 @@ function AlvarasContent() {
                     )}
                   </td>
                   <td>
-                    {r.alvara_groups ? (
+                    {r.groups && r.groups.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {r.groups.map(g => (
+                          <span
+                            key={g.id}
+                            className="inline-block rounded-md px-2 py-0.5 text-xs font-medium dark:text-slate-100"
+                            style={{
+                              background: (g.color ?? "#94a3b8") + "26",
+                              color: g.color || "#475569",
+                            }}
+                          >
+                            {g.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : r.alvara_groups ? (
                       <span
-                        className="inline-block rounded-md px-2 py-0.5 text-xs font-medium"
+                        className="inline-block rounded-md px-2 py-0.5 text-xs font-medium dark:text-slate-100"
                         style={{
                           background: (r.alvara_groups.color ?? "#94a3b8") + "26",
-                          color: "#0f172a",
+                          color: r.alvara_groups.color || "#475569",
                         }}
                       >
                         {r.alvara_groups.name}
@@ -583,24 +603,36 @@ function AlvarasContent() {
             <div className="mt-5 space-y-5 text-sm">
               <div className="grid gap-2 sm:grid-cols-[minmax(7rem,9.5rem)_1fr] sm:items-start">
                 <label className="pt-2.5 text-sm font-semibold text-slate-800" htmlFor="alvara-grupo">
-                  Grupo
+                  Grupo(s)
                 </label>
                 <div>
-                  <select
-                    id="alvara-grupo"
-                    className="select-field"
-                    value={modal.group_id}
-                    onChange={(e) => setModal({ ...modal, group_id: e.target.value })}
-                  >
-                    <option value="">Sem grupo (atribuir depois)</option>
-                    {groups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="space-y-2 border border-slate-200 dark:border-slate-700 rounded-lg p-3 max-h-40 overflow-y-auto">
+                    {groups.length === 0 ? (
+                      <p className="text-xs text-slate-400 dark:text-slate-500 py-1">Nenhum grupo cadastrado</p>
+                    ) : (
+                      groups.map((g) => {
+                        const checked = (modal.group_ids || []).includes(g.id);
+                        return (
+                          <label key={g.id} className="flex items-center gap-2 cursor-pointer py-0.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded">
+                            <input
+                              type="checkbox"
+                              className="checkbox-field rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              checked={checked}
+                              onChange={(e) => {
+                                const nextIds = e.target.checked
+                                  ? [...(modal.group_ids || []), g.id]
+                                  : (modal.group_ids || []).filter((id: string) => id !== g.id);
+                                setModal({ ...modal, group_ids: nextIds });
+                              }}
+                            />
+                            <span className="text-xs text-slate-700 dark:text-slate-200">{g.name}</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
                   <p className="mt-1.5 text-xs text-slate-500">
-                    Opcional na criação; pode escolher o grupo ao editar.
+                    Selecione um ou mais grupos para este alvará.
                   </p>
                 </div>
               </div>

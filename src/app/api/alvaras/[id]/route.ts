@@ -109,15 +109,17 @@ export async function PATCH(
     return NextResponse.json({ error: legalErr }, { status: 400 });
   }
 
-  const { id: _bodyId, created_at: _c, updated_at: _u, ...patchBody } = body as Partial<Alvara> & {
-    created_at?: string;
-    updated_at?: string;
-  };
+  const { id: _bodyId, created_at: _c, updated_at: _u, group_ids, ...patchBody } = body as any;
 
-  const selectPatch = `*, alvara_groups ( id, name, color )`;
+  const selectPatch = `*`;
   const ts = new Date().toISOString();
 
   let updatePayload: Record<string, unknown> = { ...patchBody, updated_at: ts };
+  
+  if (group_ids !== undefined) {
+    updatePayload.group_id = group_ids.length > 0 ? group_ids[0] : null;
+  }
+
   if (body.frequencia && body.frequencia !== "personalizada") {
     updatePayload.dias_frequencia_personalizada = null;
   }
@@ -135,6 +137,9 @@ export async function PATCH(
   ) {
     const { anexo_obrigatorio: _drop, ...rest } = patchBody as Record<string, unknown>;
     updatePayload = { ...rest, updated_at: ts };
+    if (group_ids !== undefined) {
+      updatePayload.group_id = group_ids.length > 0 ? group_ids[0] : null;
+    }
     const r2 = await supabase.from("alvaras").update(updatePayload).eq("id", id).select(selectPatch).single();
     data = r2.data;
     error = r2.error;
@@ -143,7 +148,38 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ alvara: data });
+
+  // Update group links if group_ids is provided
+  if (data && group_ids !== undefined) {
+    await supabase
+      .from("alvara_group_links")
+      .delete()
+      .eq("alvara_id", id);
+    
+    if (group_ids.length > 0) {
+      const linkRows = group_ids.map((gId: string) => ({
+        alvara_id: id,
+        group_id: gId,
+      }));
+      await supabase.from("alvara_group_links").insert(linkRows);
+    }
+  }
+
+  // Fetch complete group structure to return back
+  const { data: links } = await supabase
+    .from("alvara_group_links")
+    .select("alvara_groups ( id, name, color )")
+    .eq("alvara_id", id);
+  const groups = (links || []).map((l: any) => l.alvara_groups).filter(Boolean);
+
+  const returnedAlvara = {
+    ...data,
+    alvara_groups: groups[0] || null,
+    groups: groups,
+    group_ids: groups.map((g: any) => g.id),
+  };
+
+  return NextResponse.json({ alvara: returnedAlvara });
 }
 
 export async function DELETE(

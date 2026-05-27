@@ -16,21 +16,18 @@ export async function GET(request: NextRequest) {
   const groupId = request.nextUrl.searchParams.get("group_id");
   const semGrupo = request.nextUrl.searchParams.get("sem_grupo");
   const onlyActive = request.nextUrl.searchParams.get("only_active") === "true";
+
   let q = supabase
     .from("alvaras")
     .select(
       `
       *,
-      alvara_groups ( id, name, color )
+      alvara_group_links (
+        alvara_groups ( id, name, color )
+      )
     `
     )
     .order("name", { ascending: true });
-
-  if (semGrupo === "1" || semGrupo === "true") {
-    q = q.is("group_id", null);
-  } else if (groupId) {
-    q = q.eq("group_id", groupId);
-  }
 
   if (onlyActive) {
     q = q.eq("is_active", true);
@@ -42,12 +39,36 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message, alvaras: [] }, { status: 500 });
   }
 
-  const rows = data as { id: string }[] | null;
+  let rows = data as any[] | null;
   if (!rows?.length) {
     return NextResponse.json({ alvaras: [] });
   }
 
-  const ids = rows.map((a) => a.id);
+  // Transform rows to map multiple group links to standard arrays
+  let mappedRows = rows.map((a) => {
+    const groups = (a.alvara_group_links || [])
+      .map((link: any) => link.alvara_groups)
+      .filter(Boolean);
+    return {
+      ...a,
+      alvara_groups: groups[0] || null, // legacy support
+      groups: groups,
+      group_ids: groups.map((g: any) => g.id),
+    };
+  });
+
+  // Filter in memory for maximum robustness
+  if (semGrupo === "1" || semGrupo === "true") {
+    mappedRows = mappedRows.filter((a) => a.groups.length === 0);
+  } else if (groupId) {
+    mappedRows = mappedRows.filter((a) => a.groups.some((g: any) => g.id === groupId));
+  }
+
+  const ids = mappedRows.map((a) => a.id);
+  if (ids.length === 0) {
+    return NextResponse.json({ alvaras: [] });
+  }
+
   const { data: linkRows, error: linkErr } = await supabase
     .from("company_alvaras")
     .select("alvara_id")
@@ -66,7 +87,7 @@ export async function GET(request: NextRequest) {
     countMap.set(id, (countMap.get(id) ?? 0) + 1);
   }
 
-  const withCounts = rows.map((a) => ({
+  const withCounts = mappedRows.map((a) => ({
     ...a,
     vinculados: countMap.get(a.id) ?? 0,
   }));
@@ -81,6 +102,7 @@ export async function POST(request: NextRequest) {
 
   let body: {
     group_id?: string;
+    group_ids?: string[];
     name?: string;
     description?: string | null;
     orgao_emissor?: string | null;
@@ -140,8 +162,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: legalErr }, { status: 400 });
   }
 
-  const group_id =
-    body.group_id && String(body.group_id).trim() !== "" ? String(body.group_id).trim() : null;
+  const group_ids = body.group_ids || (body.group_id ? [body.group_id] : []);
+  const group_id = group_ids.length > 0 ? group_ids[0] : null;
 
   const rowBase = {
     group_id,
@@ -159,7 +181,7 @@ export async function POST(request: NextRequest) {
     dias_frequencia_personalizada: frequencia === "personalizada" ? body.dias_frequencia_personalizada : null,
   };
 
-  const selectAlvara = `*, alvara_groups ( id, name, color )`;
+  const selectAlvara = `*`;
 
   let { data, error } = await supabase
     .from("alvaras")
@@ -182,5 +204,27 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ alvara: { ...data, vinculados: 0 } as Alvara & { vinculados: number } });
+
+  // Insert group links if populated
+  if (data && group_ids.length > 0) {
+    const linkRows = group_ids.map((gId) => ({ alvara_id: data.id, group_id: gId }));
+    await supabase.from("alvara_group_links").insert(linkRows);
+  }
+
+  // Fetch complete group structure to return back
+  const { data: links } = await supabase
+    .from("alvara_group_links")
+    .select("alvara_groups ( id, name, color )")
+    .eq("alvara_id", data.id);
+  const groups = (links || []).map((l: any) => l.alvara_groups).filter(Boolean);
+
+  const returnedAlvara = {
+    ...data,
+    alvara_groups: groups[0] || null,
+    groups: groups,
+    group_ids: groups.map((g: any) => g.id),
+    vinculados: 0,
+  };
+
+  return NextResponse.json({ alvara: returnedAlvara });
 }

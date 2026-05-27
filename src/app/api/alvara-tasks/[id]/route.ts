@@ -157,6 +157,7 @@ export async function PATCH(
     }
   }
 
+  /*
   if (body.registrarBaixaNoVinculo) {
     const { data: caFull, error: cErr } = await supabase
       .from("company_alvaras")
@@ -241,9 +242,9 @@ export async function PATCH(
       data_vencimento: dataVencimento,
     });
   }
+  */
 
-  const newStatus: AlvaraTask["status"] | undefined =
-    body.status ?? (body.registrarBaixaNoVinculo ? "concluida" : undefined);
+  const newStatus: AlvaraTask["status"] | undefined = body.status;
 
   const hasNotes = Object.prototype.hasOwnProperty.call(body, "notes");
 
@@ -262,7 +263,7 @@ export async function PATCH(
   if (newStatus === "concluida") {
     const { data: caCheck, error: caCheckErr } = await supabase
       .from("company_alvaras")
-      .select("data_emissao, arquivo_url, alvara_id")
+      .select("data_emissao, data_vencimento, arquivo_url, alvara_id")
       .eq("id", taskRow.company_alvara_id)
       .single();
 
@@ -270,13 +271,26 @@ export async function PATCH(
       return NextResponse.json({ error: caCheckErr.message }, { status: 500 });
     }
 
+    const activeNotes = body.notes !== undefined ? body.notes : taskRow.notes;
+    if (activeNotes == null || String(activeNotes).trim() === "") {
+      return NextResponse.json(
+        { error: "A descrição / comentário é obrigatória para concluir a tarefa." },
+        { status: 400 }
+      );
+    }
+
     const em = caCheck?.data_emissao;
     if (em == null || String(em).trim() === "") {
       return NextResponse.json(
-        {
-          error:
-            "Não é possível concluir sem data de emissão no vínculo. Registe a emissão na empresa ou use «Dar baixa no vínculo».",
-        },
+        { error: "A data de emissão no vínculo é obrigatória para concluir a tarefa." },
+        { status: 400 }
+      );
+    }
+
+    const venc = caCheck?.data_vencimento;
+    if (venc == null || String(venc).trim() === "") {
+      return NextResponse.json(
+        { error: "A data de vencimento no vínculo é obrigatória para concluir a tarefa." },
         { status: 400 }
       );
     }
@@ -311,7 +325,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            "O vencimento da tarefa só é definido após registar a data de emissão no vínculo (a periodicidade calcula o próximo vencimento). Edite o vínculo na empresa ou use «Dar baixa».",
+            "O vencimento da tarefa é obrigatório para concluir. Edite o vínculo e salve antes de concluir.",
         },
         { status: 400 }
       );
@@ -420,9 +434,11 @@ export async function PATCH(
           // 2. Calculate nextDue (task renewal deadline) = exactly data_vencimento_anterior
           if (caLink.data_vencimento) {
             nextDue = String(caLink.data_vencimento).slice(0, 10);
-          } else if (caLink.data_emissao) {
-            // Fallback if previous vencimento is null
-            nextDue = nextVencimento;
+          } else {
+            return NextResponse.json(
+              { error: "A data de vencimento do vínculo anterior é obrigatória." },
+              { status: 400 }
+            );
           }
 
           // 3. Update the link to reset emission and set next validity for the next cycle
