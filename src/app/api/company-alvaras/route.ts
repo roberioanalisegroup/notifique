@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     .select(
       `
       *,
-      alvaras ( *, alvara_groups ( * ) ),
+      alvaras ( *, alvara_groups!group_id ( * ) ),
       companies ( id, cnpj, razao_social )
     `
     )
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
     .select(
       `
       *,
-      alvaras ( *, alvara_groups ( * ) )
+      alvaras ( *, alvara_groups!group_id ( * ) )
     `
     )
     .single();

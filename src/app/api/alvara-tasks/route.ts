@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       company_alvaras (
         *,
         companies ( ${COMPANY_IN_TASK_SELECT} ),
-        alvaras ( *, alvara_groups ( id, name, color ) )
+        alvaras ( *, alvara_groups!group_id ( id, name, color ) )
       )
     `
     )

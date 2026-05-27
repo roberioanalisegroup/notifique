@@ -46,7 +46,7 @@ async function fetchLinksForCompanies(
           name,
           frequencia,
           orgao_emissor,
-          alvara_groups ( id, name )
+          alvara_groups!group_id ( id, name )
         )
       `
       )

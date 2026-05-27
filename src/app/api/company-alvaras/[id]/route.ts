@@ -113,7 +113,7 @@ export async function PATCH(
     .select(
       `
       *,
-      alvaras ( *, alvara_groups ( * ) )
+      alvaras ( *, alvara_groups!group_id ( * ) )
     `
     )
     .single();

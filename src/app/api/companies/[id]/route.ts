@@ -33,7 +33,7 @@ export async function GET(
       *,
       alvaras (
         *,
-        alvara_groups (*)
+        alvara_groups!group_id (*)
       )
     `
     )
