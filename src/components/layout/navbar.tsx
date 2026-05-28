@@ -130,6 +130,40 @@ function UserMenuTopBar() {
   );
 }
 
+function isItemActive(item: Item, pathname: string | null): boolean {
+  if (!pathname) return false;
+
+  // A. Se o pathname atual for um match exato para um dos filhos
+  if (item.children?.some((c) => pathname === c.href)) {
+    return true;
+  }
+
+  // B. Se o pathname atual começar com um dos filhos (subpáginas de filhos)
+  if (item.children?.some((c) => c.href !== "/" && pathname.startsWith(c.href))) {
+    return true;
+  }
+
+  // C. Se o pathname for exatamente o href do item pai
+  if (pathname === item.href) {
+    return true;
+  }
+
+  // D. Se o href do pai for um prefixo do pathname (ex: subpáginas diretas)
+  if (item.href !== "/" && pathname.startsWith(item.href)) {
+    // Mas garante que este pathname não pertence explicitamente aos filhos de OUTRO item
+    const belongsToOther = items.some(
+      (other) =>
+        other.id !== item.id &&
+        other.children?.some((c) => pathname === c.href || (c.href !== "/" && pathname.startsWith(c.href)))
+    );
+    if (!belongsToOther) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function NavItemDesktop({ item }: { item: Item }) {
   const pathname = usePathname();
   const profile = usePortalProfile();
@@ -146,10 +180,7 @@ function NavItemDesktop({ item }: { item: Item }) {
 
   const [flyoutOpen, setFlyoutOpen] = useState(false);
 
-  const active =
-    pathname === item.href ||
-    (item.href !== "/" && pathname?.startsWith(item.href)) ||
-    false;
+  const active = isItemActive(item, pathname);
 
   if (!sectionVisible) return null;
 
@@ -166,9 +197,9 @@ function NavItemDesktop({ item }: { item: Item }) {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-2 rounded-l-full px-4 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-2 rounded-l-full border border-transparent px-4 py-2 text-sm font-medium transition-colors",
                 active
-                  ? "bg-blue-600 text-white shadow-sm dark:bg-primary dark:shadow-glow"
+                  ? "bg-blue-50 text-blue-700 dark:bg-[#2F6BFF]/10 dark:text-[#4DA3FF]"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-text-secondary dark:hover:text-white dark:hover:bg-white/5"
               )}
             >
@@ -178,7 +209,7 @@ function NavItemDesktop({ item }: { item: Item }) {
           ) : (
             <div
               className={cn(
-                "flex cursor-default items-center gap-2 rounded-l-full px-4 py-2 text-sm font-medium transition-colors",
+                "flex cursor-default items-center gap-2 rounded-l-full border border-transparent px-4 py-2 text-sm font-medium transition-colors",
                 active
                   ? "bg-blue-50 text-blue-700 dark:bg-[#2F6BFF]/10 dark:text-[#4DA3FF]"
                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-[#9CA3AF] dark:hover:text-white dark:hover:bg-white/5"
@@ -195,7 +226,7 @@ function NavItemDesktop({ item }: { item: Item }) {
             aria-controls={`nav-flyout-${item.id}`}
             aria-label={`Submenu de ${item.label}`}
             className={cn(
-              "flex items-center justify-center rounded-r-full px-2 py-2 transition-colors",
+              "flex items-center justify-center rounded-r-full border border-transparent px-2 py-2 transition-colors",
               active
                 ? "bg-blue-600 text-white shadow-sm dark:bg-primary dark:shadow-glow"
                 : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-text-secondary dark:hover:bg-white/5 dark:hover:text-white"
@@ -270,10 +301,7 @@ function NavItemMobile({ item, closeMenu }: { item: Item; closeMenu: () => void 
   const sectionVisible =
     !!item.children && item.children.length > 0 ? allow(item.href) || childFiltered.length > 0 : allow(item.href);
 
-  const active =
-    pathname === item.href ||
-    (item.href !== "/" && pathname?.startsWith(item.href)) ||
-    false;
+  const active = isItemActive(item, pathname);
 
   if (!sectionVisible) return null;
 

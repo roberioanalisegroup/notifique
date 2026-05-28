@@ -18,7 +18,7 @@ import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-type UiColumn = "pendente" | "andamento" | "concluido";
+type UiColumn = "pendente" | "andamento" | "concluido" | "impedimento" | "cancelada";
 
 function taskAnchorDateIso(t: AcompanhamentoTaskRow): string | null {
   const d = t.due_date?.trim();
@@ -42,8 +42,12 @@ function responsibleFromCompany(c: Company | null | undefined) {
 function eventClass(t: AcompanhamentoTaskRow, getUiColumn: (t: AcompanhamentoTaskRow) => UiColumn): string {
   if (t.status === "concluida")
     return "bg-emerald-100 text-emerald-900 line-through decoration-emerald-700/60 dark:bg-emerald-950/50 dark:text-emerald-200 dark:decoration-emerald-400/50";
+  if (t.status === "cancelada")
+    return "bg-slate-100 text-slate-500 line-through decoration-slate-400/50 dark:bg-slate-900/50 dark:text-slate-400 dark:decoration-slate-500/50 opacity-80";
+  
   const col = getUiColumn(t);
   if (col === "andamento") return "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200";
+  if (col === "impedimento") return "bg-rose-100 text-rose-900 dark:bg-rose-950/50 dark:text-rose-200";
   return "bg-red-100 text-red-900 dark:bg-red-950/50 dark:text-red-200";
 }
 

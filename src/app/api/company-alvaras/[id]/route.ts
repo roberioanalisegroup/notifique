@@ -134,18 +134,36 @@ export async function PATCH(
     updated.data_emissao.length >= 10;
 
   if (!hasEm) {
-    await supabase
+    const { error: tUpErr } = await supabase
       .from("alvara_tasks")
       .update({ due_date: null, updated_at: new Date().toISOString() })
       .eq("company_alvara_id", id)
       .eq("status", "pendente");
+    if (tUpErr) {
+      if (tUpErr.code === "23505" || (tUpErr.message?.toLowerCase().includes("duplicate") ?? false)) {
+        return NextResponse.json(
+          { error: "Já existe outra tarefa pendente para este vínculo sem data de vencimento definida." },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json({ error: tUpErr.message }, { status: 500 });
+    }
   } else if (updated.data_vencimento && typeof updated.data_vencimento === "string") {
     const due = String(updated.data_vencimento).slice(0, 10);
-    await supabase
+    const { error: tUpErr } = await supabase
       .from("alvara_tasks")
       .update({ due_date: due, updated_at: new Date().toISOString() })
       .eq("company_alvara_id", id)
       .eq("status", "pendente");
+    if (tUpErr) {
+      if (tUpErr.code === "23505" || (tUpErr.message?.toLowerCase().includes("duplicate") ?? false)) {
+        return NextResponse.json(
+          { error: "Conflito de datas: já existe outra tarefa pendente para este vínculo com a data de vencimento informada." },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json({ error: tUpErr.message }, { status: 500 });
+    }
   }
 
   const companyId = (beforeRow as { company_id?: string } | null)?.company_id;

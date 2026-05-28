@@ -248,15 +248,17 @@ export async function PATCH(
   const newStatus: AlvaraTask["status"] | undefined = body.status;
 
   const hasNotes = Object.prototype.hasOwnProperty.call(body, "notes");
+  const hasProtocolo = Object.prototype.hasOwnProperty.call(body, "protocolo");
 
   if (
     newStatus == null &&
     !hasNotes &&
     !body.registrarBaixaNoVinculo &&
-    !hasArquivo
+    !hasArquivo &&
+    !hasProtocolo
   ) {
     return NextResponse.json(
-      { error: "Informe status, notas, anexo ou registrarBaixaNoVinculo" },
+      { error: "Informe status, notas, anexo, protocolo ou registrarBaixaNoVinculo" },
       { status: 400 }
     );
   }
@@ -349,7 +351,6 @@ export async function PATCH(
     patch.notes = sanitizeText(body.notes);
   }
 
-  const hasProtocolo = Object.prototype.hasOwnProperty.call(body, "protocolo");
   if (hasProtocolo) {
     patch.protocolo = sanitizeText(body.protocolo);
   }
@@ -359,6 +360,12 @@ export async function PATCH(
   if (needsTaskUpdate) {
     const { error: u2 } = await supabase.from("alvara_tasks").update(patch).eq("id", id);
     if (u2) {
+      if (isPgUniqueViolation(u2)) {
+        return NextResponse.json(
+          { error: "Já existe uma tarefa pendente para este vínculo com o mesmo vencimento. Não é possível reativar esta tarefa." },
+          { status: 409 }
+        );
+      }
       return NextResponse.json({ error: u2.message }, { status: 500 });
     }
     if (newStatus != null && newStatus !== taskRow.status) {

@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Trash2,
   Wand2,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -33,8 +34,22 @@ export default function GeracaoTarefasPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
-
   const [generating, setGenerating] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredTasks = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return tasks;
+    return tasks.filter((t) => {
+      const emp = companyLabel(t.company_alvaras?.companies).toLowerCase();
+      const alv = (t.company_alvaras?.alvaras?.name ?? "").toLowerCase();
+      const notes = (t.notes ?? "").toLowerCase();
+      const code = (t.company_alvaras?.companies?.codigo_empresa ?? "").toLowerCase();
+      const cnpj = (t.company_alvaras?.companies?.cnpj ?? "").toLowerCase();
+      const doc = (t.company_alvaras?.companies?.numero_documento ?? "").toLowerCase();
+      return emp.includes(q) || alv.includes(q) || notes.includes(q) || code.includes(q) || cnpj.includes(q) || doc.includes(q);
+    });
+  }, [tasks, searchQuery]);
 
   const [advFrom, setAdvFrom] = useState(() => {
     const d = new Date();
@@ -78,11 +93,11 @@ export default function GeracaoTarefasPage() {
   }
 
   function toggleAll() {
-    if (selected.size === tasks.length) {
+    if (selected.size === filteredTasks.length) {
       setSelected(new Set());
       return;
     }
-    setSelected(new Set(tasks.map((t) => t.id)));
+    setSelected(new Set(filteredTasks.map((t) => t.id)));
   }
 
   async function gerarTarefas() {
@@ -224,31 +239,53 @@ export default function GeracaoTarefasPage() {
             ou <strong>sem vencimento</strong> (aguardam emissão no vínculo). Eliminação segura: só linhas{" "}
             <strong>pendentes</strong> sem eventos de histórico além da criação (ou sem histórico — legado).
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className="btn-secondary text-sm" onClick={toggleAll} disabled={loading || tasks.length === 0}>
-              {selected.size === tasks.length ? "Desmarcar todas" : "Selecionar visíveis"}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary inline-flex items-center gap-1 border-red-200 text-sm text-red-800 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
-              disabled={bulkBusy || selected.size === 0}
-              onClick={() => void eliminarPendentesIntactas()}
-            >
-              <Trash2 className="h-4 w-4" />
-              Eliminar selecionadas (só intactas)
-            </button>
+          <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-secondary text-sm" onClick={toggleAll} disabled={loading || filteredTasks.length === 0}>
+                {selected.size === filteredTasks.length && filteredTasks.length > 0 ? "Desmarcar todas" : "Selecionar visíveis"}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-1 border-red-200 text-sm text-red-800 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
+                disabled={bulkBusy || selected.size === 0}
+                onClick={() => void eliminarPendentesIntactas()}
+              >
+                <Trash2 className="h-4 w-4" />
+                Eliminar selecionadas (só intactas)
+              </button>
+            </div>
+            
+            <div className="relative w-full max-w-xs">
+              <input
+                type="text"
+                placeholder="Pesquisar por empresa, alvará, CNPJ ou código..."
+                className="input-field h-9 w-full pr-8 text-xs focus:bg-white dark:focus:bg-[#13131E]"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                  aria-label="Limpar pesquisa"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="max-h-[480px] overflow-y-auto overflow-x-auto px-1">
           <table className="table-portal min-w-[900px]">
             <thead>
-              <tr>
-                <th className="w-10" />
-                <th>Venc. tarefa</th>
-                <th>Prazo início</th>
-                <th>Empresa</th>
-                <th>Tipo</th>
-                <th>Notas</th>
+              <tr className="sticky top-0 z-10 bg-white dark:bg-[#13131E]">
+                <th className="w-10 bg-white dark:bg-[#13131E]" />
+                <th className="bg-white dark:bg-[#13131E]">Venc. tarefa</th>
+                <th className="bg-white dark:bg-[#13131E]">Prazo início</th>
+                <th className="bg-white dark:bg-[#13131E]">Empresa</th>
+                <th className="bg-white dark:bg-[#13131E]">Tipo</th>
+                <th className="bg-white dark:bg-[#13131E]">Notas</th>
               </tr>
             </thead>
             <tbody>
@@ -259,7 +296,7 @@ export default function GeracaoTarefasPage() {
                   </td>
                 </tr>
               ) : (
-                tasks.map((t) => (
+                filteredTasks.map((t) => (
                   <tr key={t.id} className={cn(selected.has(t.id) && "bg-blue-50/50 dark:bg-blue-950/25")}>
                     <td>
                       <input
@@ -277,10 +314,10 @@ export default function GeracaoTarefasPage() {
                   </tr>
                 ))
               )}
-              {!loading && tasks.length === 0 && (
+              {!loading && filteredTasks.length === 0 && (
                 <tr>
                   <td colSpan={6} className="py-10 text-center text-slate-500 dark:text-slate-400">
-                    Nenhuma tarefa pendente no intervalo da lista.
+                    Nenhuma tarefa pendente encontrada para os filtros aplicados.
                   </td>
                 </tr>
               )}

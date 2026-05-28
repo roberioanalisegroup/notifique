@@ -6,7 +6,7 @@ import { ResponsiveTableShell } from "@/components/ui/responsive-table-shell";
 import { cn, formatDate } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 
-type UiColumn = "pendente" | "andamento" | "concluido";
+type UiColumn = "pendente" | "andamento" | "concluido" | "impedimento" | "cancelada";
 
 function labelFromCa(ca: AcompanhamentoTaskRow["company_alvaras"]) {
   if (!ca?.companies) return "—";
@@ -22,13 +22,17 @@ function responsibleFromCompany(c: Company | null | undefined) {
 function colLabel(col: UiColumn): string {
   if (col === "pendente") return "Pendente";
   if (col === "andamento") return "Em andamento";
-  return "Concluído";
+  if (col === "concluido") return "Concluído";
+  if (col === "impedimento") return "Impedimento";
+  return "Cancelada";
 }
 
 function colBadgeClass(col: UiColumn): string {
   if (col === "pendente") return "bg-red-100 text-red-900 dark:bg-red-950/50 dark:text-red-200";
   if (col === "andamento") return "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200";
-  return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200";
+  if (col === "concluido") return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200";
+  if (col === "impedimento") return "bg-rose-100 text-rose-900 dark:bg-rose-950/50 dark:text-rose-200";
+  return "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300";
 }
 
 export function AcompanhamentoListView({

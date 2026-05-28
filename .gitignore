@@ -27,3 +27,7 @@ yarn-error.log*
 # ficheiros locais de teste (credenciais)
 create-user.json
 login-test.json
+
+# migrações e relatórios
+migration-report*.json
+query-db.mjs

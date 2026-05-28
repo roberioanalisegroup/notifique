@@ -43,16 +43,17 @@ function companyLabel(c: Company | null | undefined): string {
   return (c.razao_social ?? c.nome_fantasia ?? "—").trim() || "—";
 }
 
-type QuadroColumn = "pendente" | "andamento" | "concluido";
+type QuadroColumn = "pendente" | "andamento" | "concluido" | "impedimento" | "cancelada";
 
 /** Coluna atual no Kanban + estado na API — «Em andamento» é só organização local até concluir. */
 function textoEstadoNoModal(
   status: AlvaraTask["status"],
   quadroColumn: QuadroColumn | null | undefined
 ): string {
-  if (status === "concluida") return "Concluída";
-  if (status === "cancelada") return "Cancelada";
-  if (status === "pendente" && quadroColumn === "andamento") return "Em andamento no quadro";
+  if (status === "concluida" || quadroColumn === "concluido") return "Concluída";
+  if (status === "cancelada" || quadroColumn === "cancelada") return "Cancelada";
+  if (quadroColumn === "impedimento") return "Impedimento";
+  if (quadroColumn === "andamento") return "Em andamento no quadro";
   if (status === "pendente") return "Pendente";
   return status;
 }

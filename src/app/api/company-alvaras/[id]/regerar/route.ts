@@ -126,6 +126,12 @@ export async function POST(
     .eq("id", task.id);
 
   if (tUpErr) {
+    if (tUpErr.code === "23505" || (tUpErr.message?.toLowerCase().includes("duplicate") ?? false)) {
+      return NextResponse.json(
+        { error: "Conflito de datas: já existe outra tarefa pendente para este vínculo com o mesmo vencimento." },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({ error: tUpErr.message }, { status: 500 });
   }
 

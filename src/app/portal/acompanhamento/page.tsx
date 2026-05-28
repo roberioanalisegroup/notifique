@@ -61,7 +61,7 @@ import type { AlvaraTaskChecklistRow } from "@/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-type UiLane = "pendente" | "andamento";
+type UiLane = "pendente" | "andamento" | "impedimento";
 
 const LANES_STORAGE_KEY = "notifique-acompanhamento-lanes";
 
@@ -80,7 +80,7 @@ function readViewMode(): ViewMode {
   return "kanban";
 }
 
-type ColumnId = "pendente" | "andamento" | "concluido";
+type ColumnId = "pendente" | "andamento" | "concluido" | "impedimento" | "cancelada";
 
 const COLUMNS: { id: ColumnId; label: string; icon: React.ReactNode; description: string }[] = [
   {
@@ -101,6 +101,18 @@ const COLUMNS: { id: ColumnId; label: string; icon: React.ReactNode; description
     icon: <CheckCircle2 className="h-4 w-4" />,
     description: "Tarefas concluídas",
   },
+  {
+    id: "impedimento",
+    label: "Impedimento",
+    icon: <XCircle className="h-4 w-4 text-rose-500" />,
+    description: "Tarefas com algum bloqueio ou impedimento",
+  },
+  {
+    id: "cancelada",
+    label: "Canceladas",
+    icon: <Trash2 className="h-4 w-4 text-slate-500" />,
+    description: "Tarefas canceladas",
+  },
 ];
 
 function parseLaneMapJson(raw: string): Record<string, UiLane> {
@@ -108,6 +120,7 @@ function parseLaneMapJson(raw: string): Record<string, UiLane> {
   const out: Record<string, UiLane> = {};
   for (const [k, v] of Object.entries(p)) {
     if (v === "andamento") out[k] = "andamento";
+    else if (v === "impedimento") out[k] = "impedimento";
     else out[k] = "pendente";
   }
   return out;
@@ -346,7 +359,7 @@ export default function AcompanhamentoPage() {
       const qs = buildQuery();
       const url = "/api/alvara-tasks" + (qs ? "?" + qs : "");
       const d = await apiJson<{ tasks: TaskRow[] }>(url);
-      setTasks(d.tasks.filter((t) => t.status !== "cancelada"));
+      setTasks(d.tasks);
     } catch (e) {
       if (!silent) {
         toast.error(e instanceof Error ? e.message : "Erro ao carregar tarefas");
@@ -527,28 +540,45 @@ export default function AcompanhamentoPage() {
     const pendente: TaskRow[] = [];
     const andamento: TaskRow[] = [];
     const concluido: TaskRow[] = [];
+    const impedimento: TaskRow[] = [];
+    const cancelada: TaskRow[] = [];
 
     for (const t of filteredTasks) {
+      if (t.status === "cancelada") {
+        cancelada.push(t);
+        continue;
+      }
       if (t.status === "concluida") {
         concluido.push(t);
         continue;
       }
       const lane = laneMap[t.id] ?? "pendente";
-      if (lane === "andamento") andamento.push(t);
-      else pendente.push(t);
+      if (lane === "andamento") {
+        andamento.push(t);
+      } else if (lane === "impedimento") {
+        impedimento.push(t);
+      } else {
+        pendente.push(t);
+      }
     }
 
     pendente.sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
     andamento.sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
     concluido.sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""));
+    impedimento.sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+    cancelada.sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""));
 
-    return { pendente, andamento, concluido };
+    return { pendente, andamento, concluido, impedimento, cancelada };
   }, [filteredTasks, laneMap]);
 
   const getTaskUiColumn = useCallback(
     (t: TaskRow): ColumnId => {
+      if (t.status === "cancelada") return "cancelada";
       if (t.status === "concluida") return "concluido";
-      return (laneMap[t.id] ?? "pendente") === "andamento" ? "andamento" : "pendente";
+      const lane = laneMap[t.id] ?? "pendente";
+      if (lane === "andamento") return "andamento";
+      if (lane === "impedimento") return "impedimento";
+      return "pendente";
     },
     [laneMap]
   );
@@ -610,7 +640,7 @@ export default function AcompanhamentoPage() {
   }
 
   async function cancelarTarefa(t: TaskRow) {
-    if (!confirm("Cancelar esta tarefa? Ela deixa de aparecer no quadro.")) return;
+    if (!confirm("Cancelar esta tarefa?")) return;
     try {
       await apiJson("/api/alvara-tasks/" + t.id, {
         method: "PATCH",
@@ -666,18 +696,30 @@ export default function AcompanhamentoPage() {
       return;
     }
 
-    if (task.status === "concluida") {
+    if (target === "cancelada") {
+      if (task.status === "cancelada") return;
+      await cancelarTarefa(task);
+      return;
+    }
+
+    if (task.status === "concluida" || task.status === "cancelada") {
       await reabrir(task);
-      const lane: UiLane = target === "andamento" ? "andamento" : "pendente";
+      const lane: UiLane = target === "andamento" ? "andamento" : target === "impedimento" ? "impedimento" : "pendente";
       const next: Record<string, UiLane> = { ...laneMap, [task.id]: lane };
       persistLanes(next);
       return;
     }
 
-    const lane: UiLane = target === "andamento" ? "andamento" : "pendente";
+    const lane: UiLane = target === "andamento" ? "andamento" : target === "impedimento" ? "impedimento" : "pendente";
     const next: Record<string, UiLane> = { ...laneMap, [task.id]: lane };
     persistLanes(next);
-    toast.message(target === "andamento" ? "Movido para Em andamento" : "Movido para Pendente");
+    toast.message(
+      target === "andamento" 
+        ? "Movido para Em andamento" 
+        : target === "impedimento" 
+          ? "Movido para Impedimento" 
+          : "Movido para Pendente"
+    );
   }
 
   async function onDropColumn(e: React.DragEvent, target: ColumnId) {
@@ -1373,12 +1415,16 @@ export default function AcompanhamentoPage() {
                 ? tasksByColumn.pendente
                 : col.id === "andamento"
                   ? tasksByColumn.andamento
-                  : tasksByColumn.concluido;
+                  : col.id === "concluido"
+                    ? tasksByColumn.concluido
+                    : col.id === "impedimento"
+                      ? tasksByColumn.impedimento
+                      : tasksByColumn.cancelada;
 
             return (
               <section
                 key={col.id}
-                className="flex min-h-[420px] min-w-[min(100%,320px)] flex-1 flex-col rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3 shadow-sm dark:border-slate-700/90 dark:bg-slate-900/50 md:min-w-[300px]"
+                className="flex min-h-[420px] min-w-[min(100%,380px)] flex-1 flex-col rounded-2xl border border-slate-200/90 bg-slate-50/90 p-3 shadow-sm dark:border-slate-700/90 dark:bg-slate-900/50 md:min-w-[360px]"
                 onDragOver={onDragOver}
                 onDrop={(e) => void onDropColumn(e, col.id)}
               >
@@ -1389,7 +1435,9 @@ export default function AcompanhamentoPage() {
                         "flex items-center gap-2 text-base font-semibold",
                         col.id === "concluido" && "text-emerald-800 dark:text-emerald-300",
                         col.id === "andamento" && "text-amber-800 dark:text-amber-300",
-                        col.id === "pendente" && "text-red-800 dark:text-red-300"
+                        col.id === "pendente" && "text-red-800 dark:text-red-300",
+                        col.id === "impedimento" && "text-rose-800 dark:text-rose-300",
+                        col.id === "cancelada" && "text-slate-600 dark:text-slate-400"
                       )}
                     >
                       {col.icon}
@@ -1402,7 +1450,9 @@ export default function AcompanhamentoPage() {
                       "rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
                       col.id === "concluido" && "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
                       col.id === "andamento" && "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-                      col.id === "pendente" && "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300"
+                      col.id === "pendente" && "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300",
+                      col.id === "impedimento" && "bg-rose-100 text-rose-850 dark:bg-rose-950/50 dark:text-rose-300",
+                      col.id === "cancelada" && "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                     )}
                   >
                     {list.length}
@@ -1428,6 +1478,10 @@ export default function AcompanhamentoPage() {
                             "border-4 border-emerald-500/60 shadow-emerald-50 hover:shadow-emerald-100 dark:border-emerald-500/50 dark:shadow-emerald-950/30",
                           col.id === "andamento" &&
                             "border-2 border-amber-500/60 shadow-amber-50 hover:shadow-amber-100 dark:border-amber-500/50 dark:shadow-amber-950/20",
+                          col.id === "impedimento" &&
+                            "border-2 border-rose-500/60 shadow-rose-50 hover:shadow-rose-100 dark:border-rose-500/50 dark:shadow-rose-950/20",
+                          col.id === "cancelada" &&
+                            "border border-slate-200 bg-slate-50/50 dark:border-slate-700/50 dark:bg-slate-900/30 opacity-75 hover:opacity-100",
                           col.id === "pendente" && "shadow-sm",
                           dragTaskId === t.id && "opacity-60"
                         )}
