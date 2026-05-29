@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
   ] = await Promise.all([
     // 1. Companies summary for compliance, top critical, state concentration, and responsible workload
     supabase
+
       .from("companies_alvara_summary")
       .select("id, alvaras_vencidos, uf, razao_social, nome_fantasia, total_alvaras, alvaras_emitidos, responsible_user_id")
       .is("archived_at", null),
@@ -65,10 +66,19 @@ export async function GET(request: NextRequest) {
       .gte("created_at", monthStart)
       .lte("created_at", monthEnd + "T23:59:59Z"),
       
-    // 4. All active tasks for status distribution
+    // 4. All active tasks for status distribution & frontend lane mapping
     supabase
       .from("alvara_tasks")
-      .select("id, status")
+      .select(`
+        id,
+        title,
+        status,
+        company_alvaras (
+          id,
+          companies ( id, cnpj, razao_social, nome_fantasia ),
+          alvaras ( id, name )
+        )
+      `)
       .neq("status", "cancelada"),
       
     // 5. User profiles for workload responsible names
@@ -82,10 +92,24 @@ export async function GET(request: NextRequest) {
       .select("id, created_at, completed_at, status")
       .gte("created_at", sixMonthsAgoStr),
 
-    // 7. Company alvaras with file attachments for document coverage
+    // 7. Company alvaras with file attachments + group details for category distribution
     supabase
       .from("company_alvaras")
-      .select("id, arquivo_url, status"),
+      .select(`
+        id,
+        arquivo_url,
+        status,
+        alvaras (
+          id,
+          name,
+          group_id,
+          alvara_groups!group_id (
+            id,
+            name,
+            color
+          )
+        )
+      `),
 
     // 8. Count of indefinite validity alvaras
     supabase
@@ -163,12 +187,14 @@ export async function GET(request: NextRequest) {
   const taskCompletionRate = totalMonthTasks > 0 ? (completedMonthTasks / totalMonthTasks) * 100 : 0;
 
   // 5. Backlog distribution by status
-  const taskStatusCounts = {
+  const taskStatusCounts: Record<string, number> = {
     pendente: 0,
     concluida: 0,
     cancelada: 0,
   };
-  rActiveTasks.data?.forEach(t => {
+  
+  const activeTasksList = rActiveTasks.data || [];
+  activeTasksList.forEach(t => {
     if (t.status === "pendente" || t.status === "concluida" || t.status === "cancelada") {
       taskStatusCounts[t.status]++;
     }
@@ -255,11 +281,37 @@ export async function GET(request: NextRequest) {
     completed
   }));
 
-  // 9. Document upload coverage rate
-  const totalAlvarasCount = rFileCounts.data?.length || 0;
-  const alvarasWithFileCount = rFileCounts.data?.filter(f => f.arquivo_url != null && f.arquivo_url !== "").length || 0;
+  // 9. Document upload coverage rate & Categorization
+  const alvarasWithGroups = rFileCounts.data || [];
+  const totalAlvarasCount = alvarasWithGroups.length;
+  const alvarasWithFileCount = alvarasWithGroups.filter(f => f.arquivo_url != null && f.arquivo_url !== "").length;
   const documentCoverageRate = totalAlvarasCount > 0 ? (alvarasWithFileCount / totalAlvarasCount) * 100 : 0;
-  const alvarasVencidos = rFileCounts.data?.filter(f => f.status === "vencido").length || 0;
+  const alvarasVencidos = alvarasWithGroups.filter(f => f.status === "vencido").length;
+
+  const categoryCounts: Record<string, { count: number; color: string }> = {};
+  alvarasWithGroups.forEach(ca => {
+    // Safely unpack ca.alvaras which can be parsed as an array or a single object by TS
+    const alv: any = Array.isArray(ca.alvaras) ? ca.alvaras[0] : ca.alvaras;
+    if (!alv) return;
+
+    // Safely unpack alv.alvara_groups which can be parsed as an array or a single object by TS
+    const group: any = Array.isArray(alv.alvara_groups) ? alv.alvara_groups[0] : alv.alvara_groups;
+
+    const groupName = group?.name || "Sem Categoria";
+    const groupColor = group?.color || "#94a3b8";
+    if (!categoryCounts[groupName]) {
+      categoryCounts[groupName] = { count: 0, color: groupColor };
+    }
+    categoryCounts[groupName].count++;
+  });
+
+  const alvarasPorCategoria = Object.entries(categoryCounts)
+    .map(([name, data]) => ({
+      name,
+      color: data.color,
+      count: data.count
+    }))
+    .sort((a, b) => b.count - a.count);
 
   // 10. Indefinite validity count
   const indefiniteValidityCount = rIndeterminados.count || 0;
@@ -290,6 +342,8 @@ export async function GET(request: NextRequest) {
     workloadByResponsible,
     ufDistribution,
     sazonalHistory,
+    alvarasPorCategoria,
+    activeTasks: activeTasksList,
     vencendoProx30Dias: rVencendoList.data || [],
   });
 }

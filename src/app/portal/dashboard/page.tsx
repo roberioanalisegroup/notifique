@@ -19,7 +19,8 @@ import {
   Briefcase,
   Layers,
   Infinity as InfinityIcon,
-  ChevronDown
+  ChevronDown,
+  ShieldAlert
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
@@ -90,6 +91,23 @@ type SazonalHistory = {
   completed: number;
 };
 
+type AlvaraCategoria = {
+  name: string;
+  color: string;
+  count: number;
+};
+
+type ActiveTask = {
+  id: string;
+  title: string | null;
+  status: "pendente" | "concluida" | "cancelada";
+  company_alvaras: {
+    id: string;
+    companies: { id: string; cnpj: string; razao_social: string | null; nome_fantasia: string | null } | null;
+    alvaras: { id: string; name: string } | null;
+  } | null;
+};
+
 type VencendoAlvara = {
   id: string;
   numero: string | null;
@@ -155,8 +173,12 @@ export default function DashboardPage() {
   const [ufDist, setUfDist] = useState<UfDistribution[]>([]);
   const [history, setHistory] = useState<SazonalHistory[]>([]);
   const [vencendo, setVencendo] = useState<VencendoAlvara[]>([]);
+  
+  // New States
+  const [alvarasPorCategoria, setAlvarasPorCategoria] = useState<AlvaraCategoria[]>([]);
+  const [impededTasks, setImpededTasks] = useState<ActiveTask[]>([]);
+  
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
-
   const menuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
@@ -170,6 +192,8 @@ export default function DashboardPage() {
             workloadByResponsible: Workload[];
             ufDistribution: UfDistribution[];
             sazonalHistory: SazonalHistory[];
+            alvarasPorCategoria: AlvaraCategoria[];
+            activeTasks: ActiveTask[];
             vencendoProx30Dias: VencendoAlvara[];
           }>("/api/stats"),
           apiJson<{ logs: SyncLog[] }>("/api/sync-logs?limit=5"),
@@ -180,8 +204,20 @@ export default function DashboardPage() {
         setWorkload(statsData.workloadByResponsible);
         setUfDist(statsData.ufDistribution);
         setHistory(statsData.sazonalHistory);
+        setAlvarasPorCategoria(statsData.alvarasPorCategoria || []);
         setVencendo(statsData.vencendoProx30Dias);
         setLogs(logsData.logs);
+
+        // Filter tasks in 'impedimento' lane on client-side
+        let localLanes: Record<string, string> = {};
+        try {
+          const saved = localStorage.getItem("notifique_lanes");
+          if (saved) localLanes = JSON.parse(saved);
+        } catch {
+          // ignore
+        }
+        const blocked = (statsData.activeTasks || []).filter(t => localLanes[t.id] === "impedimento");
+        setImpededTasks(blocked);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Falha ao carregar o dashboard");
       } finally {
@@ -254,6 +290,21 @@ export default function DashboardPage() {
       const headers = ["Responsavel", "Empresas Vinculadas"];
       const rows = workload.map(w => [w.name, w.count]);
       downloadCSV("carga-de-trabalho-por-responsavel", headers, rows);
+      toast.success("Dados exportados!");
+    } else if (id === "categories") {
+      const headers = ["Categoria (Grupo)", "Total de Alvaras"];
+      const rows = alvarasPorCategoria.map(c => [c.name, c.count]);
+      downloadCSV("alvaras-por-categoria", headers, rows);
+      toast.success("Dados exportados!");
+    } else if (id === "impeded") {
+      const headers = ["ID Tarefa", "Titulo", "Empresa", "Alvara"];
+      const rows = impededTasks.map(t => [
+        t.id,
+        t.title || "Sem titulo",
+        t.company_alvaras?.companies?.nome_fantasia || t.company_alvaras?.companies?.razao_social || "Sem empresa",
+        t.company_alvaras?.alvaras?.name || "Sem alvara"
+      ]);
+      downloadCSV("alvaras-com-impedimentos", headers, rows);
       toast.success("Dados exportados!");
     } else if (id === "geographic") {
       const headers = ["Estado (UF)", "Total de Alvaras"];
@@ -632,7 +683,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 4. Bloco Secundário: Processos, Equipe e Produtividade */}
+      {/* 4. Bloco Secundário: Processos, Equipe e Categorias */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* INDICADOR 4 & 5: Backlog por Status & Throughput */}
         <div className="card-portal relative flex flex-col p-6 shadow-sm">
@@ -676,15 +727,12 @@ export default function DashboardPage() {
             ) : (
               <div className="relative flex justify-center items-center">
                 <svg id="tasks-donut-chart" width="150" height="150" className="rotate-[-90deg]">
-                  {/* Total Tasks (Concluida + Pendente) */}
                   {(() => {
                     const pendente = kpis?.taskStatusCounts.pendente ?? 0;
                     const concluida = kpis?.taskStatusCounts.concluida ?? 0;
                     const total = pendente + concluida;
-                    const cPerc = (concluida / (total || 1)) * 440;
                     return (
                       <>
-                        {/* Track / Pendente (red-ish or slate-ish) */}
                         <circle
                           cx="75"
                           cy="75"
@@ -693,7 +741,6 @@ export default function DashboardPage() {
                           stroke="#ef4444"
                           fill="none"
                         />
-                        {/* Concluida (blue/indigo) */}
                         <circle
                           cx="75"
                           cy="75"
@@ -709,7 +756,6 @@ export default function DashboardPage() {
                     );
                   })()}
                 </svg>
-                {/* Center metric */}
                 <div className="absolute flex flex-col items-center">
                   <span className="text-xl font-black text-slate-900 dark:text-white leading-none">
                     {(kpis?.taskStatusCounts.pendente ?? 0) + (kpis?.taskStatusCounts.concluida ?? 0)}
@@ -721,7 +767,6 @@ export default function DashboardPage() {
               </div>
             )}
             
-            {/* Legenda colorida */}
             <div className="flex gap-4 text-xs font-semibold mt-4">
               <span className="inline-flex items-center gap-1.5 text-blue-600 dark:text-[#4DA3FF]">
                 <span className="h-2 w-2 rounded-full bg-blue-600" />
@@ -842,7 +887,139 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* INDICADOR 9 & 10: Qualidade de Dados & Cobertura */}
+        {/* INDICADOR 11: Alvarás por Categoria (Grupo) */}
+        <div className="card-portal relative flex flex-col p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <FileStack className="h-5 w-5 text-indigo-500" />
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                Alvarás por Categoria
+              </h2>
+            </div>
+            
+            <div className="relative" ref={el => { menuRefs.current["categories"] = el; }}>
+              <button
+                onClick={() => setActiveMenu(activeMenu === "categories" ? null : "categories")}
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+              </button>
+              {activeMenu === "categories" && (
+                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
+                  <button
+                    onClick={() => handleExportCSV("categories")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-1 space-y-3.5 justify-center flex flex-col">
+            {alvarasPorCategoria.length === 0 ? (
+              <p className="text-center text-xs text-slate-400">Nenhuma categoria encontrada.</p>
+            ) : (
+              alvarasPorCategoria.slice(0, 4).map((cat, idx) => {
+                const maxCount = Math.max(...alvarasPorCategoria.map(x => x.count), 1);
+                const percentage = (cat.count / maxCount) * 100;
+                return (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex justify-between items-center text-xs font-semibold">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                        <span className="text-slate-700 dark:text-slate-300 truncate">{cat.name}</span>
+                      </span>
+                      <span className="tabular-nums text-slate-950 dark:text-white font-bold shrink-0">{cat.count}</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-1000"
+                        style={{ width: `${percentage}%`, backgroundColor: cat.color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <p className="text-2xs text-slate-400 text-center mt-2 uppercase tracking-wide">
+            Distribuição volumétrica por grupos cadastrados
+          </p>
+        </div>
+      </div>
+
+      {/* 5. Bloco Terceiro: Impedimentos & Auditoria */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* INDICADOR 12: Alvarás com Impedimentos */}
+        <div className="card-portal relative flex flex-col p-6 shadow-sm lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-rose-500" />
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                Alvarás com Impedimentos (Kanban)
+              </h2>
+            </div>
+            
+            <div className="relative" ref={el => { menuRefs.current["impeded"] = el; }}>
+              <button
+                onClick={() => setActiveMenu(activeMenu === "impeded" ? null : "impeded")}
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+              </button>
+              {activeMenu === "impeded" && (
+                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
+                  <button
+                    onClick={() => handleExportCSV("impeded")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col justify-center">
+            {impededTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-500 mb-3 border border-emerald-100 dark:border-emerald-900/35">
+                  <ShieldCheck className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Nenhum impedimento ativo</p>
+                <p className="text-xs text-slate-400 mt-0.5">Todas as tarefas operam em ritmo regular no Kanban.</p>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 overflow-y-auto max-h-[170px] pr-1">
+                {impededTasks.map((t) => (
+                  <div key={t.id} className="flex items-start justify-between p-3.5 rounded-xl border border-rose-100 bg-rose-500/5 dark:border-rose-950/50 dark:bg-rose-950/10">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                        {t.title || "Tarefa sem título"}
+                      </p>
+                      <p className="text-3xs text-slate-500 truncate mt-0.5">
+                        Empresa: {t.company_alvaras?.companies?.nome_fantasia || t.company_alvaras?.companies?.razao_social || "—"}
+                      </p>
+                      <p className="text-3xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wide mt-1 truncate">
+                        Tipo: {t.company_alvaras?.alvaras?.name || "—"}
+                      </p>
+                    </div>
+                    <span className="shrink-0 ml-2 inline-flex items-center rounded-md bg-rose-100 px-1.5 py-0.5 text-3xs font-extrabold text-rose-700 uppercase dark:bg-rose-500/10 dark:text-rose-400">
+                      Travado
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="text-2xs text-slate-400 text-center mt-2 uppercase tracking-wide">
+            Processos movidos para a coluna de Impedimento no Quadro Kanban
+          </p>
+        </div>
+
+        {/* INDICADOR 9 & 10: Auditoria e Qualidade */}
         <div className="card-portal relative flex flex-col p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
@@ -913,7 +1090,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 5. Bloco Inferior: Histórico de Evolução & Distribuição Geográfica */}
+      {/* 6. Bloco Inferior: Histórico de Evolução & Distribuição Geográfica */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* INDICADOR 8: Histórico de Entrada vs. Saída */}
         <div className="card-portal relative flex flex-col p-6 shadow-sm lg:col-span-2">
@@ -963,13 +1140,13 @@ export default function DashboardPage() {
                   <line x1="50" y1="120" x2="550" y2="120" stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
                   <line x1="50" y1="170" x2="550" y2="170" stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
                   <line x1="50" y1="170" x2="550" y2="170" stroke="rgba(0,0,0,0.1)" dark-stroke="rgba(255,255,255,0.2)" />
-
+ 
                   {(() => {
                     const maxVal = Math.max(...history.flatMap(h => [h.created, h.completed]), 5);
                     const scaleY = (val: number) => 170 - (val / maxVal) * 130;
                     const pointsCreated = history.map((h, i) => `${50 + i * 100},${scaleY(h.created)}`).join(" ");
                     const pointsCompleted = history.map((h, i) => `${50 + i * 100},${scaleY(h.completed)}`).join(" ");
-
+ 
                     return (
                       <>
                         {/* Line Created (Red) */}
@@ -990,7 +1167,7 @@ export default function DashboardPage() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
-
+ 
                         {/* Data Nodes & Month Labels */}
                         {history.map((h, i) => {
                           const cx = 50 + i * 100;
@@ -1043,7 +1220,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-
+ 
         {/* INDICADOR 7: Concentração Geográfica (UF) */}
         <div className="card-portal relative flex flex-col p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
@@ -1073,7 +1250,7 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
-
+ 
           <div className="flex-1 overflow-y-auto pr-1">
             {ufDist.length === 0 ? (
               <p className="text-center text-xs text-slate-400 py-10">Sem alvarás geolocalizados.</p>
