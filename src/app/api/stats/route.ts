@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
         title,
         status,
         notes,
+        completed_at,
         company_alvaras (
           id,
           companies (

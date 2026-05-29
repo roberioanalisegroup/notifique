@@ -24,7 +24,8 @@ import {
   Maximize2,
   Search,
   Filter,
-  X
+  X,
+  CalendarDays
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
@@ -109,6 +110,7 @@ type ActiveTask = {
   title: string | null;
   status: "pendente" | "concluida" | "cancelada";
   notes: string | null;
+  completed_at: string | null;
   company_alvaras: {
     id: string;
     companies: {
@@ -202,6 +204,7 @@ export default function DashboardPage() {
   const [modalSearchTerm, setModalSearchTerm] = useState("");
   const [modalStatusFilter, setModalStatusFilter] = useState("all");
   const [modalResponsibleFilter, setModalResponsibleFilter] = useState("all");
+  const [modalDateFilter, setModalDateFilter] = useState("all");
 
   const fetchModalChecklists = async (tasksList: ActiveTask[]) => {
     if (tasksList.length === 0) return;
@@ -455,7 +458,36 @@ export default function DashboardPage() {
       (modalResponsibleFilter === "unassigned" && !company?.responsible) ||
       (company?.responsible?.display_name === modalResponsibleFilter);
 
-    return matchesSearch && matchesStatus && matchesResponsible;
+    let matchesDate = true;
+    if (modalDateFilter !== "all" && statusLabel === "Concluído" && t.completed_at) {
+      const completedDate = new Date(t.completed_at);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (modalDateFilter === "today") {
+        const compare = new Date(t.completed_at);
+        compare.setHours(0, 0, 0, 0);
+        matchesDate = compare.getTime() === today.getTime();
+      } else if (modalDateFilter === "7days") {
+        const past7 = new Date();
+        past7.setDate(past7.getDate() - 7);
+        past7.setHours(0, 0, 0, 0);
+        matchesDate = completedDate >= past7;
+      } else if (modalDateFilter === "30days") {
+        const past30 = new Date();
+        past30.setDate(past30.getDate() - 30);
+        past30.setHours(0, 0, 0, 0);
+        matchesDate = completedDate >= past30;
+      } else if (modalDateFilter === "thisMonth") {
+        matchesDate =
+          completedDate.getMonth() === today.getMonth() &&
+          completedDate.getFullYear() === today.getFullYear();
+      }
+    } else if (modalDateFilter !== "all" && (statusLabel !== "Concluído" || !t.completed_at)) {
+      matchesDate = false;
+    }
+
+    return matchesSearch && matchesStatus && matchesResponsible && matchesDate;
   });
 
   const uniqueResponsibles = Array.from(
@@ -1625,7 +1657,7 @@ export default function DashboardPage() {
         {/* Modal Content */}
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden p-6 space-y-5">
           {/* Barra de Filtros */}
-          <div className="grid gap-4 sm:grid-cols-3 bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-slate-100 dark:border-white/5">
+          <div className="grid gap-4 sm:grid-cols-4 bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-slate-100 dark:border-white/5">
             {/* Input de Busca */}
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1634,7 +1666,7 @@ export default function DashboardPage() {
               <input
                 type="text"
                 className="input-field pl-9 w-full text-xs"
-                placeholder="Buscar por empresa, CNPJ ou alvará..."
+                placeholder="Buscar por empresa, CNPJ..."
                 value={modalSearchTerm}
                 onChange={(e) => setModalSearchTerm(e.target.value)}
               />
@@ -1654,7 +1686,7 @@ export default function DashboardPage() {
                 <option value="pendente">Pendente</option>
                 <option value="em andamento">Em Andamento</option>
                 <option value="com impedimento">Com Impedimento</option>
-                <option value="concluido">Concluído</option>
+                <option value="concluído">Concluído</option>
               </select>
             </div>
 
@@ -1673,6 +1705,24 @@ export default function DashboardPage() {
                 {uniqueResponsibles.map(name => (
                   <option key={name} value={name}>{name}</option>
                 ))}
+              </select>
+            </div>
+
+            {/* Dropdown de Data de Conclusão */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <CalendarDays className="h-4 w-4 text-slate-400" />
+              </span>
+              <select
+                className="input-field pl-9 w-full text-xs appearance-none"
+                value={modalDateFilter}
+                onChange={(e) => setModalDateFilter(e.target.value)}
+              >
+                <option value="all">Todas as Datas de Conclusão</option>
+                <option value="today">Hoje</option>
+                <option value="7days">Últimos 7 dias</option>
+                <option value="30days">Últimos 30 dias</option>
+                <option value="thisMonth">Este mês</option>
               </select>
             </div>
           </div>
@@ -1736,6 +1786,11 @@ export default function DashboardPage() {
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-3xs font-extrabold uppercase ${statusBadgeClass}`}>
                             {statusLabel}
                           </span>
+                          {statusLabel === "Concluído" && t.completed_at && (
+                            <p className="text-3xs text-slate-400 font-mono mt-1">
+                              Concluído em: {formatDate(t.completed_at)}
+                            </p>
+                          )}
                         </td>
                         <td className="p-3.5 text-slate-700 dark:text-slate-300">
                           {responsibleName}
