@@ -204,20 +204,50 @@ export default function DashboardPage() {
         setWorkload(statsData.workloadByResponsible);
         setUfDist(statsData.ufDistribution);
         setHistory(statsData.sazonalHistory);
-        setAlvarasPorCategoria(statsData.alvarasPorCategoria || []);
-        setVencendo(statsData.vencendoProx30Dias);
-        setLogs(logsData.logs);
-
-        // Filter tasks in 'impedimento' lane on client-side
+        
+        // Filter tasks in 'impedimento' lane on client-side and compute phase distribution
         let localLanes: Record<string, string> = {};
         try {
-          const saved = localStorage.getItem("notifique_lanes");
+          const saved = localStorage.getItem("notifique-acompanhamento-lanes");
           if (saved) localLanes = JSON.parse(saved);
         } catch {
           // ignore
         }
-        const blocked = (statsData.activeTasks || []).filter(t => localLanes[t.id] === "impedimento");
+
+        const allTasks = statsData.activeTasks || [];
+        const blocked = allTasks.filter(t => localLanes[t.id] === "impedimento");
         setImpededTasks(blocked);
+
+        // Compute status distribution: Pendente, Em Andamento, Com Impedimento, Concluído
+        let countPendente = 0;
+        let countAndamento = 0;
+        let countImpedimento = 0;
+        let countConcluido = 0;
+
+        allTasks.forEach(t => {
+          if (t.status === "concluida") {
+            countConcluido++;
+          } else {
+            const lane = localLanes[t.id] || "pendente";
+            if (lane === "andamento") {
+              countAndamento++;
+            } else if (lane === "impedimento") {
+              countImpedimento++;
+            } else {
+              countPendente++;
+            }
+          }
+        });
+
+        setAlvarasPorCategoria([
+          { name: "Pendente", color: "#6366f1", count: countPendente },
+          { name: "Em Andamento", color: "#3b82f6", count: countAndamento },
+          { name: "Com Impedimento", color: "#f43f5e", count: countImpedimento },
+          { name: "Concluído", color: "#10b981", count: countConcluido }
+        ]);
+
+        setVencendo(statsData.vencendoProx30Dias);
+        setLogs(logsData.logs);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Falha ao carregar o dashboard");
       } finally {
@@ -292,9 +322,9 @@ export default function DashboardPage() {
       downloadCSV("carga-de-trabalho-por-responsavel", headers, rows);
       toast.success("Dados exportados!");
     } else if (id === "categories") {
-      const headers = ["Categoria (Grupo)", "Total de Alvaras"];
+      const headers = ["Status (Fase)", "Total de Alvaras"];
       const rows = alvarasPorCategoria.map(c => [c.name, c.count]);
-      downloadCSV("alvaras-por-categoria", headers, rows);
+      downloadCSV("alvaras-por-status", headers, rows);
       toast.success("Dados exportados!");
     } else if (id === "impeded") {
       const headers = ["ID Tarefa", "Titulo", "Empresa", "Alvara"];
@@ -887,13 +917,13 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* INDICADOR 11: Alvarás por Categoria (Grupo) */}
+        {/* INDICADOR 11: Alvarás por Status (Fase) */}
         <div className="card-portal relative flex flex-col p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <FileStack className="h-5 w-5 text-indigo-500" />
               <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
-                Alvarás por Categoria
+                Alvarás por Status (Fase)
               </h2>
             </div>
             
@@ -919,9 +949,9 @@ export default function DashboardPage() {
 
           <div className="flex-1 overflow-y-auto pr-1 space-y-3.5 justify-center flex flex-col">
             {alvarasPorCategoria.length === 0 ? (
-              <p className="text-center text-xs text-slate-400">Nenhuma categoria encontrada.</p>
+              <p className="text-center text-xs text-slate-400">Nenhum status encontrado.</p>
             ) : (
-              alvarasPorCategoria.slice(0, 4).map((cat, idx) => {
+              alvarasPorCategoria.map((cat, idx) => {
                 const maxCount = Math.max(...alvarasPorCategoria.map(x => x.count), 1);
                 const percentage = (cat.count / maxCount) * 100;
                 return (
@@ -945,7 +975,7 @@ export default function DashboardPage() {
             )}
           </div>
           <p className="text-2xs text-slate-400 text-center mt-2 uppercase tracking-wide">
-            Distribuição volumétrica por grupos cadastrados
+            Distribuição volumétrica por fase de acompanhamento
           </p>
         </div>
       </div>
