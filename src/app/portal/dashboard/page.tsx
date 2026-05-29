@@ -9,17 +9,51 @@ import {
   FileStack,
   AlertTriangle,
   Bell,
+  Download,
+  FileSpreadsheet,
+  Image as ImageIcon,
+  MapPin,
+  TrendingUp,
+  Award,
+  ShieldCheck,
+  Briefcase,
+  Layers,
+  Infinity as InfinityIcon,
+  ChevronDown
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
+
+type Throughput = {
+  total: number;
+  completed: number;
+  rate: number;
+};
+
+type TaskStatusCounts = {
+  pendente: number;
+  concluida: number;
+  cancelada: number;
+};
+
+type Expirations = {
+  30: number;
+  60: number;
+  90: number;
+};
 
 type Kpis = {
   totalEmpresas: number;
-  ativas: number;
+  regularCompaniesCount: number;
+  complianceRate: number;
   syncPendentes: number;
   totalAlvaras: number;
   alvarasVencidos: number;
-  notificacoesNoMes: number;
+  indefiniteValidityCount: number;
+  documentCoverageRate: number;
+  throughput: Throughput;
+  taskStatusCounts: TaskStatusCounts;
+  expirations: Expirations;
 };
 
 type SyncLog = {
@@ -33,125 +67,1053 @@ type SyncLog = {
   triggered_by: string;
 };
 
+type CriticalCompany = {
+  id: string;
+  name: string;
+  vencidos: number;
+};
+
+type Workload = {
+  id: string;
+  name: string;
+  count: number;
+};
+
+type UfDistribution = {
+  uf: string;
+  count: number;
+};
+
+type SazonalHistory = {
+  label: string;
+  created: number;
+  completed: number;
+};
+
+type VencendoAlvara = {
+  id: string;
+  numero: string | null;
+  data_vencimento: string | null;
+  companies: { cnpj: string; razao_social: string | null } | null;
+  alvaras: { name: string } | null;
+};
+
+// --- CLIENT-SIDE EXPORT HELPERS ---
+function downloadCSV(filename: string, headers: string[], rows: (string | number)[][]) {
+  const csvContent = [
+    headers.join(";"),
+    ...rows.map(row => row.map(val => {
+      const cell = val === null || val === undefined ? "" : String(val);
+      if (cell.includes(";") || cell.includes('"') || cell.includes("\n")) {
+        return `"${cell.replace(/"/g, '""')}"`;
+      }
+      return cell;
+    }).join(";"))
+  ].join("\n");
+
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${filename}.csv`);
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function downloadSVG(svgId: string, filename: string) {
+  const svgEl = document.getElementById(svgId);
+  if (!svgEl) {
+    toast.error("Gráfico não encontrado para exportação.");
+    return;
+  }
+  const svgCopy = svgEl.cloneNode(true) as SVGElement;
+  svgCopy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  
+  // Apply standard layout styles in copy for beautiful viewing standalone
+  svgCopy.setAttribute("style", "background-color: #0c152b; font-family: ui-sans-serif, system-ui, sans-serif; color: #ffffff; padding: 10px; border-radius: 12px;");
+  
+  const svgString = new XMLSerializer().serializeToString(svgCopy);
+  const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${filename}.svg`);
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [logs, setLogs] = useState<SyncLog[]>([]);
-  const [vencendo, setVencendo] = useState<
-    { id: string; numero: string | null; data_vencimento: string | null; companies: { cnpj: string; razao_social: string | null } | null; alvaras: { name: string } | null }[]
-  >([]);
+  const [topCritical, setTopCritical] = useState<CriticalCompany[]>([]);
+  const [workload, setWorkload] = useState<Workload[]>([]);
+  const [ufDist, setUfDist] = useState<UfDistribution[]>([]);
+  const [history, setHistory] = useState<SazonalHistory[]>([]);
+  const [vencendo, setVencendo] = useState<VencendoAlvara[]>([]);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+
+  const menuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
-    let c = true;
-    (async () => {
+    let active = true;
+    const loadData = async () => {
       try {
-        const [s, l] = await Promise.all([
+        const [statsData, logsData] = await Promise.all([
           apiJson<{
             kpis: Kpis;
-            vencendoProx30Dias: typeof vencendo;
+            topCriticalCompanies: CriticalCompany[];
+            workloadByResponsible: Workload[];
+            ufDistribution: UfDistribution[];
+            sazonalHistory: SazonalHistory[];
+            vencendoProx30Dias: VencendoAlvara[];
           }>("/api/stats"),
           apiJson<{ logs: SyncLog[] }>("/api/sync-logs?limit=5"),
         ]);
-        if (!c) return;
-        setKpis(s.kpis);
-        setVencendo(s.vencendoProx30Dias);
-        setLogs(l.logs);
+        if (!active) return;
+        setKpis(statsData.kpis);
+        setTopCritical(statsData.topCriticalCompanies);
+        setWorkload(statsData.workloadByResponsible);
+        setUfDist(statsData.ufDistribution);
+        setHistory(statsData.sazonalHistory);
+        setVencendo(statsData.vencendoProx30Dias);
+        setLogs(logsData.logs);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Falha ao carregar o dashboard");
       } finally {
-        if (c) setLoading(false);
+        if (active) setLoading(false);
       }
-    })();
-    return () => {
-      c = false;
     };
-  }, []);
+    void loadData();
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (activeMenu) {
+        const ref = menuRefs.current[activeMenu];
+        if (ref && !ref.contains(event.target as Node)) {
+          setActiveMenu(null);
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      active = false;
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [activeMenu]);
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-slate-500 dark:text-slate-400">
+      <div className="flex h-96 items-center justify-center text-slate-500 dark:text-slate-400">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-slate-600 dark:border-t-blue-400" />
-          <span className="text-sm">Carregando…</span>
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600 dark:border-slate-800 dark:border-t-blue-500" />
+          <span className="text-sm font-medium tracking-wide">Carregando painel de indicadores...</span>
         </div>
       </div>
     );
   }
 
-  const cards = [
+  // --- STATS EXPORT HANDLERS ---
+  const handleExportCSV = (id: string) => {
+    setActiveMenu(null);
+    if (!kpis) return;
+
+    if (id === "compliance") {
+      const headers = ["Empresa Regular", "Total Empresas", "Indice de Conformidade (%)"];
+      const rows = [[kpis.regularCompaniesCount, kpis.totalEmpresas, kpis.complianceRate.toFixed(2)]];
+      downloadCSV("indice-de-conformidade-geral", headers, rows);
+      toast.success("Dados exportados!");
+    } else if (id === "top-critical") {
+      const headers = ["Nome da Empresa", "Alvaras Vencidos"];
+      const rows = topCritical.map(c => [c.name, c.vencidos]);
+      downloadCSV("empresas-criticas", headers, rows);
+      toast.success("Dados exportados!");
+    } else if (id === "alerts") {
+      const headers = ["Periodo", "Alvaras a Vencer"];
+      const rows = [
+        ["A vencer em 30 dias", kpis.expirations[30]],
+        ["A vencer em 60 dias", kpis.expirations[60]],
+        ["A vencer em 90 dias", kpis.expirations[90]]
+      ];
+      downloadCSV("alvaras-a-vencer-projecao", headers, rows);
+      toast.success("Dados exportados!");
+    } else if (id === "tasks") {
+      const headers = ["Status da Tarefa", "Quantidade"];
+      const rows = [
+        ["Pendentes", kpis.taskStatusCounts.pendente],
+        ["Concluidas", kpis.taskStatusCounts.concluida],
+        ["Canceladas", kpis.taskStatusCounts.cancelada]
+      ];
+      downloadCSV("distribuicao-backlog-tarefas", headers, rows);
+      toast.success("Dados exportados!");
+    } else if (id === "workload") {
+      const headers = ["Responsavel", "Empresas Vinculadas"];
+      const rows = workload.map(w => [w.name, w.count]);
+      downloadCSV("carga-de-trabalho-por-responsavel", headers, rows);
+      toast.success("Dados exportados!");
+    } else if (id === "geographic") {
+      const headers = ["Estado (UF)", "Total de Alvaras"];
+      const rows = ufDist.map(u => [u.uf, u.count]);
+      downloadCSV("concentracao-geografica-uf", headers, rows);
+      toast.success("Dados exportados!");
+    } else if (id === "sazonal") {
+      const headers = ["Mes/Ano", "Novos Processos (Criados)", "Processos Concluidos"];
+      const rows = history.map(h => [h.label, h.created, h.completed]);
+      downloadCSV("historico-entrada-saida-mensal", headers, rows);
+      toast.success("Dados exportados!");
+    } else if (id === "indefinite") {
+      const headers = ["KPI", "Quantidade"];
+      const rows = [["Alvaras com Validade Indeterminada", kpis.indefiniteValidityCount]];
+      downloadCSV("alvaras-validade-indeterminada", headers, rows);
+      toast.success("Dados exportados!");
+    } else if (id === "document-coverage") {
+      const headers = ["KPI", "Taxa de Cobertura Documental (%)"];
+      const rows = [["Taxa de Uploads PDF", kpis.documentCoverageRate.toFixed(2)]];
+      downloadCSV("cobertura-documental-uploads", headers, rows);
+      toast.success("Dados exportados!");
+    }
+  };
+
+  const handleExportSVG = (id: string, filename: string) => {
+    setActiveMenu(null);
+    downloadSVG(id, filename);
+    toast.success("Gráfico exportado!");
+  };
+
+  // Base cards mapping
+  const baselineCards = [
     {
-      label: "TOTAL DE EMPRESAS",
+      label: "Total de Empresas",
       value: kpis?.totalEmpresas ?? 0,
-      icon: <Building2 className="h-5 w-5" />,
-      iconBg: "bg-blue-100 text-blue-600 dark:bg-blue-950/55 dark:text-blue-300",
+      icon: <Building2 className="h-5 w-5 text-blue-500" />,
+      color: "from-blue-500/10 to-blue-500/0 border-blue-500/10"
     },
     {
-      label: "EMPRESAS ATIVAS",
-      value: kpis?.ativas ?? 0,
-      icon: <CheckCircle className="h-5 w-5" />,
-      iconBg: "bg-green-100 text-green-600 dark:bg-emerald-950/55 dark:text-emerald-300",
-    },
-    {
-      label: "SYNC PENDENTE",
-      value: kpis?.syncPendentes ?? 0,
-      icon: <RefreshCw className="h-5 w-5" />,
-      iconBg: "bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-300",
-    },
-    {
-      label: "TIPOS DE ALVARÁS",
+      label: "Tipos de Alvarás",
       value: kpis?.totalAlvaras ?? 0,
-      icon: <FileStack className="h-5 w-5" />,
-      iconBg: "bg-blue-100 text-blue-600 dark:bg-blue-950/55 dark:text-blue-300",
+      icon: <FileStack className="h-5 w-5 text-indigo-500" />,
+      color: "from-indigo-500/10 to-indigo-500/0 border-indigo-500/10"
     },
     {
-      label: "ALVARÁS VENCIDOS",
+      label: "Alvarás Vencidos",
       value: kpis?.alvarasVencidos ?? 0,
-      icon: <AlertTriangle className="h-5 w-5" />,
-      iconBg: "bg-orange-100 text-orange-600 dark:bg-orange-950/50 dark:text-orange-300",
+      icon: <AlertTriangle className="h-5 w-5 text-orange-500" />,
+      color: "from-orange-500/10 to-orange-500/0 border-orange-500/10"
     },
     {
-      label: "NOTIFICADOS NO MÊS",
-      value: kpis?.notificacoesNoMes ?? 0,
-      icon: <Bell className="h-5 w-5" />,
-      iconBg: "bg-purple-100 text-purple-600 dark:bg-purple-950/50 dark:text-purple-300",
-    },
+      label: "Sync Pendentes",
+      value: kpis?.syncPendentes ?? 0,
+      icon: <RefreshCw className="h-5 w-5 text-rose-500" />,
+      color: "from-rose-500/10 to-rose-500/0 border-rose-500/10"
+    }
   ];
 
   return (
     <div className="space-y-8 text-slate-900 dark:text-slate-100">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Visão geral da gestão de alvarás e empresas no portal.
-        </p>
+      {/* 1. Header do Painel */}
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 dark:from-white dark:via-blue-100 dark:to-indigo-200 bg-clip-text text-transparent">
+            Painel de Indicadores
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Acompanhamento em tempo real de conformidade, prazos e produtividade corporativa.
+          </p>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500" />
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            Dados Atualizados
+          </span>
+        </div>
       </div>
 
-      {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((c) => (
+      {/* 2. Grid de Baselines */}
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {baselineCards.map((c) => (
           <div
             key={c.label}
-            className="card-portal flex items-center gap-4 p-5 transition-shadow hover:shadow-md dark:hover:ring-slate-600/60"
+            className={`card-portal relative overflow-hidden bg-gradient-to-b ${c.color} border p-5 transition-transform hover:-translate-y-0.5 hover:shadow-md`}
           >
-            <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${c.iconBg}`}>
-              {c.icon}
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                {c.label}
-              </p>
-              <p className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-50">
-                {c.value}
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {c.label}
+                </p>
+                <p className="mt-1 text-3xl font-black tabular-nums text-slate-900 dark:text-slate-50">
+                  {c.value}
+                </p>
+              </div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/50 shadow-sm border border-slate-100 dark:bg-white/5 dark:border-white/10">
+                {c.icon}
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Bottom sections */}
+      {/* 3. Bloco Principal: Risco, Compliance & Alertas */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* INDICADOR 1: Índice de Conformidade */}
+        <div className="card-portal relative flex flex-col p-6 shadow-sm">
+          {/* Header Card */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-emerald-500" />
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                Conformidade Geral
+              </h2>
+            </div>
+            
+            {/* Export Dropdown */}
+            <div className="relative" ref={el => { menuRefs.current["compliance"] = el; }}>
+              <button
+                onClick={() => setActiveMenu(activeMenu === "compliance" ? null : "compliance")}
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+              </button>
+              {activeMenu === "compliance" && (
+                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
+                  <button
+                    onClick={() => handleExportCSV("compliance")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
+                  </button>
+                  <button
+                    onClick={() => handleExportSVG("compliance-chart", "indice-de-conformidade")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5 text-blue-500" /> Gráfico (SVG)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Gráfico de Progresso Circular SVG */}
+          <div className="flex-1 flex flex-col items-center justify-center py-2">
+            <svg id="compliance-chart" width="180" height="180" className="rotate-[-90deg]">
+              {/* Track background */}
+              <circle
+                cx="90"
+                cy="90"
+                r="70"
+                strokeWidth="12"
+                stroke="rgba(16, 185, 129, 0.1)"
+                fill="none"
+              />
+              {/* Progress */}
+              <circle
+                cx="90"
+                cy="90"
+                r="70"
+                strokeWidth="12"
+                stroke="#10b981"
+                fill="none"
+                strokeDasharray="440"
+                strokeDashoffset={440 - (440 * (kpis?.complianceRate ?? 0)) / 100}
+                strokeLinecap="round"
+                className="transition-all duration-1000 ease-out"
+              />
+            </svg>
+            <div className="absolute flex flex-col items-center justify-center mt-[-10px]">
+              <span className="text-3xl font-black tabular-nums tracking-tight">
+                {kpis?.complianceRate.toFixed(1) ?? "0"}%
+              </span>
+              <span className="text-2xs font-semibold text-slate-400 uppercase tracking-wider mt-0.5">
+                Empresas Regulares
+              </span>
+            </div>
+          </div>
+
+          <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">
+            {kpis?.regularCompaniesCount ?? 0} de {kpis?.totalEmpresas ?? 0} empresas operam com todos os alvarás ativos e sem pendências vencidas.
+          </p>
+        </div>
+
+        {/* INDICADOR 2: Empresas Críticas */}
+        <div className="card-portal relative flex flex-col p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                Empresas mais Críticas
+              </h2>
+            </div>
+            
+            <div className="relative" ref={el => { menuRefs.current["top-critical"] = el; }}>
+              <button
+                onClick={() => setActiveMenu(activeMenu === "top-critical" ? null : "top-critical")}
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+              </button>
+              {activeMenu === "top-critical" && (
+                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
+                  <button
+                    onClick={() => handleExportCSV("top-critical")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
+                  </button>
+                  <button
+                    onClick={() => handleExportSVG("top-critical-chart", "empresas-mais-criticas")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5 text-blue-500" /> Gráfico (SVG)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col justify-center">
+            {topCritical.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-slate-400 dark:text-slate-500">Zero alvarás vencidos no momento.</p>
+                <p className="text-2xs text-emerald-500 uppercase tracking-widest font-semibold mt-1">Conformidade total</p>
+              </div>
+            ) : (
+              <svg id="top-critical-chart" width="100%" height="160" viewBox="0 0 320 160" className="overflow-visible">
+                {topCritical.map((comp, idx) => {
+                  const y = idx * 30 + 15;
+                  const maxV = Math.max(...topCritical.map(c => c.vencidos), 1);
+                  const barWidth = (comp.vencidos / maxV) * 160;
+                  return (
+                    <g key={comp.id} className="group">
+                      {/* Company Name Label */}
+                      <text
+                        x="0"
+                        y={y + 5}
+                        fontSize="10"
+                        fontWeight="semibold"
+                        fill="currentColor"
+                        className="text-slate-600 dark:text-slate-300"
+                      >
+                        {comp.name.length > 18 ? comp.name.slice(0, 16) + "..." : comp.name}
+                      </text>
+                      {/* Bar Track */}
+                      <rect
+                        x="110"
+                        y={y - 6}
+                        width="160"
+                        height="8"
+                        rx="4"
+                        fill="rgba(249, 115, 22, 0.08)"
+                      />
+                      {/* Bar Fill */}
+                      <rect
+                        x="110"
+                        y={y - 6}
+                        width={barWidth}
+                        height="8"
+                        rx="4"
+                        fill="url(#critical-orange-gradient)"
+                      />
+                      {/* Count value */}
+                      <text
+                        x={115 + barWidth}
+                        y={y + 2}
+                        fontSize="10"
+                        fontWeight="bold"
+                        fill="#f97316"
+                        className="tabular-nums"
+                      >
+                        {comp.vencidos}
+                      </text>
+                    </g>
+                  );
+                })}
+                <defs>
+                  <linearGradient id="critical-orange-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#ea580c" />
+                    <stop offset="100%" stopColor="#f97316" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            )}
+          </div>
+          <p className="text-2xs text-slate-400 text-center mt-2 uppercase tracking-wide">
+            Ranking baseado em alvarás expirados pendentes
+          </p>
+        </div>
+
+        {/* INDICADOR 3: Projeção de Alertas Críticos */}
+        <div className="card-portal relative flex flex-col p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-indigo-500" />
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                Alvarás a Vencer (Projeção)
+              </h2>
+            </div>
+            
+            <div className="relative" ref={el => { menuRefs.current["alerts"] = el; }}>
+              <button
+                onClick={() => setActiveMenu(activeMenu === "alerts" ? null : "alerts")}
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+              </button>
+              {activeMenu === "alerts" && (
+                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
+                  <button
+                    onClick={() => handleExportCSV("alerts")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col justify-around gap-4 py-2">
+            {/* 30 dias */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wide">
+                  Próximos 30 dias
+                </span>
+                <span className="font-bold tabular-nums text-rose-600 dark:text-rose-400">
+                  {kpis?.expirations[30] ?? 0} alvarás
+                </span>
+              </div>
+              <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-rose-500 transition-all duration-1000"
+                  style={{ width: `${Math.min(((kpis?.expirations[30] ?? 0) / 10) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 60 dias */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-orange-500 uppercase tracking-wide">
+                  De 31 a 60 dias
+                </span>
+                <span className="font-bold tabular-nums text-orange-500">
+                  {kpis?.expirations[60] ?? 0} alvarás
+                </span>
+              </div>
+              <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-orange-400 transition-all duration-1000"
+                  style={{ width: `${Math.min(((kpis?.expirations[60] ?? 0) / 10) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 90 dias */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-amber-500 uppercase tracking-wide">
+                  De 61 a 90 dias
+                </span>
+                <span className="font-bold tabular-nums text-amber-500">
+                  {kpis?.expirations[90] ?? 0} alvarás
+                </span>
+              </div>
+              <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-amber-400 transition-all duration-1000"
+                  style={{ width: `${Math.min(((kpis?.expirations[90] ?? 0) / 10) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Bloco Secundário: Processos, Equipe e Produtividade */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* INDICADOR 4 & 5: Backlog por Status & Throughput */}
+        <div className="card-portal relative flex flex-col p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Layers className="h-5 w-5 text-indigo-500" />
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                Backlog de Tarefas
+              </h2>
+            </div>
+            
+            <div className="relative" ref={el => { menuRefs.current["tasks"] = el; }}>
+              <button
+                onClick={() => setActiveMenu(activeMenu === "tasks" ? null : "tasks")}
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+              </button>
+              {activeMenu === "tasks" && (
+                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
+                  <button
+                    onClick={() => handleExportCSV("tasks")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
+                  </button>
+                  <button
+                    onClick={() => handleExportSVG("tasks-donut-chart", "distribuicao-backlog")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5 text-blue-500" /> Gráfico (SVG)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col justify-center items-center py-2">
+            {kpis && (kpis.taskStatusCounts.pendente + kpis.taskStatusCounts.concluida) === 0 ? (
+              <p className="text-xs text-slate-400 dark:text-slate-500 py-10">Nenhuma tarefa ativa registrada.</p>
+            ) : (
+              <div className="relative flex justify-center items-center">
+                <svg id="tasks-donut-chart" width="150" height="150" className="rotate-[-90deg]">
+                  {/* Total Tasks (Concluida + Pendente) */}
+                  {(() => {
+                    const pendente = kpis?.taskStatusCounts.pendente ?? 0;
+                    const concluida = kpis?.taskStatusCounts.concluida ?? 0;
+                    const total = pendente + concluida;
+                    const cPerc = (concluida / (total || 1)) * 440;
+                    return (
+                      <>
+                        {/* Track / Pendente (red-ish or slate-ish) */}
+                        <circle
+                          cx="75"
+                          cy="75"
+                          r="55"
+                          strokeWidth="14"
+                          stroke="#ef4444"
+                          fill="none"
+                        />
+                        {/* Concluida (blue/indigo) */}
+                        <circle
+                          cx="75"
+                          cy="75"
+                          r="55"
+                          strokeWidth="14"
+                          stroke="#2F6BFF"
+                          fill="none"
+                          strokeDasharray="345"
+                          strokeDashoffset={345 - (345 * concluida) / (total || 1)}
+                          strokeLinecap="round"
+                        />
+                      </>
+                    );
+                  })()}
+                </svg>
+                {/* Center metric */}
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-xl font-black text-slate-900 dark:text-white leading-none">
+                    {(kpis?.taskStatusCounts.pendente ?? 0) + (kpis?.taskStatusCounts.concluida ?? 0)}
+                  </span>
+                  <span className="text-3xs uppercase tracking-wider text-slate-400 mt-1 font-semibold">
+                    Tarefas
+                  </span>
+                </div>
+              </div>
+            )}
+            
+            {/* Legenda colorida */}
+            <div className="flex gap-4 text-xs font-semibold mt-4">
+              <span className="inline-flex items-center gap-1.5 text-blue-600 dark:text-[#4DA3FF]">
+                <span className="h-2 w-2 rounded-full bg-blue-600" />
+                Concluídas ({kpis?.taskStatusCounts.concluida ?? 0})
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-rose-500">
+                <span className="h-2 w-2 rounded-full bg-rose-500" />
+                Pendentes ({kpis?.taskStatusCounts.pendente ?? 0})
+              </span>
+            </div>
+          </div>
+          
+          <div className="border-t border-slate-100 dark:border-white/5 pt-3.5 mt-3 flex items-center justify-between text-xs">
+            <span className="text-slate-500">Conclusão no Mês:</span>
+            <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+              {kpis?.throughput.rate.toFixed(0)}% Eficiência (Throughput)
+            </span>
+          </div>
+        </div>
+
+        {/* INDICADOR 6: Carga de Trabalho por Responsável */}
+        <div className="card-portal relative flex flex-col p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Briefcase className="h-5 w-5 text-indigo-500" />
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                Carga por Responsável
+              </h2>
+            </div>
+            
+            <div className="relative" ref={el => { menuRefs.current["workload"] = el; }}>
+              <button
+                onClick={() => setActiveMenu(activeMenu === "workload" ? null : "workload")}
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+              </button>
+              {activeMenu === "workload" && (
+                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
+                  <button
+                    onClick={() => handleExportCSV("workload")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
+                  </button>
+                  <button
+                    onClick={() => handleExportSVG("workload-chart", "carga-de-trabalho")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5 text-blue-500" /> Gráfico (SVG)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col justify-center">
+            {workload.length === 0 ? (
+              <p className="text-center text-xs text-slate-400 py-6">Nenhum responsável atribuído a empresas.</p>
+            ) : (
+              <svg id="workload-chart" width="100%" height="160" viewBox="0 0 320 160" className="overflow-visible">
+                {workload.slice(0, 5).map((w, idx) => {
+                  const y = idx * 30 + 15;
+                  const maxCount = Math.max(...workload.map(x => x.count), 1);
+                  const barWidth = (w.count / maxCount) * 160;
+                  return (
+                    <g key={w.id || idx}>
+                      <text
+                        x="0"
+                        y={y + 5}
+                        fontSize="9"
+                        fontWeight="semibold"
+                        fill="currentColor"
+                        className="text-slate-500 dark:text-slate-300"
+                      >
+                        {w.name.length > 15 ? w.name.slice(0, 13) + "..." : w.name}
+                      </text>
+                      <rect
+                        x="100"
+                        y={y - 6}
+                        width="160"
+                        height="8"
+                        rx="4"
+                        fill="rgba(47, 107, 255, 0.08)"
+                      />
+                      <rect
+                        x="100"
+                        y={y - 6}
+                        width={barWidth}
+                        height="8"
+                        rx="4"
+                        fill="url(#blue-workload-gradient)"
+                      />
+                      <text
+                        x={105 + barWidth}
+                        y={y + 2}
+                        fontSize="10"
+                        fontWeight="bold"
+                        fill="#2F6BFF"
+                        className="tabular-nums"
+                      >
+                        {w.count}
+                      </text>
+                    </g>
+                  );
+                })}
+                <defs>
+                  <linearGradient id="blue-workload-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#2563eb" />
+                    <stop offset="100%" stopColor="#3b82f6" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            )}
+          </div>
+          <p className="text-2xs text-slate-400 text-center mt-2 uppercase tracking-wide">
+            Carga de empresas sob responsabilidade de cada analista
+          </p>
+        </div>
+
+        {/* INDICADOR 9 & 10: Qualidade de Dados & Cobertura */}
+        <div className="card-portal relative flex flex-col p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-indigo-500" />
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                Auditoria de Dados
+              </h2>
+            </div>
+            
+            <div className="relative" ref={el => { menuRefs.current["audit"] = el; }}>
+              <button
+                onClick={() => setActiveMenu(activeMenu === "audit" ? null : "audit")}
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+              </button>
+              {activeMenu === "audit" && (
+                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
+                  <button
+                    onClick={() => handleExportCSV("document-coverage")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col justify-around gap-6">
+            {/* Indicador 9: Cobertura Documental */}
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 shrink-0 flex items-center justify-center rounded-xl bg-indigo-50 dark:bg-white/5 border border-indigo-100 dark:border-white/10">
+                <FileStack className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div className="flex-1">
+                <div className="flex justify-between items-center text-xs font-semibold mb-1">
+                  <span className="text-slate-600 dark:text-slate-400">Cobertura Documental (PDFs)</span>
+                  <span className="text-slate-900 dark:text-white font-bold">{kpis?.documentCoverageRate.toFixed(1)}%</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-indigo-600 transition-all duration-1000"
+                    style={{ width: `${kpis?.documentCoverageRate ?? 0}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Indicador 10: Validade Indeterminada */}
+            <div className="flex items-center gap-4 border-t border-slate-100 dark:border-white/5 pt-4">
+              <div className="h-12 w-12 shrink-0 flex items-center justify-center rounded-xl bg-teal-50 dark:bg-white/5 border border-teal-100 dark:border-white/10">
+                <InfinityIcon className="h-6 w-6 text-teal-600 dark:text-teal-400" />
+              </div>
+              <div className="flex-1">
+                <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-0.5">
+                  Validade Legal Indeterminada
+                </div>
+                <div className="text-lg font-extrabold text-slate-900 dark:text-white">
+                  {kpis?.indefiniteValidityCount ?? 0} alvarás
+                </div>
+                <div className="text-3xs text-teal-600 dark:text-teal-400 uppercase tracking-widest font-semibold mt-0.5">
+                  Documentos permanentes sem expiração
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. Bloco Inferior: Histórico de Evolução & Distribuição Geográfica */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* INDICADOR 8: Histórico de Entrada vs. Saída */}
+        <div className="card-portal relative flex flex-col p-6 shadow-sm lg:col-span-2">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-indigo-500" />
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                Fluxo Mensal de Processos (Criados vs. Concluídos)
+              </h2>
+            </div>
+            
+            <div className="relative" ref={el => { menuRefs.current["sazonal"] = el; }}>
+              <button
+                onClick={() => setActiveMenu(activeMenu === "sazonal" ? null : "sazonal")}
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+              </button>
+              {activeMenu === "sazonal" && (
+                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
+                  <button
+                    onClick={() => handleExportCSV("sazonal")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
+                  </button>
+                  <button
+                    onClick={() => handleExportSVG("history-line-chart", "historico-mensal-entrada-saida")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5 text-blue-500" /> Gráfico (SVG)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col justify-center">
+            {history.length === 0 ? (
+              <p className="text-center text-xs text-slate-400 py-10">Histórico sazonal indisponível.</p>
+            ) : (
+              <div className="w-full">
+                <svg id="history-line-chart" width="100%" height="220" viewBox="0 0 600 220" className="overflow-visible w-full">
+                  {/* Grid Lines */}
+                  <line x1="50" y1="20" x2="550" y2="20" stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
+                  <line x1="50" y1="70" x2="550" y2="70" stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
+                  <line x1="50" y1="120" x2="550" y2="120" stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
+                  <line x1="50" y1="170" x2="550" y2="170" stroke="rgba(255,255,255,0.05)" strokeDasharray="3" />
+                  <line x1="50" y1="170" x2="550" y2="170" stroke="rgba(0,0,0,0.1)" dark-stroke="rgba(255,255,255,0.2)" />
+
+                  {(() => {
+                    const maxVal = Math.max(...history.flatMap(h => [h.created, h.completed]), 5);
+                    const scaleY = (val: number) => 170 - (val / maxVal) * 130;
+                    const pointsCreated = history.map((h, i) => `${50 + i * 100},${scaleY(h.created)}`).join(" ");
+                    const pointsCompleted = history.map((h, i) => `${50 + i * 100},${scaleY(h.completed)}`).join(" ");
+
+                    return (
+                      <>
+                        {/* Line Created (Red) */}
+                        <polyline
+                          fill="none"
+                          stroke="#f43f5e"
+                          strokeWidth="3.5"
+                          points={pointsCreated}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        {/* Line Completed (Blue) */}
+                        <polyline
+                          fill="none"
+                          stroke="#3b82f6"
+                          strokeWidth="3.5"
+                          points={pointsCompleted}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+
+                        {/* Data Nodes & Month Labels */}
+                        {history.map((h, i) => {
+                          const cx = 50 + i * 100;
+                          const cyCreated = scaleY(h.created);
+                          const cyCompleted = scaleY(h.completed);
+                          return (
+                            <g key={i} className="group/node">
+                              {/* Labels X axis */}
+                              <text
+                                x={cx}
+                                y="195"
+                                textAnchor="middle"
+                                fontSize="10"
+                                fontWeight="bold"
+                                fill="currentColor"
+                                className="text-slate-500 dark:text-slate-400"
+                              >
+                                {h.label}
+                              </text>
+                              {/* Created Nodes */}
+                              <circle cx={cx} cy={cyCreated} r="4.5" fill="#f43f5e" stroke="#fff" strokeWidth="1.5" />
+                              <text x={cx} y={cyCreated - 8} textAnchor="middle" fontSize="9" fontWeight="extrabold" fill="#f43f5e" className="tabular-nums">
+                                {h.created}
+                              </text>
+                              {/* Completed Nodes */}
+                              <circle cx={cx} cy={cyCompleted} r="4.5" fill="#3b82f6" stroke="#fff" strokeWidth="1.5" />
+                              <text x={cx} y={cyCompleted + 12} textAnchor="middle" fontSize="9" fontWeight="extrabold" fill="#3b82f6" className="tabular-nums">
+                                {h.completed}
+                              </text>
+                            </g>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
+                </svg>
+              </div>
+            )}
+            
+            {/* Color key legend */}
+            <div className="flex justify-center gap-6 text-xs font-semibold mt-4">
+              <span className="inline-flex items-center gap-1.5 text-rose-500">
+                <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+                Novas Demandas (Abertas)
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
+                <span className="h-2.5 w-2.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                Entregas Concluídas (Emitidas)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* INDICADOR 7: Concentração Geográfica (UF) */}
+        <div className="card-portal relative flex flex-col p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-indigo-500" />
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                Alvarás por Estado (UF)
+              </h2>
+            </div>
+            
+            <div className="relative" ref={el => { menuRefs.current["geographic"] = el; }}>
+              <button
+                onClick={() => setActiveMenu(activeMenu === "geographic" ? null : "geographic")}
+                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+              </button>
+              {activeMenu === "geographic" && (
+                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
+                  <button
+                    onClick={() => handleExportCSV("geographic")}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-1">
+            {ufDist.length === 0 ? (
+              <p className="text-center text-xs text-slate-400 py-10">Sem alvarás geolocalizados.</p>
+            ) : (
+              <div className="space-y-4">
+                {ufDist.slice(0, 5).map((u) => {
+                  const maxVal = Math.max(...ufDist.map(x => x.count), 1);
+                  const percentage = (u.count / maxVal) * 100;
+                  return (
+                    <div key={u.uf} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs font-semibold">
+                        <span className="flex items-center gap-1.5">
+                          <span className="inline-flex h-5 w-7 items-center justify-center rounded bg-slate-100 text-3xs font-extrabold text-slate-700 uppercase dark:bg-white/5 dark:text-slate-300">
+                            {u.uf}
+                          </span>
+                        </span>
+                        <span className="tabular-nums text-slate-900 dark:text-white font-bold">{u.count} alvarás</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-indigo-500 transition-all duration-1000"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          
+          <p className="text-3xs text-slate-400 text-center mt-4 uppercase tracking-wide">
+            Representação das 5 principais regiões com maior densidade
+          </p>
+        </div>
+      </div>
+
+      {/* 6. Listas Auxiliares do Rodapé */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Últimas sincronizações */}
+        {/* Histórico Recente de Sync */}
         <section className="card-portal overflow-hidden shadow-sm">
           <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-700">
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -205,7 +1167,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* Alvarás vencendo */}
+        {/* Alvarás Vencendo no Curto Prazo */}
         <section className="card-portal overflow-hidden shadow-sm">
           <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-700">
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
