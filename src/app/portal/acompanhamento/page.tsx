@@ -254,12 +254,24 @@ function getTaskYear(t: TaskRow): number {
 
 export type FilterCondition = {
   id: string;
-  field: "cidade" | "uf" | "codigo_empresa" | "frequencia" | "nome_alvara" | "protocolo" | "nome_empresa";
+  field: "cidade" | "uf" | "codigo_empresa" | "frequencia" | "nome_alvara" | "protocolo" | "nome_empresa" | "atraso";
   operator: "equals" | "contains" | "starts_with" | "ends_with";
   value: string;
 };
 
-function matchesCondition(t: TaskRow, cond: FilterCondition): boolean {
+function matchesCondition(
+  t: TaskRow,
+  cond: FilterCondition,
+  hoje: string,
+  laneMap: Record<string, string>
+): boolean {
+  if (cond.field === "atraso") {
+    const lane = (laneMap[t.id] ?? "pendente") as ColumnId;
+    const isAtrasada = taskAtrasoInicio(t, lane, hoje) || taskAtrasoVencimento(t, hoje);
+    const valAtrasada = isAtrasada ? "sim" : "não";
+    return valAtrasada === cond.value;
+  }
+
   let val = "";
   if (cond.field === "cidade") val = t.company_alvaras?.companies?.municipio ?? "";
   else if (cond.field === "uf") val = t.company_alvaras?.companies?.uf ?? "";
@@ -538,7 +550,7 @@ export default function AcompanhamentoPage() {
       }
       // Filtros Personalizados Lógicos (E/OU)
       if (conditions.length > 0) {
-        const results = conditions.map((cond) => matchesCondition(t, cond));
+        const results = conditions.map((cond) => matchesCondition(t, cond, hojeStr, laneMap));
         const matched = logicalOperator === "and"
           ? results.every((r) => r === true)
           : results.some((r) => r === true);
@@ -1300,8 +1312,9 @@ export default function AcompanhamentoPage() {
                       value={cond.field}
                       onChange={(e) => {
                         const nextField = e.target.value as FilterCondition["field"];
+                        const nextValue = nextField === "atraso" ? "sim" : "";
                         setConditions((prev) =>
-                          prev.map((c) => (c.id === cond.id ? { ...c, field: nextField } : c))
+                          prev.map((c) => (c.id === cond.id ? { ...c, field: nextField, value: nextValue } : c))
                         );
                       }}
                     >
@@ -1312,42 +1325,65 @@ export default function AcompanhamentoPage() {
                       <option value="nome_alvara">Alvará: Nome / Tipo</option>
                       <option value="frequencia">Alvará: Frequência</option>
                       <option value="protocolo">Tarefa: Protocolo</option>
+                      <option value="atraso">Tarefa: Em Atraso</option>
                     </select>
 
-                    <select
-                      className="select-field text-xs py-1 px-2 bg-white"
-                      value={cond.operator}
-                      onChange={(e) => {
-                        const nextOp = e.target.value as FilterCondition["operator"];
-                        setConditions((prev) =>
-                          prev.map((c) => (c.id === cond.id ? { ...c, operator: nextOp } : c))
-                        );
-                      }}
-                    >
-                      <option value="contains">Contém</option>
-                      <option value="equals">Igual a</option>
-                      <option value="starts_with">Começa com</option>
-                      <option value="ends_with">Termina com</option>
-                    </select>
+                    {cond.field === "atraso" ? (
+                      <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold px-2">
+                        é igual a
+                      </span>
+                    ) : (
+                      <select
+                        className="select-field text-xs py-1 px-2 bg-white"
+                        value={cond.operator}
+                        onChange={(e) => {
+                          const nextOp = e.target.value as FilterCondition["operator"];
+                          setConditions((prev) =>
+                            prev.map((c) => (c.id === cond.id ? { ...c, operator: nextOp } : c))
+                          );
+                        }}
+                      >
+                        <option value="contains">Contém</option>
+                        <option value="equals">Igual a</option>
+                        <option value="starts_with">Começa com</option>
+                        <option value="ends_with">Termina com</option>
+                      </select>
+                    )}
 
-                    <input
-                      type="text"
-                      className="input-field text-xs py-1 px-3 flex-1 min-w-[120px]"
-                      value={cond.value}
-                      placeholder={
-                        cond.field === "frequencia"
-                          ? "Ex: anual, mensal, personalizada..."
-                          : cond.field === "uf"
-                            ? "Ex: SP, RJ, MG..."
-                            : "Digite o valor da busca..."
-                      }
-                      onChange={(e) => {
-                        const nextVal = e.target.value;
-                        setConditions((prev) =>
-                          prev.map((c) => (c.id === cond.id ? { ...c, value: nextVal } : c))
-                        );
-                      }}
-                    />
+                    {cond.field === "atraso" ? (
+                      <select
+                        className="select-field text-xs py-1 px-2.5 bg-white flex-1 min-w-[120px]"
+                        value={cond.value}
+                        onChange={(e) => {
+                          const nextVal = e.target.value;
+                          setConditions((prev) =>
+                            prev.map((c) => (c.id === cond.id ? { ...c, value: nextVal } : c))
+                          );
+                        }}
+                      >
+                        <option value="sim">Sim (Atrasado)</option>
+                        <option value="não">Não (No Prazo)</option>
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        className="input-field text-xs py-1 px-3 flex-1 min-w-[120px]"
+                        value={cond.value}
+                        placeholder={
+                          cond.field === "frequencia"
+                            ? "Ex: anual, mensal, personalizada..."
+                            : cond.field === "uf"
+                              ? "Ex: SP, RJ, MG..."
+                              : "Digite o valor da busca..."
+                        }
+                        onChange={(e) => {
+                          const nextVal = e.target.value;
+                          setConditions((prev) =>
+                            prev.map((c) => (c.id === cond.id ? { ...c, value: nextVal } : c))
+                          );
+                        }}
+                      />
+                    )}
 
                     <button
                       type="button"
