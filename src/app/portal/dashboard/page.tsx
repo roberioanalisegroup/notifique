@@ -205,6 +205,8 @@ export default function DashboardPage() {
   const [modalStatusFilter, setModalStatusFilter] = useState("all");
   const [modalResponsibleFilter, setModalResponsibleFilter] = useState("all");
   const [modalDateFilter, setModalDateFilter] = useState("all");
+  const [modalStartDate, setModalStartDate] = useState("");
+  const [modalEndDate, setModalEndDate] = useState("");
 
   const fetchModalChecklists = async (tasksList: ActiveTask[]) => {
     if (tasksList.length === 0) return;
@@ -482,6 +484,15 @@ export default function DashboardPage() {
         matchesDate =
           completedDate.getMonth() === today.getMonth() &&
           completedDate.getFullYear() === today.getFullYear();
+      } else if (modalDateFilter === "custom") {
+        if (modalStartDate) {
+          const start = new Date(modalStartDate + "T00:00:00");
+          matchesDate = matchesDate && completedDate >= start;
+        }
+        if (modalEndDate) {
+          const end = new Date(modalEndDate + "T23:59:59");
+          matchesDate = matchesDate && completedDate <= end;
+        }
       }
     } else if (modalDateFilter !== "all" && (statusLabel !== "Concluído" || !t.completed_at)) {
       matchesDate = false;
@@ -1716,16 +1727,58 @@ export default function DashboardPage() {
               <select
                 className="input-field pl-9 w-full text-xs appearance-none"
                 value={modalDateFilter}
-                onChange={(e) => setModalDateFilter(e.target.value)}
+                onChange={(e) => {
+                  setModalDateFilter(e.target.value);
+                  if (e.target.value !== "custom") {
+                    setModalStartDate("");
+                    setModalEndDate("");
+                  }
+                }}
               >
                 <option value="all">Todas as Datas de Conclusão</option>
                 <option value="today">Hoje</option>
                 <option value="7days">Últimos 7 dias</option>
                 <option value="30days">Últimos 30 dias</option>
                 <option value="thisMonth">Este mês</option>
+                <option value="custom">Período Personalizado</option>
               </select>
             </div>
           </div>
+
+          {/* Inputs de Data para Período Personalizado */}
+          {modalDateFilter === "custom" && (
+            <div className="flex flex-wrap items-center gap-3 bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-slate-100 dark:border-white/5 text-xs animate-in fade-in duration-200">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 dark:text-slate-400 font-semibold">De:</span>
+                <input
+                  type="date"
+                  className="input-field py-1.5 px-3 text-xs w-36 dark:bg-[#0c152b] border border-slate-200 dark:border-slate-800 rounded-lg text-slate-700 dark:text-slate-300"
+                  value={modalStartDate}
+                  onChange={(e) => setModalStartDate(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 dark:text-slate-400 font-semibold">Até:</span>
+                <input
+                  type="date"
+                  className="input-field py-1.5 px-3 text-xs w-36 dark:bg-[#0c152b] border border-slate-200 dark:border-slate-800 rounded-lg text-slate-700 dark:text-slate-300"
+                  value={modalEndDate}
+                  onChange={(e) => setModalEndDate(e.target.value)}
+                />
+              </div>
+              {(modalStartDate || modalEndDate) && (
+                <button
+                  onClick={() => {
+                    setModalStartDate("");
+                    setModalEndDate("");
+                  }}
+                  className="text-xs text-rose-600 dark:text-rose-400 hover:underline ml-auto font-bold"
+                >
+                  Limpar Período
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Tabela de Dados */}
           <div className="flex-1 min-h-0 overflow-y-auto border border-slate-100 dark:border-white/5 rounded-xl">
