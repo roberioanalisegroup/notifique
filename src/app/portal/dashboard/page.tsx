@@ -269,7 +269,17 @@ export default function DashboardPage() {
           // ignore
         }
 
-        const allTasks = statsData.activeTasks || [];
+        const hojeStr = new Date().toISOString().slice(0, 10);
+        const isTaskOculta = (t: ActiveTask): boolean => {
+          if (t.status !== "pendente") return false;
+          if (!t.due_date || String(t.due_date).trim() === "") return false;
+          const diffTime = new Date(t.due_date).getTime() - new Date(hojeStr).getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          return diffDays > 90;
+        };
+
+        const rawTasks = statsData.activeTasks || [];
+        const allTasks = rawTasks.filter(t => !isTaskOculta(t));
         setAllTasks(allTasks);
         const blocked = allTasks.filter(t => localLanes[t.id] === "impedimento");
         setImpededTasks(blocked);
