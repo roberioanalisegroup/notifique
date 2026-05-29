@@ -1141,24 +1141,7 @@ export default function DashboardPage() {
                 <Maximize2 className="h-3.5 w-3.5" /> Detalhar
               </button>
 
-              <div className="relative" ref={el => { menuRefs.current["categories"] = el; }}>
-                <button
-                  onClick={() => setActiveMenu(activeMenu === "categories" ? null : "categories")}
-                  className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
-                >
-                  <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
-                </button>
-              {activeMenu === "categories" && (
-                <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
-                  <button
-                    onClick={() => handleExportCSV("categories")}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
-                  >
-                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
-                  </button>
-                </div>
-              )}
-            </div>
+
           </div>
         </div>
 
@@ -1189,9 +1172,7 @@ export default function DashboardPage() {
               })
             )}
           </div>
-          <p className="text-2xs text-slate-400 text-center mt-2 uppercase tracking-wide">
-            Distribuição volumétrica por fase de acompanhamento
-          </p>
+
         </div>
       </div>
 
