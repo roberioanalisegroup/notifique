@@ -73,9 +73,16 @@ export async function GET(request: NextRequest) {
         id,
         title,
         status,
+        notes,
         company_alvaras (
           id,
-          companies ( id, cnpj, razao_social, nome_fantasia ),
+          companies (
+            id,
+            cnpj,
+            razao_social,
+            nome_fantasia,
+            responsible:profiles ( id, display_name )
+          ),
           alvaras ( id, name )
         )
       `)

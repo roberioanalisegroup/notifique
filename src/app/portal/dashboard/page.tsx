@@ -20,10 +20,16 @@ import {
   Layers,
   Infinity as InfinityIcon,
   ChevronDown,
-  ShieldAlert
+  ShieldAlert,
+  Maximize2,
+  Search,
+  Filter,
+  X
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
+import { AccessibleModal } from "@/components/ui/accessible-modal";
+import type { AlvaraTaskChecklistRow } from "@/types";
 
 type Throughput = {
   total: number;
@@ -102,9 +108,16 @@ type ActiveTask = {
   id: string;
   title: string | null;
   status: "pendente" | "concluida" | "cancelada";
+  notes: string | null;
   company_alvaras: {
     id: string;
-    companies: { id: string; cnpj: string; razao_social: string | null; nome_fantasia: string | null } | null;
+    companies: {
+      id: string;
+      cnpj: string;
+      razao_social: string | null;
+      nome_fantasia: string | null;
+      responsible: { id: string; display_name: string | null } | null;
+    } | null;
     alvaras: { id: string; name: string } | null;
   } | null;
 };
@@ -179,6 +192,39 @@ export default function DashboardPage() {
   const [alvarasPorCategoria, setAlvarasPorCategoria] = useState<AlvaraCategoria[]>([]);
   const [impededTasks, setImpededTasks] = useState<ActiveTask[]>([]);
   
+  // States for detailed status modal
+  const [allTasks, setAllTasks] = useState<ActiveTask[]>([]);
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [checklistByTaskId, setChecklistByTaskId] = useState<Record<string, AlvaraTaskChecklistRow[]>>({});
+  const [loadingChecklist, setLoadingChecklist] = useState(false);
+
+  // Filters inside status modal
+  const [modalSearchTerm, setModalSearchTerm] = useState("");
+  const [modalStatusFilter, setModalStatusFilter] = useState("all");
+  const [modalResponsibleFilter, setModalResponsibleFilter] = useState("all");
+
+  const fetchModalChecklists = async (tasksList: ActiveTask[]) => {
+    if (tasksList.length === 0) return;
+    setLoadingChecklist(true);
+    try {
+      const taskIds = tasksList.map(t => t.id);
+      const d = await apiJson<{ by_task: Record<string, AlvaraTaskChecklistRow[]> }>(
+        "/api/alvara-tasks/checklist-batch",
+        { method: "POST", body: JSON.stringify({ task_ids: taskIds }) }
+      );
+      setChecklistByTaskId(d.by_task ?? {});
+    } catch (e) {
+      console.error("Erro ao carregar checklists do modal:", e);
+    } finally {
+      setLoadingChecklist(false);
+    }
+  };
+
+  const handleOpenStatusModal = () => {
+    setIsStatusModalOpen(true);
+    void fetchModalChecklists(allTasks);
+  };
+  
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const menuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -216,6 +262,7 @@ export default function DashboardPage() {
         }
 
         const allTasks = statsData.activeTasks || [];
+        setAllTasks(allTasks);
         const blocked = allTasks.filter(t => localLanes[t.id] === "impedimento");
         setImpededTasks(blocked);
 
@@ -364,6 +411,104 @@ export default function DashboardPage() {
     setActiveMenu(null);
     downloadSVG(id, filename);
     toast.success("Gráfico exportado!");
+  };
+
+  // Lane logic (from localStorage):
+  let localLanes: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("notifique-acompanhamento-lanes");
+      if (saved) localLanes = JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+  }
+
+  const getTaskStatusLabel = (t: ActiveTask) => {
+    if (t.status === "concluida") return "Concluído";
+    if (t.status === "cancelada") return "Cancelado";
+    const lane = localLanes[t.id] || "pendente";
+    if (lane === "andamento") return "Em Andamento";
+    if (lane === "impedimento") return "Com Impedimento";
+    return "Pendente";
+  };
+
+  const filteredTasks = allTasks.filter(t => {
+    const company = t.company_alvaras?.companies;
+    const alvara = t.company_alvaras?.alvaras;
+    const statusLabel = getTaskStatusLabel(t);
+
+    const matchesSearch =
+      modalSearchTerm.trim() === "" ||
+      (company?.nome_fantasia || "").toLowerCase().includes(modalSearchTerm.toLowerCase()) ||
+      (company?.razao_social || "").toLowerCase().includes(modalSearchTerm.toLowerCase()) ||
+      (company?.cnpj || "").includes(modalSearchTerm) ||
+      (alvara?.name || "").toLowerCase().includes(modalSearchTerm.toLowerCase()) ||
+      (t.title || "").toLowerCase().includes(modalSearchTerm.toLowerCase());
+
+    const matchesStatus =
+      modalStatusFilter === "all" ||
+      statusLabel.toLowerCase() === modalStatusFilter.toLowerCase();
+
+    const matchesResponsible =
+      modalResponsibleFilter === "all" ||
+      (modalResponsibleFilter === "unassigned" && !company?.responsible) ||
+      (company?.responsible?.display_name === modalResponsibleFilter);
+
+    return matchesSearch && matchesStatus && matchesResponsible;
+  });
+
+  const uniqueResponsibles = Array.from(
+    new Set(
+      allTasks
+        .map(t => t.company_alvaras?.companies?.responsible?.display_name)
+        .filter((name): name is string => typeof name === "string")
+    )
+  ).sort();
+
+  const handleExportDetailedCSV = () => {
+    const headers = [
+      "Empresa",
+      "CNPJ",
+      "Alvará",
+      "Status (Fase)",
+      "Responsável",
+      "Checklist (Progresso)",
+      "Etapas Completas",
+      "Observações / Notas"
+    ];
+
+    const rows = filteredTasks.map(t => {
+      const company = t.company_alvaras?.companies;
+      const alvara = t.company_alvaras?.alvaras;
+      const statusLabel = getTaskStatusLabel(t);
+      const responsibleName = company?.responsible?.display_name || "Sem Responsável";
+      const notes = t.notes || "Sem observações";
+
+      const checklistRows = checklistByTaskId[t.id] || [];
+      const total = checklistRows.length;
+      const completed = checklistRows.filter(r => r.completed).length;
+      const checklistProgressText = total > 0 ? `${completed}/${total}` : "0/0";
+
+      const checklistDoneNames = checklistRows
+        .filter(r => r.completed)
+        .map(r => r.label)
+        .join(", ") || "Nenhuma";
+
+      return [
+        company?.nome_fantasia || company?.razao_social || "Sem empresa",
+        company?.cnpj || "",
+        alvara?.name || "",
+        statusLabel,
+        responsibleName,
+        checklistProgressText,
+        checklistDoneNames,
+        notes
+      ];
+    });
+
+    downloadCSV("detalhamento-alvaras-por-status", headers, rows);
+    toast.success("Tabela detalhada exportada!");
   };
 
   const score = kpis?.scoreRegularidade ?? 100;
@@ -944,13 +1089,22 @@ export default function DashboardPage() {
               </h2>
             </div>
             
-            <div className="relative" ref={el => { menuRefs.current["categories"] = el; }}>
+            <div className="flex items-center gap-3">
               <button
-                onClick={() => setActiveMenu(activeMenu === "categories" ? null : "categories")}
-                className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+                onClick={handleOpenStatusModal}
+                className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold transition-colors"
+                title="Expandir visualização"
               >
-                <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+                <Maximize2 className="h-3.5 w-3.5" /> Detalhar
               </button>
+
+              <div className="relative" ref={el => { menuRefs.current["categories"] = el; }}>
+                <button
+                  onClick={() => setActiveMenu(activeMenu === "categories" ? null : "categories")}
+                  className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+                >
+                  <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
+                </button>
               {activeMenu === "categories" && (
                 <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
                   <button
@@ -963,6 +1117,7 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+        </div>
 
           <div className="flex-1 overflow-y-auto pr-1 space-y-3.5 justify-center flex flex-col">
             {alvarasPorCategoria.length === 0 ? (
@@ -1437,6 +1592,203 @@ export default function DashboardPage() {
           </div>
         </section>
       </div>
+
+      {/* MODAL DETALHADO: ALVARÁS POR STATUS (FASE) */}
+      <AccessibleModal
+        open={isStatusModalOpen}
+        onClose={() => setIsStatusModalOpen(false)}
+        labelledBy="modal-detalhe-status-title"
+        overlayClassName="z-[999]"
+        panelClassName="modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden p-0 bg-white dark:bg-[#0c152b] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl"
+      >
+        {/* Modal Header */}
+        <div className="flex items-start justify-between border-b border-slate-100 dark:border-white/5 px-6 py-5">
+          <div>
+            <h2 id="modal-detalhe-status-title" className="text-xl font-bold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+              <FileStack className="h-5 w-5 text-indigo-500" />
+              Detalhamento de Alvarás por Status (Fase)
+            </h2>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Visualize, filtre e exporte os dados detalhados dos alvarás ativos no sistema.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsStatusModalOpen(false)}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200 transition-colors"
+            aria-label="Fechar modal"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Modal Content */}
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden p-6 space-y-5">
+          {/* Barra de Filtros */}
+          <div className="grid gap-4 sm:grid-cols-3 bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-slate-100 dark:border-white/5">
+            {/* Input de Busca */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-slate-400" />
+              </span>
+              <input
+                type="text"
+                className="input-field pl-9 w-full text-xs"
+                placeholder="Buscar por empresa, CNPJ ou alvará..."
+                value={modalSearchTerm}
+                onChange={(e) => setModalSearchTerm(e.target.value)}
+              />
+            </div>
+
+            {/* Dropdown de Status */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Filter className="h-4 w-4 text-slate-400" />
+              </span>
+              <select
+                className="input-field pl-9 w-full text-xs appearance-none"
+                value={modalStatusFilter}
+                onChange={(e) => setModalStatusFilter(e.target.value)}
+              >
+                <option value="all">Todas as Fases / Status</option>
+                <option value="pendente">Pendente</option>
+                <option value="em andamento">Em Andamento</option>
+                <option value="com impedimento">Com Impedimento</option>
+                <option value="concluido">Concluído</option>
+              </select>
+            </div>
+
+            {/* Dropdown de Responsável */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Briefcase className="h-4 w-4 text-slate-400" />
+              </span>
+              <select
+                className="input-field pl-9 w-full text-xs appearance-none"
+                value={modalResponsibleFilter}
+                onChange={(e) => setModalResponsibleFilter(e.target.value)}
+              >
+                <option value="all">Todos os Responsáveis</option>
+                <option value="unassigned">Sem Responsável</option>
+                {uniqueResponsibles.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tabela de Dados */}
+          <div className="flex-1 min-h-0 overflow-y-auto border border-slate-100 dark:border-white/5 rounded-xl">
+            {loadingChecklist ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-2">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
+                <span className="text-xs text-slate-500">Buscando etapas de checklist...</span>
+              </div>
+            ) : filteredTasks.length === 0 ? (
+              <div className="text-center py-20">
+                <p className="text-sm text-slate-400">Nenhum registro encontrado para os filtros aplicados.</p>
+              </div>
+            ) : (
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="sticky top-0 bg-slate-50 dark:bg-[#0c152b] border-b border-slate-100 dark:border-white/5 z-10">
+                  <tr>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Empresa</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Alvará</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status / Fase</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Responsável</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Checklist</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Observações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                  {filteredTasks.map((t) => {
+                    const company = t.company_alvaras?.companies;
+                    const alvara = t.company_alvaras?.alvaras;
+                    const statusLabel = getTaskStatusLabel(t);
+                    const responsibleName = company?.responsible?.display_name || "Sem Responsável";
+                    
+                    // Checklist logic
+                    const checklistRows = checklistByTaskId[t.id] || [];
+                    const totalCheck = checklistRows.length;
+                    const completedCheck = checklistRows.filter(r => r.completed).length;
+
+                    // Badges coloring
+                    let statusBadgeClass = "bg-slate-100 text-slate-700 dark:bg-white/5 dark:text-slate-300";
+                    if (statusLabel === "Concluído") statusBadgeClass = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+                    else if (statusLabel === "Pendente") statusBadgeClass = "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400";
+                    else if (statusLabel === "Em Andamento") statusBadgeClass = "bg-blue-500/10 text-blue-600 dark:text-blue-400";
+                    else if (statusLabel === "Com Impedimento") statusBadgeClass = "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20";
+
+                    return (
+                      <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors">
+                        <td className="p-3.5 font-medium text-slate-900 dark:text-slate-100">
+                          <div>
+                            <p className="font-semibold text-slate-900 dark:text-white">
+                              {company?.nome_fantasia || company?.razao_social || "Sem empresa"}
+                            </p>
+                            <p className="text-3xs text-slate-400 font-mono mt-0.5">{company?.cnpj || ""}</p>
+                          </div>
+                        </td>
+                        <td className="p-3.5 text-slate-700 dark:text-slate-300">
+                          {alvara?.name || "—"}
+                        </td>
+                        <td className="p-3.5">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-3xs font-extrabold uppercase ${statusBadgeClass}`}>
+                            {statusLabel}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-slate-700 dark:text-slate-300">
+                          {responsibleName}
+                        </td>
+                        <td className="p-3.5">
+                          {totalCheck > 0 ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold font-mono text-slate-800 dark:text-slate-200">
+                                {completedCheck}/{totalCheck}
+                              </span>
+                              <span className="text-3xs text-slate-400 uppercase tracking-wide">
+                                ({((completedCheck / totalCheck) * 100).toFixed(0)}%)
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-3xs">Sem etapas</span>
+                          )}
+                        </td>
+                        <td className="p-3.5 text-slate-500 max-w-[200px] truncate" title={t.notes || ""}>
+                          {t.notes || "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="border-t border-slate-100 dark:border-white/5 px-6 py-4 flex items-center justify-between bg-slate-50/50 dark:bg-white/5">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Mostrando <strong className="text-slate-900 dark:text-white font-bold">{filteredTasks.length}</strong> de <strong className="text-slate-900 dark:text-white font-bold">{allTasks.length}</strong> registros.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportDetailedCSV}
+              className="btn-secondary inline-flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400 bg-green-500/10 border-green-500/15 py-2 px-3.5 rounded-xl font-bold"
+              disabled={filteredTasks.length === 0}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Exportar Tabela (CSV)
+            </button>
+            <button
+              onClick={() => setIsStatusModalOpen(false)}
+              className="btn-primary py-2 px-4 rounded-xl"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </AccessibleModal>
     </div>
   );
 }
