@@ -185,6 +185,12 @@ function taskMotivoNaoConclusao(t: TaskRow): string {
   if (!hasVencimentoTarefa) {
     return "O vencimento da tarefa preenche-se ao registar a emissão no vínculo; use também «Dar baixa» se aplicável.";
   }
+
+  const caVenc = t.company_alvaras?.data_vencimento;
+  if (caVenc && t.due_date && caVenc.slice(0, 10) <= t.due_date.slice(0, 10)) {
+    return "Para concluir, é preciso atualizar as datas do vínculo no modal para as datas da nova renovação futura.";
+  }
+
   return "Não é possível concluir esta tarefa.";
 }
 
@@ -193,6 +199,12 @@ function taskPodeConcluir(t: TaskRow): boolean {
   const hasEmissao = em != null && String(em).trim() !== "";
   const hasVencimentoTarefa = t.due_date != null && String(t.due_date).trim() !== "";
   if (!hasEmissao || !hasVencimentoTarefa) return false;
+
+  const caVenc = t.company_alvaras?.data_vencimento;
+  if (caVenc && t.due_date && caVenc.slice(0, 10) <= t.due_date.slice(0, 10)) {
+    return false;
+  }
+
   const exigeAnexo = t.company_alvaras?.alvaras?.anexo_obrigatorio === true;
   if (exigeAnexo) {
     const url = t.company_alvaras?.arquivo_url;
@@ -1565,7 +1577,7 @@ function TaskCard({
   const ca = task.company_alvaras;
   const c = ca?.companies;
   const a = ca?.alvaras;
-  const venc = getTaskStatusMeta(task, hoje);
+  const venc = getTaskStatusMeta(task, hoje, uiColumn);
   const atrasoInicio = taskAtrasoInicio(task, uiColumn, hoje);
   const atrasoVenc = taskAtrasoVencimento(task, hoje);
   const atrasada = atrasoInicio || atrasoVenc;

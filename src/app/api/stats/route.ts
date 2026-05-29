@@ -109,6 +109,7 @@ export async function GET(request: NextRequest) {
         id,
         arquivo_url,
         status,
+        data_vencimento,
         alvaras (
           id,
           name,
@@ -158,7 +159,7 @@ export async function GET(request: NextRequest) {
     // 12. Active company_alvaras links for summary calculations
     supabase
       .from("company_alvaras")
-      .select("id, company_id, status, data_notificacao")
+      .select("id, company_id, status, data_notificacao, data_vencimento")
   ]);
 
   const companiesList = rCompaniesSummary.data || [];
@@ -188,7 +189,7 @@ export async function GET(request: NextRequest) {
     counts.total_alvaras++;
     if (link.status === "emitido") counts.alvaras_emitidos++;
     if (link.status === "pendente") counts.alvaras_pendentes++;
-    if (link.status === "vencido") counts.alvaras_vencidos++;
+    if (link.status === "vencido" || (link.data_vencimento && link.data_vencimento < today)) counts.alvaras_vencidos++;
     if (link.data_notificacao != null) counts.alvaras_notificados++;
   });
 
@@ -353,7 +354,7 @@ export async function GET(request: NextRequest) {
   const totalAlvarasCount = alvarasWithGroups.length;
   const alvarasWithFileCount = alvarasWithGroups.filter(f => f.arquivo_url != null && f.arquivo_url !== "").length;
   const documentCoverageRate = totalAlvarasCount > 0 ? (alvarasWithFileCount / totalAlvarasCount) * 100 : 0;
-  const alvarasVencidos = alvarasWithGroups.filter(f => f.status === "vencido").length;
+  const alvarasVencidos = alvarasWithGroups.filter(f => f.status === "vencido" || (f.data_vencimento && f.data_vencimento < today)).length;
 
   const categoryCounts: Record<string, { count: number; color: string }> = {};
   alvarasWithGroups.forEach(ca => {

@@ -333,6 +333,16 @@ export async function PATCH(
         { status: 400 }
       );
     }
+
+    if (due && venc && venc.slice(0, 10) <= due.slice(0, 10)) {
+      return NextResponse.json(
+        {
+          error:
+            "O vencimento do vínculo deve ser maior que o vencimento da tarefa atual para registrar o novo ciclo de validade.",
+        },
+        { status: 400 }
+      );
+    }
   }
 
   const patch: Record<string, unknown> = {

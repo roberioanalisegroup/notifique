@@ -357,7 +357,7 @@ export function TaskEditModal({
   const timeline = [...history].sort(
     (x, y) => new Date(x.created_at).getTime() - new Date(y.created_at).getTime()
   );
-  const venc = getTaskStatusMeta(task, new Date().toISOString().slice(0, 10));
+  const venc = getTaskStatusMeta(task, new Date().toISOString().slice(0, 10), quadroColumn || undefined);
   const empresaHref = c ? "/portal/empresas/" + c.id : null;
 
   return (

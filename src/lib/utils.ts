@@ -181,11 +181,30 @@ type TaskRowForStatus = AlvaraTask & {
   }) | null;
 };
 
-export function getTaskStatusMeta(task: TaskRowForStatus | null | undefined, hoje: string): { className: string; text: string } {
+export function getTaskStatusMeta(
+  task: TaskRowForStatus | null | undefined,
+  hoje: string,
+  lane?: string
+): { className: string; text: string } {
   if (!task) {
     return { className: "", text: "Sem validade no vínculo" };
   }
   if (task.status === "concluida") {
+    const compDate = task.completed_at ? task.completed_at.slice(0, 10) : null;
+    const ca = task.company_alvaras;
+    const limitDate = task.due_date
+      ? task.due_date.slice(0, 10)
+      : (task.inicio_obrigatorio_ate
+          ? task.inicio_obrigatorio_ate.slice(0, 10)
+          : (ca?.data_vencimento ? ca.data_vencimento.slice(0, 10) : null));
+
+    if (compDate && limitDate && compDate > limitDate) {
+      return {
+        className: "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-900",
+        text: "Concluído - Vencido",
+      };
+    }
+
     return {
       className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200",
       text: "Concluída",
@@ -195,6 +214,19 @@ export function getTaskStatusMeta(task: TaskRowForStatus | null | undefined, hoj
     return {
       className: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
       text: "Cancelada",
+    };
+  }
+
+  if (lane === "andamento") {
+    return {
+      className: "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200",
+      text: "Em Andamento",
+    };
+  }
+  if (lane === "impedimento") {
+    return {
+      className: "bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-900",
+      text: "Com Impedimento",
     };
   }
 
