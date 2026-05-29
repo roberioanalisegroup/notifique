@@ -52,6 +52,7 @@ type Kpis = {
   alvarasVencidos: number;
   indefiniteValidityCount: number;
   documentCoverageRate: number;
+  scoreRegularidade: number;
   throughput: Throughput;
   taskStatusCounts: TaskStatusCounts;
   expirations: Expirations;
@@ -365,6 +366,22 @@ export default function DashboardPage() {
     toast.success("Gráfico exportado!");
   };
 
+  const score = kpis?.scoreRegularidade ?? 100;
+  const isHigh = score >= 90;
+  const isMedium = score >= 70;
+
+  const scoreColor = isHigh
+    ? "from-emerald-500/10 to-emerald-500/0 border-emerald-500/10"
+    : isMedium
+      ? "from-amber-500/10 to-amber-500/0 border-amber-500/10"
+      : "from-rose-500/10 to-rose-500/0 border-rose-500/10";
+
+  const scoreIconColor = isHigh
+    ? "text-emerald-500"
+    : isMedium
+      ? "text-amber-500"
+      : "text-rose-500";
+
   // Base cards mapping
   const baselineCards = [
     {
@@ -374,10 +391,10 @@ export default function DashboardPage() {
       color: "from-blue-500/10 to-blue-500/0 border-blue-500/10"
     },
     {
-      label: "Tipos de Alvarás",
-      value: kpis?.totalAlvaras ?? 0,
-      icon: <FileStack className="h-5 w-5 text-indigo-500" />,
-      color: "from-indigo-500/10 to-indigo-500/0 border-indigo-500/10"
+      label: "Score de Regularidade",
+      value: `${kpis?.scoreRegularidade !== undefined ? kpis.scoreRegularidade.toFixed(1) : "100.0"}%`,
+      icon: <Award className={`h-5 w-5 ${scoreIconColor}`} />,
+      color: scoreColor
     },
     {
       label: "Alvarás Vencidos",

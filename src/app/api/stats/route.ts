@@ -316,6 +316,10 @@ export async function GET(request: NextRequest) {
   // 10. Indefinite validity count
   const indefiniteValidityCount = rIndeterminados.count || 0;
 
+  const scoreRegularidade = totalAlvarasCount > 0
+    ? ((totalAlvarasCount - alvarasVencidos) / totalAlvarasCount) * 100
+    : 100;
+
   return NextResponse.json({
     kpis: {
       totalEmpresas,
@@ -326,6 +330,7 @@ export async function GET(request: NextRequest) {
       alvarasVencidos,
       indefiniteValidityCount,
       documentCoverageRate,
+      scoreRegularidade,
       throughput: {
         total: totalMonthTasks,
         completed: completedMonthTasks,
