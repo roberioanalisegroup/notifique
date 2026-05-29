@@ -111,8 +111,11 @@ type ActiveTask = {
   status: "pendente" | "concluida" | "cancelada";
   notes: string | null;
   completed_at: string | null;
+  due_date: string | null;
+  inicio_obrigatorio_ate: string | null;
   company_alvaras: {
     id: string;
+    data_vencimento: string | null;
     companies: {
       id: string;
       cnpj: string;
@@ -430,7 +433,20 @@ export default function DashboardPage() {
   }
 
   const getTaskStatusLabel = (t: ActiveTask) => {
-    if (t.status === "concluida") return "Concluído";
+    if (t.status === "concluida") {
+      const compDate = t.completed_at ? t.completed_at.slice(0, 10) : null;
+      const ca = t.company_alvaras;
+      const limitDate = t.due_date
+        ? t.due_date.slice(0, 10)
+        : (t.inicio_obrigatorio_ate
+            ? t.inicio_obrigatorio_ate.slice(0, 10)
+            : (ca?.data_vencimento ? ca.data_vencimento.slice(0, 10) : null));
+
+      if (compDate && limitDate && compDate > limitDate) {
+        return "Concluído - Vencido";
+      }
+      return "Concluído";
+    }
     if (t.status === "cancelada") return "Cancelado";
     const lane = localLanes[t.id] || "pendente";
     if (lane === "andamento") return "Em Andamento";
@@ -1678,7 +1694,8 @@ export default function DashboardPage() {
                 <option value="pendente">Pendente</option>
                 <option value="em andamento">Em Andamento</option>
                 <option value="com impedimento">Com Impedimento</option>
-                <option value="concluído">Concluído</option>
+                <option value="concluído">Concluído (No Prazo)</option>
+                <option value="concluído - vencido">Concluído - Vencido</option>
               </select>
             </div>
 
@@ -1799,6 +1816,7 @@ export default function DashboardPage() {
                     // Badges coloring
                     let statusBadgeClass = "bg-slate-100 text-slate-700 dark:bg-white/5 dark:text-slate-300";
                     if (statusLabel === "Concluído") statusBadgeClass = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+                    else if (statusLabel === "Concluído - Vencido") statusBadgeClass = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20";
                     else if (statusLabel === "Pendente") statusBadgeClass = "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400";
                     else if (statusLabel === "Em Andamento") statusBadgeClass = "bg-blue-500/10 text-blue-600 dark:text-blue-400";
                     else if (statusLabel === "Com Impedimento") statusBadgeClass = "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20";
@@ -1820,7 +1838,7 @@ export default function DashboardPage() {
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-3xs font-extrabold uppercase ${statusBadgeClass}`}>
                             {statusLabel}
                           </span>
-                          {statusLabel === "Concluído" && t.completed_at && (
+                          {statusLabel.startsWith("Concluído") && t.completed_at && (
                             <p className="text-3xs text-slate-400 font-mono mt-1">
                               Concluído em: {formatDate(t.completed_at)}
                             </p>

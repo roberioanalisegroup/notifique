@@ -77,8 +77,11 @@ export async function GET(request: NextRequest) {
         status,
         notes,
         completed_at,
+        due_date,
+        inicio_obrigatorio_ate,
         company_alvaras (
           id,
+          data_vencimento,
           companies (
             id,
             cnpj,
@@ -351,10 +354,10 @@ export async function GET(request: NextRequest) {
 
   // 9. Document upload coverage rate & Categorization
   const alvarasWithGroups = rFileCounts.data || [];
-  const totalAlvarasCount = alvarasWithGroups.length;
+  const totalAlvarasCount = alvarasLinks.length;
   const alvarasWithFileCount = alvarasWithGroups.filter(f => f.arquivo_url != null && f.arquivo_url !== "").length;
   const documentCoverageRate = totalAlvarasCount > 0 ? (alvarasWithFileCount / totalAlvarasCount) * 100 : 0;
-  const alvarasVencidos = alvarasWithGroups.filter(f => f.status === "vencido" || (f.data_vencimento && f.data_vencimento < today)).length;
+  const alvarasVencidos = alvarasLinks.filter(f => f.status === "vencido" || (f.data_vencimento && f.data_vencimento < today)).length;
 
   const categoryCounts: Record<string, { count: number; color: string }> = {};
   alvarasWithGroups.forEach(ca => {
