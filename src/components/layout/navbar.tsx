@@ -50,7 +50,6 @@ const items: Item[] = [
     icon: <Building2 className="h-4 w-4 shrink-0" />,
     parentNavigates: true,
     children: [
-      { href: "/portal/empresas/importar", label: "Importar" },
       { href: "/portal/empresas/responsaveis", label: "Responsáveis" },
     ],
   },
@@ -63,7 +62,6 @@ const items: Item[] = [
     children: [
       { href: "/portal/alvaras/grupos", label: "Grupos" },
       { href: "/portal/alvaras/etapas", label: "Etapas" },
-      { href: "/portal/alvaras/importar", label: "Importar" },
     ],
   },
   {
@@ -75,6 +73,8 @@ const items: Item[] = [
       { href: "/portal/configuracoes/sincronizacao", label: "Sincronização" },
       { href: "/portal/configuracoes/usuarios", label: "Usuários" },
       { href: "/portal/acompanhamento/geracao", label: "Geração e manutenção" },
+      { href: "/portal/empresas/importar", label: "Importar Empresas" },
+      { href: "/portal/alvaras/importar", label: "Importar Alvarás" },
     ],
   },
 ];
