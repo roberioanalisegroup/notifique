@@ -26,6 +26,8 @@ export async function GET(request: NextRequest) {
   in90.setDate(in90.getDate() + 90);
   const until90 = in90.toISOString().slice(0, 10);
 
+
+
   // 6 months ago for time series
   const sixMonthsAgo = new Date(now);
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
@@ -43,13 +45,13 @@ export async function GET(request: NextRequest) {
     rIndeterminados,
     rTotalAlvarasTipos,
     rSyncPending,
-    rVencendoList
+    rVencendoList,
+    rCompanyAlvarasLinks
   ] = await Promise.all([
-    // 1. Companies summary for compliance, top critical, state concentration, and responsible workload
+    // 1. Fetch active companies directly from the table to bypass incomplete view columns
     supabase
-
-      .from("companies_alvara_summary")
-      .select("id, alvaras_vencidos, uf, razao_social, nome_fantasia, total_alvaras, alvaras_emitidos, responsible_user_id")
+      .from("companies")
+      .select("id, uf, razao_social, nome_fantasia, responsible_user_id")
       .is("archived_at", null),
     
     // 2. Future expirations for 30, 60, 90 days projection
@@ -151,10 +153,67 @@ export async function GET(request: NextRequest) {
       .gte("data_vencimento", today)
       .lte("data_vencimento", until30)
       .order("data_vencimento", { ascending: true })
-      .limit(5)
+      .limit(5),
+
+    // 12. Active company_alvaras links for summary calculations
+    supabase
+      .from("company_alvaras")
+      .select("id, company_id, status, data_notificacao")
   ]);
 
-  const summaryData = rCompaniesSummary.data || [];
+  const companiesList = rCompaniesSummary.data || [];
+  const alvarasLinks = rCompanyAlvarasLinks.data || [];
+
+  // Compute alvara status counts for each company in-memory
+  const alvarasByCompany: Record<string, {
+    total_alvaras: number;
+    alvaras_emitidos: number;
+    alvaras_pendentes: number;
+    alvaras_vencidos: number;
+    alvaras_notificados: number;
+  }> = {};
+
+  alvarasLinks.forEach(link => {
+    if (!link.company_id) return;
+    if (!alvarasByCompany[link.company_id]) {
+      alvarasByCompany[link.company_id] = {
+        total_alvaras: 0,
+        alvaras_emitidos: 0,
+        alvaras_pendentes: 0,
+        alvaras_vencidos: 0,
+        alvaras_notificados: 0
+      };
+    }
+    const counts = alvarasByCompany[link.company_id];
+    counts.total_alvaras++;
+    if (link.status === "emitido") counts.alvaras_emitidos++;
+    if (link.status === "pendente") counts.alvaras_pendentes++;
+    if (link.status === "vencido") counts.alvaras_vencidos++;
+    if (link.data_notificacao != null) counts.alvaras_notificados++;
+  });
+
+  // Emulate companies_alvara_summary view signature
+  const summaryData = companiesList.map(c => {
+    const counts = alvarasByCompany[c.id] || {
+      total_alvaras: 0,
+      alvaras_emitidos: 0,
+      alvaras_pendentes: 0,
+      alvaras_vencidos: 0,
+      alvaras_notificados: 0
+    };
+    return {
+      id: c.id,
+      uf: c.uf,
+      razao_social: c.razao_social,
+      nome_fantasia: c.nome_fantasia,
+      responsible_user_id: c.responsible_user_id,
+      alvaras_vencidos: counts.alvaras_vencidos,
+      alvaras_emitidos: counts.alvaras_emitidos,
+      alvaras_pendentes: counts.alvaras_pendentes,
+      total_alvaras: counts.total_alvaras,
+      alvaras_notificados: counts.alvaras_notificados
+    };
+  });
   const totalEmpresas = summaryData.length;
   const ativas = summaryData.filter(c => c.alvaras_vencidos === 0).length; // "regular" or "active compliance"
   
