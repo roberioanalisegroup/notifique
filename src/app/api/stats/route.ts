@@ -220,7 +220,7 @@ export async function GET(request: NextRequest) {
     };
   });
   const totalEmpresas = summaryData.length;
-  const ativas = summaryData.filter(c => c.alvaras_vencidos === 0).length; // "regular" or "active compliance"
+  const ativas = summaryData.filter(c => c.total_alvaras > 0 && c.alvaras_vencidos === 0).length; // "regular" or "active compliance"
   
   // 1. General Compliance Rate
   const complianceRate = totalEmpresas > 0 ? (ativas / totalEmpresas) * 100 : 0;
