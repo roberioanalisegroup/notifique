@@ -1,7 +1,7 @@
 "use client";
 
 import { apiJson } from "@/lib/api-client";
-import { formatDate } from "@/lib/utils";
+import { formatDate, getTaskStatusMeta } from "@/lib/utils";
 import {
   Building2,
   CheckCircle,
@@ -205,11 +205,23 @@ export default function DashboardPage() {
 
   // Filters inside status modal
   const [modalSearchTerm, setModalSearchTerm] = useState("");
-  const [modalStatusFilter, setModalStatusFilter] = useState("all");
+  const [modalStatusFilters, setModalStatusFilters] = useState<string[]>([]);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
   const [modalResponsibleFilter, setModalResponsibleFilter] = useState("all");
   const [modalDateFilter, setModalDateFilter] = useState("all");
   const [modalStartDate, setModalStartDate] = useState("");
   const [modalEndDate, setModalEndDate] = useState("");
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setStatusDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
 
   const fetchModalChecklists = async (tasksList: ActiveTask[]) => {
     if (tasksList.length === 0) return;
@@ -443,25 +455,20 @@ export default function DashboardPage() {
   }
 
   const getTaskStatusLabel = (t: ActiveTask) => {
-    if (t.status === "concluida") {
-      const compDate = t.completed_at ? t.completed_at.slice(0, 10) : null;
-      const ca = t.company_alvaras;
-      const limitDate = t.due_date
-        ? t.due_date.slice(0, 10)
-        : (t.inicio_obrigatorio_ate
-            ? t.inicio_obrigatorio_ate.slice(0, 10)
-            : (ca?.data_vencimento ? ca.data_vencimento.slice(0, 10) : null));
-
-      if (compDate && limitDate && compDate > limitDate) {
-        return "Concluído - Vencido";
-      }
-      return "Concluído";
-    }
-    if (t.status === "cancelada") return "Cancelado";
     const lane = localLanes[t.id] || "pendente";
-    if (lane === "andamento") return "Em Andamento";
-    if (lane === "impedimento") return "Com Impedimento";
-    return "Pendente";
+    const hoje = new Date().toISOString().slice(0, 10);
+    const adaptedTask = {
+      ...t,
+      company_alvaras: t.company_alvaras ? {
+        ...t.company_alvaras,
+        alvaras: t.company_alvaras.alvaras ? {
+          ...t.company_alvaras.alvaras,
+          alvara_groups: null
+        } : null
+      } : null
+    } as any;
+    const meta = getTaskStatusMeta(adaptedTask, hoje, lane);
+    return meta ? meta.text : "Pendente - Não definida";
   };
 
   const filteredTasks = allTasks.filter(t => {
@@ -478,8 +485,20 @@ export default function DashboardPage() {
       (t.title || "").toLowerCase().includes(modalSearchTerm.toLowerCase());
 
     const matchesStatus =
-      modalStatusFilter === "all" ||
-      statusLabel.toLowerCase() === modalStatusFilter.toLowerCase();
+      modalStatusFilters.length === 0 ||
+      modalStatusFilters.includes("all") ||
+      modalStatusFilters.some(filter => {
+        if (filter === "Pendente - Vence em") {
+          return statusLabel.startsWith("Pendente - Vence em");
+        }
+        if (filter === "Pendente - Não definida") {
+          return statusLabel.startsWith("Pendente - Não definida");
+        }
+        if (filter === "Válido até") {
+          return statusLabel.startsWith("Válido até");
+        }
+        return statusLabel === filter;
+      });
 
     const matchesResponsible =
       modalResponsibleFilter === "all" ||
@@ -1690,23 +1709,85 @@ export default function DashboardPage() {
               />
             </div>
 
-            {/* Dropdown de Status */}
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Filter className="h-4 w-4 text-slate-400" />
-              </span>
-              <select
-                className="input-field pl-9 w-full text-xs appearance-none"
-                value={modalStatusFilter}
-                onChange={(e) => setModalStatusFilter(e.target.value)}
+            {/* Dropdown de Status (Multi-Select) */}
+            <div className="relative" ref={statusDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                className="input-field pl-9 w-full text-xs text-left flex items-center justify-between bg-white dark:bg-[#0c152b] border border-slate-200 dark:border-slate-800 rounded-lg text-slate-700 dark:text-slate-300 h-10 px-3 hover:bg-slate-50 dark:hover:bg-white/5 transition"
               >
-                <option value="all">Todas as Fases / Status</option>
-                <option value="pendente">Pendente</option>
-                <option value="em andamento">Em Andamento</option>
-                <option value="com impedimento">Com Impedimento</option>
-                <option value="concluído">Concluído (No Prazo)</option>
-                <option value="concluído - vencido">Concluído - Vencido</option>
-              </select>
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Filter className="h-4 w-4 text-slate-400" />
+                </span>
+                <span className="truncate">
+                  {modalStatusFilters.length === 0 || modalStatusFilters.includes("all")
+                    ? "Todas as Fases / Status"
+                    : `${modalStatusFilters.length} selecionado(s)`}
+                </span>
+                <ChevronDown className={`h-4 w-4 text-slate-400 shrink-0 transition-transform ${statusDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+              
+              {statusDropdownOpen && (
+                <div className="absolute left-0 right-0 mt-1 z-50 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-800 dark:bg-[#0c152b] text-xs">
+                  <div className="flex flex-wrap gap-2 border-b border-slate-100 dark:border-white/5 pb-2 mb-2">
+                    <button
+                      type="button"
+                      className="rounded bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 px-2 py-1 text-2xs font-semibold text-slate-700 dark:text-slate-200"
+                      onClick={() => setModalStatusFilters(["all"])}
+                    >
+                      Selecionar Todos
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 px-2 py-1 text-2xs font-semibold text-slate-700 dark:text-slate-200"
+                      onClick={() => setModalStatusFilters([])}
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    {[
+                      { value: "Pendente - Vencida", label: "🚨 Pendente - Vencida" },
+                      { value: "Pendente - Vence em", label: "⚠️ Pendente - Vence em X dias" },
+                      { value: "Pendente - Não definida", label: "⏳ Pendente - Não definida" },
+                      { value: "Válido até", label: "🛡️ Válido até DD/MM/AAAA" },
+                      { value: "Em Andamento", label: "🔵 Em Andamento" },
+                      { value: "Em Andamento - Vencido", label: "🟠 Em Andamento - Vencido" },
+                      { value: "Com Impedimento", label: "🛑 Com Impedimento" },
+                      { value: "Com Impedimento - Vencido", label: "💀 Com Impedimento - Vencido" },
+                      { value: "Concluída", label: "🟢 Concluída" },
+                      { value: "Concluído - Vencido", label: "🟡 Concluído - Vencido" },
+                      { value: "Cancelada", label: "🔘 Cancelada" }
+                    ].map((opt) => {
+                      const checked = modalStatusFilters.includes(opt.value);
+                      return (
+                        <label
+                          key={opt.value}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            className="rounded border-slate-350 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500"
+                            onChange={(e) => {
+                              setModalStatusFilters((prev) => {
+                                const cleanPrev = prev.filter(x => x !== "all");
+                                if (e.target.checked) {
+                                  return [...cleanPrev, opt.value];
+                                } else {
+                                  return cleanPrev.filter(x => x !== opt.value);
+                                }
+                              });
+                            }}
+                          />
+                          <span>{opt.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Dropdown de Responsável */}
@@ -1824,12 +1905,26 @@ export default function DashboardPage() {
                     const completedCheck = checklistRows.filter(r => r.completed).length;
 
                     // Badges coloring
-                    let statusBadgeClass = "bg-slate-100 text-slate-700 dark:bg-white/5 dark:text-slate-300";
-                    if (statusLabel === "Concluído") statusBadgeClass = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
-                    else if (statusLabel === "Concluído - Vencido") statusBadgeClass = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20";
-                    else if (statusLabel === "Pendente") statusBadgeClass = "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400";
-                    else if (statusLabel === "Em Andamento") statusBadgeClass = "bg-blue-500/10 text-blue-600 dark:text-blue-400";
-                    else if (statusLabel === "Com Impedimento") statusBadgeClass = "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20";
+                    let statusBadgeClass = "bg-slate-100 text-slate-700 dark:bg-white/5 dark:text-slate-300 border border-slate-200 dark:border-slate-800";
+                    if (statusLabel === "Concluída" || statusLabel === "Concluído") {
+                      statusBadgeClass = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
+                    } else if (statusLabel === "Concluído - Vencido") {
+                      statusBadgeClass = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20";
+                    } else if (statusLabel === "Em Andamento - Vencido" || statusLabel === "Com Impedimento - Vencido" || statusLabel === "Pendente - Vencida") {
+                      statusBadgeClass = "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20";
+                    } else if (statusLabel.startsWith("Pendente - Vence em")) {
+                      statusBadgeClass = "bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20";
+                    } else if (statusLabel.startsWith("Pendente - Não definida")) {
+                      statusBadgeClass = "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20";
+                    } else if (statusLabel.startsWith("Válido até")) {
+                      statusBadgeClass = "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20";
+                    } else if (statusLabel === "Em Andamento") {
+                      statusBadgeClass = "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20";
+                    } else if (statusLabel === "Com Impedimento") {
+                      statusBadgeClass = "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20";
+                    } else if (statusLabel === "Cancelada") {
+                      statusBadgeClass = "bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20";
+                    }
 
                     return (
                       <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors">
