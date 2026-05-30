@@ -218,12 +218,26 @@ export function getTaskStatusMeta(
   }
 
   if (lane === "andamento") {
+    const due = task.due_date ? task.due_date.slice(0, 10) : (task.company_alvaras?.data_vencimento ? task.company_alvaras.data_vencimento.slice(0, 10) : null);
+    if (due && due < hoje) {
+      return {
+        className: "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-900",
+        text: "Em Andamento - Vencido",
+      };
+    }
     return {
       className: "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200",
       text: "Em Andamento",
     };
   }
   if (lane === "impedimento") {
+    const due = task.due_date ? task.due_date.slice(0, 10) : (task.company_alvaras?.data_vencimento ? task.company_alvaras.data_vencimento.slice(0, 10) : null);
+    if (due && due < hoje) {
+      return {
+        className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200",
+        text: "Com Impedimento - Vencido",
+      };
+    }
     return {
       className: "bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-900",
       text: "Com Impedimento",
@@ -239,7 +253,7 @@ export function getTaskStatusMeta(
       if (limitDate < hoje) {
         return {
           className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200",
-          text: "Pendente - Vencida (Prazo de renovação esgotado)",
+          text: "Pendente - Vencida",
         };
       }
 
@@ -250,7 +264,7 @@ export function getTaskStatusMeta(
       if (diffDays <= 90) {
         return {
           className: "bg-orange-100 text-orange-950 dark:bg-orange-950/50 dark:text-orange-200",
-          text: `Vence em ${diffDays} dias`,
+          text: `Pendente - Vence em ${diffDays} dias`,
         };
       }
 
@@ -278,7 +292,7 @@ export function getTaskStatusMeta(
       if (prazoInicio < hoje) {
         return {
           className: "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200",
-          text: "Pendente - Vencida (Prazo de definição esgotado)",
+          text: "Pendente - Vencida",
         };
       }
 
@@ -292,7 +306,7 @@ export function getTaskStatusMeta(
 
       return {
         className: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200",
-        text: `Não definida (${diasRestantesText})`,
+        text: `Pendente - Não definida (${diasRestantesText})`,
       };
     }
 
@@ -324,7 +338,7 @@ export function getTaskStatusMeta(
   if (diffDays <= 90) {
     return {
       className: "bg-orange-100 text-orange-950 dark:bg-orange-950/50 dark:text-orange-200",
-      text: `Vence em ${diffDays} dias`,
+      text: `Pendente - Vence em ${diffDays} dias`,
     };
   }
 

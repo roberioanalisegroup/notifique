@@ -254,7 +254,7 @@ function getTaskYear(t: TaskRow): number {
 
 export type FilterCondition = {
   id: string;
-  field: "cidade" | "uf" | "codigo_empresa" | "frequencia" | "nome_alvara" | "protocolo" | "nome_empresa" | "atraso";
+  field: "cidade" | "uf" | "codigo_empresa" | "frequencia" | "nome_alvara" | "protocolo" | "nome_empresa" | "atraso" | "etapa" | "status";
   operator: "equals" | "contains" | "starts_with" | "ends_with";
   value: string;
 };
@@ -265,11 +265,42 @@ function matchesCondition(
   hoje: string,
   laneMap: Record<string, string>
 ): boolean {
+  const lane = t.status === "cancelada" ? "cancelada" : (t.status === "concluida" ? "concluido" : (laneMap[t.id] ?? "pendente"));
+
   if (cond.field === "atraso") {
-    const lane = (laneMap[t.id] ?? "pendente") as ColumnId;
-    const isAtrasada = taskAtrasoInicio(t, lane, hoje) || taskAtrasoVencimento(t, hoje);
+    const isAtrasada = taskAtrasoInicio(t, lane as any, hoje) || taskAtrasoVencimento(t, hoje);
     const valAtrasada = isAtrasada ? "sim" : "não";
     return valAtrasada === cond.value;
+  }
+
+  if (cond.field === "etapa") {
+    const colLabels: Record<string, string> = {
+      pendente: "pendente",
+      andamento: "em andamento",
+      concluido: "concluído",
+      impedimento: "impedimento",
+      cancelada: "canceladas"
+    };
+    const label = colLabels[lane] || lane;
+    const nVal = label.trim().toLowerCase();
+    const nCond = cond.value.trim().toLowerCase();
+    if (cond.operator === "equals") return nVal === nCond;
+    if (cond.operator === "contains") return nVal.includes(nCond);
+    if (cond.operator === "starts_with") return nVal.startsWith(nCond);
+    if (cond.operator === "ends_with") return nVal.endsWith(nCond);
+    return false;
+  }
+
+  if (cond.field === "status") {
+    const statusMeta = getTaskStatusMeta(t, hoje, lane as any);
+    const label = statusMeta ? statusMeta.text : "";
+    const nVal = label.trim().toLowerCase();
+    const nCond = cond.value.trim().toLowerCase();
+    if (cond.operator === "equals") return nVal === nCond;
+    if (cond.operator === "contains") return nVal.includes(nCond);
+    if (cond.operator === "starts_with") return nVal.startsWith(nCond);
+    if (cond.operator === "ends_with") return nVal.endsWith(nCond);
+    return false;
   }
 
   let val = "";
@@ -317,6 +348,23 @@ export default function AcompanhamentoPage() {
   const [detailModal, setDetailModal] = useState<{ taskId: string; column: ColumnId } | null>(
     null
   );
+  const [swimlaneMode, setSwimlaneMode] = useState<"nenhuma" | "empresa" | "responsavel">(() => {
+    if (typeof window === "undefined") return "nenhuma";
+    try {
+      const s = localStorage.getItem("notifique-acompanhamento-swimlane");
+      if (s === "empresa" || s === "responsavel") return s;
+    } catch { /* ignore */ }
+    return "nenhuma";
+  });
+  const [collapsedSwimlanes, setCollapsedSwimlanes] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const s = localStorage.getItem("notifique-acompanhamento-collapsed-swimlanes");
+      if (s) return JSON.parse(s);
+    } catch { /* ignore */ }
+    return {};
+  });
+
   const companyMenuRef = useRef<HTMLDivElement>(null);
   const yearMenuRef = useRef<HTMLDivElement>(null);
   const taskMenuRef = useRef<HTMLDivElement>(null);
@@ -334,6 +382,22 @@ export default function AcompanhamentoPage() {
       /* ignore */
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("notifique-acompanhamento-swimlane", swimlaneMode);
+    } catch {
+      /* ignore */
+    }
+  }, [swimlaneMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("notifique-acompanhamento-collapsed-swimlanes", JSON.stringify(collapsedSwimlanes));
+    } catch {
+      /* ignore */
+    }
+  }, [collapsedSwimlanes]);
 
   useEffect(() => {
     function onStorage(e: StorageEvent) {
@@ -595,6 +659,97 @@ export default function AcompanhamentoPage() {
     return { pendente, andamento, concluido, impedimento, cancelada };
   }, [filteredTasks, laneMap]);
 
+  const swimlaneGroups = useMemo((): {
+    id: string;
+    label: string;
+    tasksByColumn: {
+      pendente: TaskRow[];
+      andamento: TaskRow[];
+      concluido: TaskRow[];
+      impedimento: TaskRow[];
+      cancelada: TaskRow[];
+    };
+  }[] => {
+    if (swimlaneMode === "nenhuma") return [];
+
+    const groupsMap = new Map<string, { label: string; tasks: TaskRow[] }>();
+
+    for (const t of filteredTasks) {
+      let groupId = "unassigned";
+      let groupLabel = "Sem Responsável";
+
+      if (swimlaneMode === "empresa") {
+        const c = t.company_alvaras?.companies;
+        groupId = c?.id || "unassigned";
+        groupLabel = c ? (c.nome_fantasia || c.razao_social || "Empresa Sem Nome") : "Sem Empresa";
+      } else if (swimlaneMode === "responsavel") {
+        const resp = t.company_alvaras?.companies?.responsible;
+        groupId = resp?.id || "unassigned";
+        groupLabel = resp?.display_name || "Sem Responsável";
+      }
+
+      const existing = groupsMap.get(groupId);
+      if (existing) {
+        existing.tasks.push(t);
+      } else {
+        groupsMap.set(groupId, { label: groupLabel, tasks: [t] });
+      }
+    }
+
+    const groupsList: {
+      id: string;
+      label: string;
+      tasksByColumn: {
+        pendente: TaskRow[];
+        andamento: TaskRow[];
+        concluido: TaskRow[];
+        impedimento: TaskRow[];
+        cancelada: TaskRow[];
+      };
+    }[] = [];
+
+    groupsMap.forEach((val, id) => {
+      const pendente: TaskRow[] = [];
+      const andamento: TaskRow[] = [];
+      const concluido: TaskRow[] = [];
+      const impedimento: TaskRow[] = [];
+      const cancelada: TaskRow[] = [];
+
+      for (const t of val.tasks) {
+        if (t.status === "cancelada") {
+          cancelada.push(t);
+          continue;
+        }
+        if (t.status === "concluida") {
+          concluido.push(t);
+          continue;
+        }
+        const lane = laneMap[t.id] ?? "pendente";
+        if (lane === "andamento") {
+          andamento.push(t);
+        } else if (lane === "impedimento") {
+          impedimento.push(t);
+        } else {
+          pendente.push(t);
+        }
+      }
+
+      pendente.sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+      andamento.sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+      concluido.sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""));
+      impedimento.sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+      cancelada.sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""));
+
+      groupsList.push({
+        id,
+        label: val.label,
+        tasksByColumn: { pendente, andamento, concluido, impedimento, cancelada }
+      });
+    });
+
+    return groupsList.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [filteredTasks, laneMap, swimlaneMode]);
+
   const getTaskUiColumn = useCallback(
     (t: TaskRow): ColumnId => {
       if (t.status === "cancelada") return "cancelada";
@@ -848,6 +1003,22 @@ export default function AcompanhamentoPage() {
                 <CalendarDays className="h-4 w-4" aria-hidden />
               </button>
             </div>
+
+            {viewMode === "kanban" && (
+              <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white px-2 py-0.5 shadow-sm dark:border-slate-600/90 dark:bg-slate-800/90">
+                <span className="text-2xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 pl-1">Raias:</span>
+                <select
+                  value={swimlaneMode}
+                  onChange={(e) => setSwimlaneMode(e.target.value as any)}
+                  className="bg-transparent text-xs font-semibold py-1.5 pr-8 pl-1 border-none focus:outline-none focus:ring-0 text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <option value="nenhuma" className="dark:bg-slate-850">Nenhuma</option>
+                  <option value="empresa" className="dark:bg-slate-850">Por Empresa</option>
+                  <option value="responsavel" className="dark:bg-slate-850">Por Responsável</option>
+                </select>
+              </div>
+            )}
+
             <button
               type="button"
               id="acompanhamento-ajuda-toggle"
@@ -1312,7 +1483,10 @@ export default function AcompanhamentoPage() {
                       value={cond.field}
                       onChange={(e) => {
                         const nextField = e.target.value as FilterCondition["field"];
-                        const nextValue = nextField === "atraso" ? "sim" : "";
+                        let nextValue = "";
+                        if (nextField === "atraso") nextValue = "sim";
+                        else if (nextField === "etapa") nextValue = "pendente";
+                        else if (nextField === "status") nextValue = "Pendente - Vencida";
                         setConditions((prev) =>
                           prev.map((c) => (c.id === cond.id ? { ...c, field: nextField, value: nextValue } : c))
                         );
@@ -1326,6 +1500,8 @@ export default function AcompanhamentoPage() {
                       <option value="frequencia">Alvará: Frequência</option>
                       <option value="protocolo">Tarefa: Protocolo</option>
                       <option value="atraso">Tarefa: Em Atraso</option>
+                      <option value="etapa">Tarefa: Etapa (Coluna)</option>
+                      <option value="status">Tarefa: Status Dinâmico</option>
                     </select>
 
                     {cond.field === "atraso" ? (
@@ -1363,6 +1539,46 @@ export default function AcompanhamentoPage() {
                       >
                         <option value="sim">Sim (Atrasado)</option>
                         <option value="não">Não (No Prazo)</option>
+                      </select>
+                    ) : cond.field === "etapa" ? (
+                      <select
+                        className="select-field text-xs py-1 px-2.5 bg-white flex-1 min-w-[120px]"
+                        value={cond.value}
+                        onChange={(e) => {
+                          const nextVal = e.target.value;
+                          setConditions((prev) =>
+                            prev.map((c) => (c.id === cond.id ? { ...c, value: nextVal } : c))
+                          );
+                        }}
+                      >
+                        <option value="pendente">Pendente</option>
+                        <option value="em andamento">Em andamento</option>
+                        <option value="concluído">Concluído</option>
+                        <option value="impedimento">Impedimento</option>
+                        <option value="canceladas">Canceladas</option>
+                      </select>
+                    ) : cond.field === "status" ? (
+                      <select
+                        className="select-field text-xs py-1 px-2.5 bg-white flex-1 min-w-[120px]"
+                        value={cond.value}
+                        onChange={(e) => {
+                          const nextVal = e.target.value;
+                          setConditions((prev) =>
+                            prev.map((c) => (c.id === cond.id ? { ...c, value: nextVal } : c))
+                          );
+                        }}
+                      >
+                        <option value="Pendente - Vencida">Pendente - Vencida</option>
+                        <option value="Pendente - Vence em">Pendente - Vence em X dias</option>
+                        <option value="Pendente - Não definida">Pendente - Não definida</option>
+                        <option value="Válido até">Válido até DD/MM/AAAA</option>
+                        <option value="Em Andamento">Em Andamento</option>
+                        <option value="Em Andamento - Vencido">Em Andamento - Vencido</option>
+                        <option value="Com Impedimento">Com Impedimento</option>
+                        <option value="Com Impedimento - Vencido">Com Impedimento - Vencido</option>
+                        <option value="Concluída">Concluída</option>
+                        <option value="Concluído - Vencido">Concluído - Vencido</option>
+                        <option value="Cancelada">Cancelada</option>
                       </select>
                     ) : (
                       <input
@@ -1455,6 +1671,173 @@ export default function AcompanhamentoPage() {
           getUiColumn={getTaskUiColumn}
           onOpen={(t) => onOpenTaskDetail(t.id, getTaskUiColumn(t))}
         />
+      ) : swimlaneMode !== "nenhuma" ? (
+        <div className="relative z-0 -mx-1 flex flex-col gap-6 overflow-x-auto pb-4">
+          {/* Cabeçalho Fixo das Colunas (Apenas quando há raias ativas) */}
+          <div className="flex min-w-[1800px] gap-5 px-1 pb-1">
+            {COLUMNS.map((col) => (
+              <div key={col.id} className="flex-1 min-w-[360px] px-3">
+                <div className="flex items-center justify-between">
+                  <h2
+                    className={cn(
+                      "flex items-center gap-2 text-sm font-bold uppercase tracking-wider",
+                      col.id === "concluido" && "text-emerald-800 dark:text-emerald-300",
+                      col.id === "andamento" && "text-amber-800 dark:text-amber-300",
+                      col.id === "pendente" && "text-red-800 dark:text-red-300",
+                      col.id === "impedimento" && "text-rose-800 dark:text-rose-300",
+                      col.id === "cancelada" && "text-slate-600 dark:text-slate-400"
+                    )}
+                  >
+                    {col.icon}
+                    <span>{col.label}</span>
+                  </h2>
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
+                      col.id === "concluido" && "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
+                      col.id === "andamento" && "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
+                      col.id === "pendente" && "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300",
+                      col.id === "impedimento" && "bg-rose-100 text-rose-850 dark:bg-rose-950/50 dark:text-rose-300",
+                      col.id === "cancelada" && "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                    )}
+                  >
+                    {col.id === "pendente"
+                      ? swimlaneGroups.reduce((acc, g) => acc + g.tasksByColumn.pendente.length, 0)
+                      : col.id === "andamento"
+                        ? swimlaneGroups.reduce((acc, g) => acc + g.tasksByColumn.andamento.length, 0)
+                        : col.id === "concluido"
+                          ? swimlaneGroups.reduce((acc, g) => acc + g.tasksByColumn.concluido.length, 0)
+                          : col.id === "impedimento"
+                            ? swimlaneGroups.reduce((acc, g) => acc + g.tasksByColumn.impedimento.length, 0)
+                            : swimlaneGroups.reduce((acc, g) => acc + g.tasksByColumn.cancelada.length, 0)}
+                  </span>
+                </div>
+                <p className="mt-1 text-[0.68rem] text-slate-500 dark:text-slate-400 leading-tight">
+                  {col.description}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* Renderização das Raias */}
+          {swimlaneGroups.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-200 bg-white/80 px-3 py-8 text-center text-sm text-slate-400 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-500">
+              Nenhuma raia encontrada com estes filtros.
+            </p>
+          ) : (
+            swimlaneGroups.map((group) => {
+              const isCollapsed = !!collapsedSwimlanes[group.id];
+              const totalTasksInGroup =
+                group.tasksByColumn.pendente.length +
+                group.tasksByColumn.andamento.length +
+                group.tasksByColumn.concluido.length +
+                group.tasksByColumn.impedimento.length +
+                group.tasksByColumn.cancelada.length;
+
+              return (
+                <div key={group.id} className="flex min-w-[1800px] flex-col rounded-2xl border border-slate-200/60 bg-white/40 shadow-sm dark:border-slate-800/40 dark:bg-slate-900/10 overflow-hidden">
+                  {/* Cabeçalho da Raia (Swimlane Bar) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCollapsedSwimlanes((prev) => ({
+                        ...prev,
+                        [group.id]: !prev[group.id],
+                      }));
+                    }}
+                    className="flex w-full items-center justify-between bg-slate-50/90 dark:bg-slate-800/80 px-4 py-3 text-left font-semibold text-slate-900 dark:text-slate-100 hover:bg-slate-100/90 dark:hover:bg-slate-800/95 transition"
+                  >
+                    <div className="flex items-center gap-3">
+                      <ChevronDown
+                        className={cn("h-4 w-4 text-slate-400 dark:text-slate-500 transition-transform duration-200", isCollapsed && "-rotate-90")}
+                      />
+                      <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                        {swimlaneMode === "empresa" ? `🏢 Empresa: ${group.label}` : `👤 Responsável: ${group.label}`}
+                      </span>
+                      <span className="rounded-full bg-slate-200/85 dark:bg-slate-700 px-2.5 py-0.5 text-2xs font-bold text-slate-600 dark:text-slate-400 tabular-nums">
+                        {totalTasksInGroup} {totalTasksInGroup === 1 ? "tarefa" : "tarefas"}
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Colunas dentro da Raia */}
+                  {!isCollapsed && (
+                    <div className="flex gap-5 p-3 bg-slate-50/20 dark:bg-slate-900/5 transition-all">
+                      {COLUMNS.map((col) => {
+                        const list =
+                          col.id === "pendente"
+                            ? group.tasksByColumn.pendente
+                            : col.id === "andamento"
+                              ? group.tasksByColumn.andamento
+                              : col.id === "concluido"
+                                ? group.tasksByColumn.concluido
+                                : col.id === "impedimento"
+                                  ? group.tasksByColumn.impedimento
+                                  : group.tasksByColumn.cancelada;
+
+                        return (
+                          <div
+                            key={col.id}
+                            className="flex-1 min-h-[160px] min-w-[360px] flex flex-col rounded-xl border border-slate-100 bg-white/80 p-2 dark:border-slate-800/40 dark:bg-slate-800/50"
+                            onDragOver={onDragOver}
+                            onDrop={(e) => void onDropColumn(e, col.id)}
+                          >
+                            <div className="flex flex-col gap-3 min-h-[120px]">
+                              {list.length === 0 ? (
+                                <div className="flex-1 flex items-center justify-center rounded-xl border border-dashed border-slate-200/40 bg-white/20 px-3 py-6 text-center text-xs text-slate-400 dark:border-slate-700/30 dark:bg-slate-900/10 dark:text-slate-600 select-none">
+                                  Arraste para cá
+                                </div>
+                              ) : (
+                                list.map((t) => (
+                                  <article
+                                    key={t.id}
+                                    draggable
+                                    onDragStart={(e) => onDragStart(e, t.id)}
+                                    onDragEnd={onDragEnd}
+                                    onClick={() => onOpenTaskDetail(t.id, col.id)}
+                                    className={cn(
+                                      "group cursor-pointer rounded-2xl bg-white p-4 shadow-sm transition-all duration-150 hover:shadow-md dark:bg-slate-850 dark:shadow-black/20 border border-slate-100 dark:border-slate-700/80 hover:border-slate-200/90 dark:hover:border-slate-600/90",
+                                      col.id === "concluido" &&
+                                        "border-4 border-emerald-500/60 shadow-emerald-50 hover:shadow-emerald-100 dark:border-emerald-500/50 dark:shadow-emerald-950/30",
+                                      col.id === "andamento" &&
+                                        "border-2 border-amber-500/60 shadow-amber-50 hover:shadow-amber-100 dark:border-amber-500/50 dark:shadow-amber-950/20",
+                                      col.id === "impedimento" &&
+                                        "border-2 border-rose-500/60 shadow-rose-50 hover:shadow-rose-100 dark:border-rose-500/50 dark:shadow-rose-950/20",
+                                      col.id === "cancelada" &&
+                                        "border border-slate-200 bg-slate-50/50 dark:border-slate-700/50 dark:bg-slate-900/30 opacity-75 hover:opacity-100",
+                                      col.id === "pendente" && "shadow-sm",
+                                      dragTaskId === t.id && "opacity-60"
+                                    )}
+                                  >
+                                    <TaskCard
+                                      task={t}
+                                      uiColumn={col.id}
+                                      hoje={hoje}
+                                      checklistRows={checklistByTaskId[t.id] ?? []}
+                                      onChecklistToggle={(itemId, completed, comment, attachmentUrl) =>
+                                        void patchChecklist(t.id, itemId, completed, comment, attachmentUrl)
+                                      }
+                                      onOpenDetail={() => onOpenTaskDetail(t.id, col.id)}
+                                      onBaixa={() => void darBaixaNoVinculo(t)}
+                                      onConcluir={() => void soConcluir(t)}
+                                      onReabrir={() => void reabrir(t)}
+                                      onCancelar={() => void cancelarTarefa(t)}
+                                      onMoveToColumn={(target) => void moveTaskToColumn(t, target)}
+                                    />
+                                  </article>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
       ) : (
         <div className="relative z-0 -mx-1 flex flex-col gap-5 overflow-x-auto pb-4 md:flex-row md:items-start">
           {COLUMNS.map((col) => {
