@@ -423,6 +423,45 @@ export default function DashboardPage() {
     };
   }, [activeMenu]);
 
+  // --- COMPLIANCE DETAILS MODAL LOGIC (Hooks called unconditionally before early return) ---
+  const filteredCompanies = useMemo(() => {
+    return companiesSummary.filter(c => {
+      // Search term
+      if (complianceSearchTerm.trim() !== "") {
+        const term = complianceSearchTerm.toLowerCase();
+        const nameMatch = (c.nome_fantasia || "").toLowerCase().includes(term) ||
+                          (c.razao_social || "").toLowerCase().includes(term) ||
+                          (c.id || "").includes(term);
+        if (!nameMatch) return false;
+      }
+
+      // Status filter
+      if (complianceStatusFilter !== "all") {
+        const isRegular = c.total_alvaras > 0 && c.alvaras_vencidos === 0;
+        const isCritical = c.alvaras_vencidos > 0;
+        const isUnmonitored = c.total_alvaras === 0;
+
+        if (complianceStatusFilter === "regular" && !isRegular) return false;
+        if (complianceStatusFilter === "critical" && !isCritical) return false;
+        if (complianceStatusFilter === "unmonitored" && !isUnmonitored) return false;
+      }
+
+      // UF filter
+      if (complianceUfFilter !== "all") {
+        if (c.uf !== complianceUfFilter) return false;
+      }
+
+      return true;
+    });
+  }, [companiesSummary, complianceSearchTerm, complianceStatusFilter, complianceUfFilter]);
+
+  const uniqueUfs = useMemo(() => {
+    const ufs = companiesSummary
+      .map(c => c.uf)
+      .filter((uf): uf is string => uf !== null && uf !== undefined && uf.trim() !== "");
+    return Array.from(new Set(ufs)).sort();
+  }, [companiesSummary]);
+
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center text-slate-500 dark:text-slate-400">
@@ -753,44 +792,7 @@ export default function DashboardPage() {
     toast.success("Tabela detalhada exportada!");
   };
 
-  // --- COMPLIANCE DETAILS MODAL LOGIC ---
-  const filteredCompanies = useMemo(() => {
-    return companiesSummary.filter(c => {
-      // Search term
-      if (complianceSearchTerm.trim() !== "") {
-        const term = complianceSearchTerm.toLowerCase();
-        const nameMatch = (c.nome_fantasia || "").toLowerCase().includes(term) ||
-                          (c.razao_social || "").toLowerCase().includes(term) ||
-                          (c.id || "").includes(term);
-        if (!nameMatch) return false;
-      }
-
-      // Status filter
-      if (complianceStatusFilter !== "all") {
-        const isRegular = c.total_alvaras > 0 && c.alvaras_vencidos === 0;
-        const isCritical = c.alvaras_vencidos > 0;
-        const isUnmonitored = c.total_alvaras === 0;
-
-        if (complianceStatusFilter === "regular" && !isRegular) return false;
-        if (complianceStatusFilter === "critical" && !isCritical) return false;
-        if (complianceStatusFilter === "unmonitored" && !isUnmonitored) return false;
-      }
-
-      // UF filter
-      if (complianceUfFilter !== "all") {
-        if (c.uf !== complianceUfFilter) return false;
-      }
-
-      return true;
-    });
-  }, [companiesSummary, complianceSearchTerm, complianceStatusFilter, complianceUfFilter]);
-
-  const uniqueUfs = useMemo(() => {
-    const ufs = companiesSummary
-      .map(c => c.uf)
-      .filter((uf): uf is string => uf !== null && uf !== undefined && uf.trim() !== "");
-    return Array.from(new Set(ufs)).sort();
-  }, [companiesSummary]);
+  // Note: Compliance details modal hooks (filteredCompanies, uniqueUfs) moved before early loading return
 
   const handleExportComplianceCSV = () => {
     const headers = [
