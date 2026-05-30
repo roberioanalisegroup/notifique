@@ -29,7 +29,7 @@ import {
   Sliders,
   GripVertical
 } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
 import { AccessibleModal } from "@/components/ui/accessible-modal";
 import type { AlvaraTaskChecklistRow } from "@/types";
@@ -138,6 +138,19 @@ type VencendoAlvara = {
   alvaras: { name: string } | null;
 };
 
+type CompanySummaryRow = {
+  id: string;
+  uf: string | null;
+  razao_social: string | null;
+  nome_fantasia: string | null;
+  responsible_user_id: string | null;
+  alvaras_vencidos: number;
+  alvaras_emitidos: number;
+  alvaras_pendentes: number;
+  total_alvaras: number;
+  alvaras_notificados: number;
+};
+
 // --- CLIENT-SIDE EXPORT HELPERS ---
 function downloadCSV(filename: string, headers: string[], rows: (string | number)[][]) {
   const csvContent = [
@@ -205,6 +218,13 @@ export default function DashboardPage() {
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [checklistByTaskId, setChecklistByTaskId] = useState<Record<string, AlvaraTaskChecklistRow[]>>({});
   const [loadingChecklist, setLoadingChecklist] = useState(false);
+
+  // States for detailed compliance modal
+  const [companiesSummary, setCompaniesSummary] = useState<CompanySummaryRow[]>([]);
+  const [isComplianceModalOpen, setIsComplianceModalOpen] = useState(false);
+  const [complianceSearchTerm, setComplianceSearchTerm] = useState("");
+  const [complianceStatusFilter, setComplianceStatusFilter] = useState("all");
+  const [complianceUfFilter, setComplianceUfFilter] = useState("all");
 
   // Filters inside status modal
   const [modalSearchTerm, setModalSearchTerm] = useState("");
@@ -313,6 +333,7 @@ export default function DashboardPage() {
             alvarasPorCategoria: AlvaraCategoria[];
             activeTasks: ActiveTask[];
             vencendoProx30Dias: VencendoAlvara[];
+            companiesSummary: CompanySummaryRow[];
           }>("/api/stats"),
           apiJson<{ logs: SyncLog[] }>("/api/sync-logs?limit=5"),
         ]);
@@ -322,6 +343,7 @@ export default function DashboardPage() {
         setWorkload(statsData.workloadByResponsible);
         setUfDist(statsData.ufDistribution);
         setHistory(statsData.sazonalHistory);
+        setCompaniesSummary(statsData.companiesSummary || []);
         
         // Filter tasks in 'impedimento' lane on client-side and compute phase distribution
         let localLanes: Record<string, string> = {};
@@ -731,6 +753,78 @@ export default function DashboardPage() {
     toast.success("Tabela detalhada exportada!");
   };
 
+  // --- COMPLIANCE DETAILS MODAL LOGIC ---
+  const filteredCompanies = useMemo(() => {
+    return companiesSummary.filter(c => {
+      // Search term
+      if (complianceSearchTerm.trim() !== "") {
+        const term = complianceSearchTerm.toLowerCase();
+        const nameMatch = (c.nome_fantasia || "").toLowerCase().includes(term) ||
+                          (c.razao_social || "").toLowerCase().includes(term) ||
+                          (c.id || "").includes(term);
+        if (!nameMatch) return false;
+      }
+
+      // Status filter
+      if (complianceStatusFilter !== "all") {
+        const isRegular = c.total_alvaras > 0 && c.alvaras_vencidos === 0;
+        const isCritical = c.alvaras_vencidos > 0;
+        const isUnmonitored = c.total_alvaras === 0;
+
+        if (complianceStatusFilter === "regular" && !isRegular) return false;
+        if (complianceStatusFilter === "critical" && !isCritical) return false;
+        if (complianceStatusFilter === "unmonitored" && !isUnmonitored) return false;
+      }
+
+      // UF filter
+      if (complianceUfFilter !== "all") {
+        if (c.uf !== complianceUfFilter) return false;
+      }
+
+      return true;
+    });
+  }, [companiesSummary, complianceSearchTerm, complianceStatusFilter, complianceUfFilter]);
+
+  const uniqueUfs = useMemo(() => {
+    const ufs = companiesSummary
+      .map(c => c.uf)
+      .filter((uf): uf is string => uf !== null && uf !== undefined && uf.trim() !== "");
+    return Array.from(new Set(ufs)).sort();
+  }, [companiesSummary]);
+
+  const handleExportComplianceCSV = () => {
+    const headers = [
+      "CNPJ/ID",
+      "Razão Social",
+      "Nome Fantasia",
+      "Estado (UF)",
+      "Total Alvarás",
+      "Alvarás Emitidos",
+      "Alvarás Pendentes",
+      "Alvarás Vencidos",
+      "Situação"
+    ];
+    const rows = filteredCompanies.map((c: CompanySummaryRow) => {
+      let situacao = "Sem Alvarás (Não Monitorada)";
+      if (c.total_alvaras > 0) {
+        situacao = c.alvaras_vencidos === 0 ? "Em Conformidade (Regular)" : "Crítica (Com Pendência)";
+      }
+      return [
+        c.id,
+        c.razao_social || "—",
+        c.nome_fantasia || "—",
+        c.uf || "—",
+        c.total_alvaras,
+        c.alvaras_emitidos,
+        c.alvaras_pendentes,
+        c.alvaras_vencidos,
+        situacao
+      ];
+    });
+    downloadCSV("detalhamento-conformidade-geral", headers, rows);
+    toast.success("Dados de conformidade exportados!");
+  };
+
   const score = kpis?.scoreRegularidade ?? 100;
   const isHigh = score >= 90;
   const isMedium = score >= 70;
@@ -957,31 +1051,14 @@ export default function DashboardPage() {
                   </h2>
                 </div>
                 
-                {/* Export Dropdown */}
-                <div className="relative" ref={el => { menuRefs.current["compliance"] = el; }}>
-                  <button
-                    onClick={() => setActiveMenu(activeMenu === "compliance" ? null : "compliance")}
-                    className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
-                  >
-                    <Download className="h-3.5 w-3.5" /> Exportar <ChevronDown className="h-3 w-3" />
-                  </button>
-                  {activeMenu === "compliance" && (
-                    <div className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-800 dark:bg-[#0c152b]">
-                      <button
-                        onClick={() => handleExportCSV("compliance")}
-                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
-                      >
-                        <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" /> Planilha (CSV)
-                      </button>
-                      <button
-                        onClick={() => handleExportSVG("compliance-chart", "indice-de-conformidade")}
-                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-white/5"
-                      >
-                        <ImageIcon className="h-3.5 w-3.5 text-blue-500" /> Gráfico (SVG)
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsComplianceModalOpen(true)}
+                  className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold transition-colors"
+                  title="Expandir visualização"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" /> Detalhar
+                </button>
               </div>
 
               {/* Gráfico de Progresso Circular SVG */}
@@ -2518,6 +2595,188 @@ export default function DashboardPage() {
             </button>
             <button
               onClick={() => setIsStatusModalOpen(false)}
+              className="btn-primary py-2 px-4 rounded-xl"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </AccessibleModal>
+
+      {/* MODAL DETALHADO: CONFORMIDADE GERAL */}
+      <AccessibleModal
+        open={isComplianceModalOpen}
+        onClose={() => setIsComplianceModalOpen(false)}
+        labelledBy="modal-detalhe-compliance-title"
+        overlayClassName="z-[999]"
+        panelClassName="modal-panel flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden p-0 bg-white dark:bg-[#0c152b] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl"
+      >
+        {/* Modal Header */}
+        <div className="flex items-start justify-between border-b border-slate-100 dark:border-white/5 px-6 py-5">
+          <div>
+            <h2 id="modal-detalhe-compliance-title" className="text-xl font-bold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-emerald-500" />
+              Detalhamento do Índice de Conformidade Geral
+            </h2>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Monitore a regularidade de cada empresa de forma individualizada com base em seus alvarás válidos.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsComplianceModalOpen(false)}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-700 dark:hover:bg-white/5 dark:hover:text-slate-200 transition-colors"
+            aria-label="Fechar modal"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Modal Content */}
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden p-6 space-y-5">
+          {/* Barra de Filtros */}
+          <div className="grid gap-4 sm:grid-cols-3 bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-slate-100 dark:border-white/5">
+            {/* Input de Busca */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-slate-400" />
+              </span>
+              <input
+                type="text"
+                className="input-field pl-9 w-full text-xs"
+                placeholder="Buscar por empresa, CNPJ..."
+                value={complianceSearchTerm}
+                onChange={(e) => setComplianceSearchTerm(e.target.value)}
+              />
+            </div>
+
+            {/* Dropdown de Situação de Regularidade */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Filter className="h-4 w-4 text-slate-400" />
+              </span>
+              <select
+                className="input-field pl-9 w-full text-xs appearance-none"
+                value={complianceStatusFilter}
+                onChange={(e) => setComplianceStatusFilter(e.target.value)}
+              >
+                <option value="all">Todas as Situações</option>
+                <option value="regular">🟢 Em Conformidade (Regular)</option>
+                <option value="critical">🔴 Crítica (Com Pendência)</option>
+                <option value="unmonitored">⚪ Não Monitorada (Sem Alvarás)</option>
+              </select>
+            </div>
+
+            {/* Dropdown de Estado (UF) */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <MapPin className="h-4 w-4 text-slate-400" />
+              </span>
+              <select
+                className="input-field pl-9 w-full text-xs appearance-none"
+                value={complianceUfFilter}
+                onChange={(e) => setComplianceUfFilter(e.target.value)}
+              >
+                <option value="all">Todos os Estados (UF)</option>
+                {uniqueUfs.map((uf: string) => (
+                  <option key={uf} value={uf}>{uf}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tabela de Dados */}
+          <div className="flex-1 min-h-0 overflow-y-auto border border-slate-100 dark:border-white/5 rounded-xl">
+            {filteredCompanies.length === 0 ? (
+              <div className="text-center py-20">
+                <p className="text-sm text-slate-400">Nenhuma empresa encontrada para os filtros aplicados.</p>
+              </div>
+            ) : (
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="sticky top-0 bg-slate-50 dark:bg-[#0c152b] border-b border-slate-100 dark:border-white/5 z-10">
+                  <tr>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Empresa / CNPJ</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Estado (UF)</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Alvarás Ativos</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Alvarás Vencidos</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Total Monitorados</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Situação de Regularidade</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                  {filteredCompanies.map((c: CompanySummaryRow) => {
+                    const isRegular = c.total_alvaras > 0 && c.alvaras_vencidos === 0;
+                    const isCritical = c.alvaras_vencidos > 0;
+                    const isUnmonitored = c.total_alvaras === 0;
+
+                    let statusBadgeClass = "bg-slate-100 text-slate-700 dark:bg-white/5 dark:text-slate-300 border border-slate-200 dark:border-slate-800";
+                    let statusLabel = "Sem Alvarás";
+
+                    if (isRegular) {
+                      statusBadgeClass = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
+                      statusLabel = "Em Conformidade";
+                    } else if (isCritical) {
+                      statusBadgeClass = "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20";
+                      statusLabel = `Crítica (${c.alvaras_vencidos} vencido${c.alvaras_vencidos > 1 ? "s" : ""})`;
+                    } else if (isUnmonitored) {
+                      statusBadgeClass = "bg-slate-500/10 text-slate-500 border border-slate-500/20";
+                      statusLabel = "Não Monitorada";
+                    }
+
+                    return (
+                      <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors">
+                        <td className="p-3.5 font-medium text-slate-900 dark:text-slate-100">
+                          <div>
+                            <p className="font-semibold text-slate-900 dark:text-white">
+                              {c.nome_fantasia || c.razao_social || "Sem nome cadastrado"}
+                            </p>
+                            <p className="text-3xs text-slate-400 font-mono mt-0.5">{c.id}</p>
+                          </div>
+                        </td>
+                        <td className="p-3.5 text-center">
+                          <span className="inline-flex h-5 w-7 items-center justify-center rounded bg-slate-100 text-3xs font-extrabold text-slate-700 uppercase dark:bg-white/5 dark:text-slate-300">
+                            {c.uf || "—"}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-center font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
+                          {c.alvaras_emitidos}
+                        </td>
+                        <td className={`p-3.5 text-center font-semibold font-mono ${c.alvaras_vencidos > 0 ? "text-red-600 dark:text-red-400" : "text-slate-400 dark:text-slate-600"}`}>
+                          {c.alvaras_vencidos}
+                        </td>
+                        <td className="p-3.5 text-center font-bold text-slate-700 dark:text-slate-300 font-mono">
+                          {c.total_alvaras}
+                        </td>
+                        <td className="p-3.5">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-3xs font-extrabold uppercase ${statusBadgeClass}`}>
+                            {statusLabel}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="border-t border-slate-100 dark:border-white/5 px-6 py-4 flex items-center justify-between bg-slate-50/50 dark:bg-white/5">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Mostrando <strong className="text-slate-900 dark:text-white font-bold">{filteredCompanies.length}</strong> de <strong className="text-slate-900 dark:text-white font-bold">{companiesSummary.length}</strong> empresas.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportComplianceCSV}
+              className="btn-secondary inline-flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400 bg-green-500/10 border-green-500/15 py-2 px-3.5 rounded-xl font-bold"
+              disabled={filteredCompanies.length === 0}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Exportar Tabela (CSV)
+            </button>
+            <button
+              onClick={() => setIsComplianceModalOpen(false)}
               className="btn-primary py-2 px-4 rounded-xl"
             >
               Fechar

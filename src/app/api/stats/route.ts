@@ -422,5 +422,6 @@ export async function GET(request: NextRequest) {
     alvarasPorCategoria,
     activeTasks: activeTasksList,
     vencendoProx30Dias: rVencendoList.data || [],
+    companiesSummary: summaryData,
   });
 }
