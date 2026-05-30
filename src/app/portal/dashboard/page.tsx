@@ -107,6 +107,7 @@ type AlvaraCategoria = {
 
 type ActiveTask = {
   id: string;
+  created_at: string;
   title: string | null;
   status: "pendente" | "concluida" | "cancelada";
   notes: string | null;

@@ -275,7 +275,7 @@ export function getTaskStatusMeta(
     }
 
     const prazoDias = ca?.alvaras?.prazo_inicio_dias ?? 30;
-    const baseDia = task.created_at.slice(0, 10);
+    const baseDia = task.created_at ? task.created_at.slice(0, 10) : hoje;
     const n = Math.min(3650, Math.max(1, Number(prazoDias ?? 30) || 30));
     
     let prazoInicio: string | null = task.inicio_obrigatorio_ate ? task.inicio_obrigatorio_ate.slice(0, 10) : null;

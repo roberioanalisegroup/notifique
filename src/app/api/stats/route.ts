@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
       .from("alvara_tasks")
       .select(`
         id,
+        created_at,
         title,
         status,
         notes,
