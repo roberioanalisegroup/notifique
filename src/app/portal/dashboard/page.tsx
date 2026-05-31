@@ -142,6 +142,7 @@ type CompanySummaryRow = {
   id: string;
   cnpj: string | null;
   uf: string | null;
+  municipio: string | null;
   razao_social: string | null;
   nome_fantasia: string | null;
   responsible_user_id: string | null;
@@ -226,6 +227,7 @@ export default function DashboardPage() {
   const [complianceSearchTerm, setComplianceSearchTerm] = useState("");
   const [complianceStatusFilter, setComplianceStatusFilter] = useState("all");
   const [complianceUfFilter, setComplianceUfFilter] = useState("all");
+  const [complianceCityFilter, setComplianceCityFilter] = useState("all");
 
   // Filters inside status modal
   const [modalSearchTerm, setModalSearchTerm] = useState("");
@@ -453,9 +455,14 @@ export default function DashboardPage() {
         if (c.uf !== complianceUfFilter) return false;
       }
 
+      // City filter
+      if (complianceCityFilter !== "all") {
+        if (c.municipio !== complianceCityFilter) return false;
+      }
+
       return true;
     });
-  }, [companiesSummary, complianceSearchTerm, complianceStatusFilter, complianceUfFilter]);
+  }, [companiesSummary, complianceSearchTerm, complianceStatusFilter, complianceUfFilter, complianceCityFilter]);
 
   const uniqueUfs = useMemo(() => {
     const ufs = companiesSummary
@@ -463,6 +470,50 @@ export default function DashboardPage() {
       .filter((uf): uf is string => uf !== null && uf !== undefined && uf.trim() !== "");
     return Array.from(new Set(ufs)).sort();
   }, [companiesSummary]);
+
+  const uniqueCities = useMemo(() => {
+    const cities = companiesSummary
+      .filter(c => complianceUfFilter === "all" || c.uf === complianceUfFilter)
+      .map(c => c.municipio)
+      .filter((city): city is string => city !== null && city !== undefined && city.trim() !== "");
+    return Array.from(new Set(cities)).sort();
+  }, [companiesSummary, complianceUfFilter]);
+
+  const companyMetrics = useMemo(() => {
+    const metrics: Record<string, { impedidos: number; naoIniciados: number }> = {};
+    
+    // Initialize
+    companiesSummary.forEach(c => {
+      metrics[c.id] = { impedidos: 0, naoIniciados: 0 };
+    });
+
+    // Lane logic (from localStorage):
+    let localLanes: Record<string, string> = {};
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("notifique-acompanhamento-lanes");
+        if (saved) localLanes = JSON.parse(saved);
+      } catch {
+        // ignore
+      }
+    }
+
+    // Populate
+    allTasks.forEach(t => {
+      const ca = t.company_alvaras;
+      const companyId = ca?.companies?.id;
+      if (companyId && metrics[companyId]) {
+        const lane = localLanes[t.id] || "pendente";
+        if (lane === "impedimento") {
+          metrics[companyId].impedidos++;
+        } else if (lane === "pendente") {
+          metrics[companyId].naoIniciados++;
+        }
+      }
+    });
+
+    return metrics;
+  }, [companiesSummary, allTasks]);
 
   if (loading) {
     return (
@@ -802,9 +853,11 @@ export default function DashboardPage() {
       "Razão Social",
       "Nome Fantasia",
       "Estado (UF)",
+      "Cidade",
       "Total Alvarás",
       "Alvarás Emitidos",
-      "Alvarás Pendentes",
+      "Alvarás Não Iniciados (Pendentes)",
+      "Alvarás com Impedimento",
       "Alvarás Vencidos",
       "Situação"
     ];
@@ -818,9 +871,11 @@ export default function DashboardPage() {
         c.razao_social || "—",
         c.nome_fantasia || "—",
         c.uf || "—",
+        c.municipio || "—",
         c.total_alvaras,
         c.alvaras_emitidos,
-        c.alvaras_pendentes,
+        companyMetrics[c.id]?.naoIniciados ?? 0,
+        companyMetrics[c.id]?.impedidos ?? 0,
         c.alvaras_vencidos,
         situacao
       ];
@@ -2639,7 +2694,7 @@ export default function DashboardPage() {
         {/* Modal Content */}
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden p-6 space-y-5">
           {/* Barra de Filtros */}
-          <div className="grid gap-4 sm:grid-cols-3 bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-slate-100 dark:border-white/5">
+          <div className="grid gap-4 sm:grid-cols-4 bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-slate-100 dark:border-white/5">
             {/* Input de Busca */}
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -2679,11 +2734,31 @@ export default function DashboardPage() {
               <select
                 className="input-field pl-9 w-full text-xs appearance-none"
                 value={complianceUfFilter}
-                onChange={(e) => setComplianceUfFilter(e.target.value)}
+                onChange={(e) => {
+                  setComplianceUfFilter(e.target.value);
+                  setComplianceCityFilter("all");
+                }}
               >
                 <option value="all">Todos os Estados (UF)</option>
                 {uniqueUfs.map((uf: string) => (
                   <option key={uf} value={uf}>{uf}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Dropdown de Cidade */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <MapPin className="h-4 w-4 text-slate-400" />
+              </span>
+              <select
+                className="input-field pl-9 w-full text-xs appearance-none"
+                value={complianceCityFilter}
+                onChange={(e) => setComplianceCityFilter(e.target.value)}
+              >
+                <option value="all">Todas as Cidades</option>
+                {uniqueCities.map((city: string) => (
+                  <option key={city} value={city}>{city}</option>
                 ))}
               </select>
             </div>
@@ -2701,9 +2776,12 @@ export default function DashboardPage() {
                   <tr>
                     <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Empresa / CNPJ</th>
                     <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Estado (UF)</th>
-                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Alvarás Ativos</th>
-                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Alvarás Vencidos</th>
-                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Total Monitorados</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Cidade</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Ativos</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Não Iniciados</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Com Impedimento</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Vencidos</th>
+                    <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">Total</th>
                     <th className="p-3.5 font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Situação de Regularidade</th>
                   </tr>
                 </thead>
@@ -2744,10 +2822,19 @@ export default function DashboardPage() {
                             {c.uf || "—"}
                           </span>
                         </td>
+                        <td className="p-3.5 text-center text-slate-700 dark:text-slate-300 font-medium">
+                          {c.municipio || "—"}
+                        </td>
                         <td className="p-3.5 text-center font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
                           {c.alvaras_emitidos}
                         </td>
-                        <td className={`p-3.5 text-center font-semibold font-mono ${c.alvaras_vencidos > 0 ? "text-red-600 dark:text-red-400" : "text-slate-400 dark:text-slate-600"}`}>
+                        <td className="p-3.5 text-center font-semibold text-indigo-500 dark:text-indigo-400 font-mono">
+                          {companyMetrics[c.id]?.naoIniciados ?? 0}
+                        </td>
+                        <td className={`p-3.5 text-center font-semibold font-mono ${(companyMetrics[c.id]?.impedidos ?? 0) > 0 ? "text-amber-500 font-bold" : "text-slate-400 dark:text-slate-600"}`}>
+                          {companyMetrics[c.id]?.impedidos ?? 0}
+                        </td>
+                        <td className={`p-3.5 text-center font-semibold font-mono ${c.alvaras_vencidos > 0 ? "text-red-600 dark:text-red-400 font-extrabold" : "text-slate-400 dark:text-slate-600"}`}>
                           {c.alvaras_vencidos}
                         </td>
                         <td className="p-3.5 text-center font-bold text-slate-700 dark:text-slate-300 font-mono">
