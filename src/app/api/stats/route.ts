@@ -178,6 +178,17 @@ export async function GET(request: NextRequest) {
     alvaras_notificados: number;
   }> = {};
 
+  // Build a set of company_alvara_ids that have at least one completed task valid for the current/future cycle
+  const caWithValidCompletedTask = new Set<string>();
+  (rActiveTasks.data || []).forEach(t => {
+    if (t.status === "concluida" && t.due_date && t.due_date >= today) {
+      const caId = (t.company_alvaras as any)?.id;
+      if (caId) {
+        caWithValidCompletedTask.add(caId);
+      }
+    }
+  });
+
   alvarasLinks.forEach(link => {
     if (!link.company_id) return;
     if (!alvarasByCompany[link.company_id]) {
@@ -191,8 +202,18 @@ export async function GET(request: NextRequest) {
     }
     const counts = alvarasByCompany[link.company_id];
     counts.total_alvaras++;
-    if (link.status === "emitido") counts.alvaras_emitidos++;
-    if (link.status === "pendente") counts.alvaras_pendentes++;
+
+    // An alvará is counted as active (emitido) if its status is literally 'emitido' 
+    // OR if its status is 'pendente' but it has a valid completed task for the cycle.
+    const isAtivo = link.status === "emitido" || 
+                    (link.status === "pendente" && caWithValidCompletedTask.has(link.id));
+
+    if (isAtivo) {
+      counts.alvaras_emitidos++;
+    } else {
+      counts.alvaras_pendentes++;
+    }
+
     if (link.status === "vencido" || (link.data_vencimento && link.data_vencimento < today)) counts.alvaras_vencidos++;
     if (link.data_notificacao != null) counts.alvaras_notificados++;
   });
