@@ -1,7 +1,7 @@
 "use client";
 
 import { apiJson } from "@/lib/api-client";
-import { formatDate, getTaskStatusMeta, cn } from "@/lib/utils";
+import { formatDate, getTaskStatusMeta, cn, formatCNPJ } from "@/lib/utils";
 import {
   Building2,
   CheckCircle,
@@ -140,6 +140,7 @@ type VencendoAlvara = {
 
 type CompanySummaryRow = {
   id: string;
+  cnpj: string | null;
   uf: string | null;
   razao_social: string | null;
   nome_fantasia: string | null;
@@ -431,6 +432,7 @@ export default function DashboardPage() {
         const term = complianceSearchTerm.toLowerCase();
         const nameMatch = (c.nome_fantasia || "").toLowerCase().includes(term) ||
                           (c.razao_social || "").toLowerCase().includes(term) ||
+                          (c.cnpj || "").includes(term) ||
                           (c.id || "").includes(term);
         if (!nameMatch) return false;
       }
@@ -812,7 +814,7 @@ export default function DashboardPage() {
         situacao = c.alvaras_vencidos === 0 ? "Em Conformidade (Regular)" : "Crítica (Com Pendência)";
       }
       return [
-        c.id,
+        c.cnpj ? formatCNPJ(c.cnpj) : c.id,
         c.razao_social || "—",
         c.nome_fantasia || "—",
         c.uf || "—",
@@ -2732,7 +2734,9 @@ export default function DashboardPage() {
                             <p className="font-semibold text-slate-900 dark:text-white">
                               {c.nome_fantasia || c.razao_social || "Sem nome cadastrado"}
                             </p>
-                            <p className="text-3xs text-slate-400 font-mono mt-0.5">{c.id}</p>
+                            <p className="text-3xs text-slate-400 font-mono mt-0.5">
+                              {c.cnpj ? formatCNPJ(c.cnpj) : "Sem CNPJ"}
+                            </p>
                           </div>
                         </td>
                         <td className="p-3.5 text-center">

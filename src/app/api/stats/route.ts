@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     // 1. Fetch active companies directly from the table to bypass incomplete view columns
     supabase
       .from("companies")
-      .select("id, uf, razao_social, nome_fantasia, responsible_user_id")
+      .select("id, cnpj, uf, razao_social, nome_fantasia, responsible_user_id")
       .is("archived_at", null),
     
     // 2. Future expirations for 30, 60, 90 days projection
@@ -208,6 +208,7 @@ export async function GET(request: NextRequest) {
     };
     return {
       id: c.id,
+      cnpj: c.cnpj,
       uf: c.uf,
       razao_social: c.razao_social,
       nome_fantasia: c.nome_fantasia,
