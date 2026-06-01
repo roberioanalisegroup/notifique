@@ -17,9 +17,11 @@ import type {
 import {
   Building2,
   CalendarDays,
+  FileCheck2,
   History,
   Loader2,
   Paperclip,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -91,6 +93,17 @@ export function TaskEditModal({
   const [overrideDias, setOverrideDias] = useState<number | "">("");
   const [regerando, setRegerando] = useState(false);
 
+  // ── Estado de upload de anexo (Cloudflare R2) ──
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [preparedAttachment, setPreparedAttachment] = useState<{
+    storage_key: string;
+    public_url: string;
+    file_name: string;
+    file_size: number;
+    file_mime_type: string;
+  } | null>(null);
+
   const load = useCallback(async () => {
     if (!taskId) return;
     setLoading(true);
@@ -120,6 +133,8 @@ export function TaskEditModal({
       setEmissaoDraft("");
       setVencimentoDraft("");
       setIsIndefiniteDraft(false);
+      setPreparedAttachment(null);
+      setUploading(false);
     }
   }, [open, taskId, load]);
 
@@ -343,7 +358,11 @@ export function TaskEditModal({
   const hasEmissao = Boolean(emissaoDraft && emissaoDraft.trim());
   const hasVencimento = Boolean(vencimentoDraft && vencimentoDraft.trim());
   const exigeAnexoTipo = a?.anexo_obrigatorio === true;
-  const temAnexo = Boolean(ca?.arquivo_url && String(ca.arquivo_url).trim());
+  // Anexo existente no documento vigente OU anexo preparado no estado local
+  const docs = ca?.company_alvara_documents ?? [];
+  const currentDoc = Array.isArray(docs) ? docs.find((d: any) => d.is_current) : null;
+  const temAnexoExistente = Boolean(currentDoc?.file_path && String(currentDoc.file_path).trim());
+  const temAnexo = temAnexoExistente || Boolean(preparedAttachment);
   const okAnexo = !exigeAnexoTipo || temAnexo;
   const exigeChecklist = a?.checklist_obrigatorio === true;
   const okChecklist = !exigeChecklist || isChecklistFullyCompleted(checklistRows);
@@ -458,7 +477,7 @@ export function TaskEditModal({
                             return;
                           }
                           if (exigeAnexoTipo && !temAnexo) {
-                            toast.error("Este tipo de alvará exige documento anexado ao vínculo.");
+                            toast.error("Este tipo de alvará exige documento anexado para conclusão.");
                             return;
                           }
 
@@ -466,6 +485,21 @@ export function TaskEditModal({
                           setSaving(true);
                           try {
                             const finalNotes = notes.trim() !== "" ? notes.trim() : "Documento cadastrado e ciclo operacional concluído pelo portal.";
+
+                            // Dados do anexo: priorizar preparedAttachment (upload novo), fallback para doc existente
+                            const attachmentData = preparedAttachment
+                              ? {
+                                  file_path: preparedAttachment.storage_key,
+                                  file_name: preparedAttachment.file_name,
+                                  file_size: preparedAttachment.file_size,
+                                  file_mime_type: preparedAttachment.file_mime_type,
+                                }
+                              : {
+                                  file_path: currentDoc?.file_path ?? null,
+                                  file_name: currentDoc?.file_name ?? null,
+                                  file_size: currentDoc?.file_size ?? null,
+                                  file_mime_type: currentDoc?.file_mime_type ?? null,
+                                };
 
                             await apiJson("/api/alvara-tasks/" + taskId, {
                               method: "PATCH",
@@ -476,10 +510,7 @@ export function TaskEditModal({
                                 issue_date: isoEm,
                                 expiration_date: isoVenc,
                                 is_indefinite: isIndefiniteDraft,
-                                file_path: ca?.arquivo_url ?? null,
-                                file_name: (ca as any)?.file_name ?? null,
-                                file_size: (ca as any)?.file_size ?? null,
-                                file_mime: (ca as any)?.file_mime_type ?? null,
+                                ...attachmentData,
                               }),
                             });
 
@@ -703,9 +734,67 @@ export function TaskEditModal({
 
               <div className="flex flex-wrap items-start gap-2 text-xs text-slate-600 dark:text-slate-400">
                 <Paperclip className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="min-w-0 flex-1 space-y-1">
+                <div className="min-w-0 flex-1 space-y-2">
+                  {/* Input invisível de ficheiro */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,image/png,image/jpeg,image/webp"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !taskId) return;
+                      // Reset para permitir re-seleção do mesmo ficheiro
+                      e.target.value = "";
+
+                      // Validação rápida no frontend (backend valida novamente)
+                      const allowedMimes = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
+                      if (!allowedMimes.includes(file.type)) {
+                        toast.error(`Tipo de ficheiro não permitido: ${file.type}. Use PDF ou imagens (PNG, JPEG, WebP).`);
+                        return;
+                      }
+                      const maxBytes = 10 * 1024 * 1024;
+                      if (file.size > maxBytes) {
+                        toast.error("Ficheiro excede o limite de 10 MB.");
+                        return;
+                      }
+
+                      setUploading(true);
+                      try {
+                        const fd = new FormData();
+                        fd.append("file", file);
+                        const res = await fetch(`/api/alvara-tasks/${taskId}/attachment`, {
+                          method: "POST",
+                          body: fd,
+                        });
+                        const json = await res.json();
+                        if (!res.ok) {
+                          throw new Error(json.error || "Erro no upload.");
+                        }
+                        setPreparedAttachment({
+                          storage_key: json.storage_key,
+                          public_url: json.public_url,
+                          file_name: json.file_name,
+                          file_size: json.file_size,
+                          file_mime_type: json.file_mime_type,
+                        });
+                        toast.success("Anexo enviado! Pronto para conclusão.");
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Falha no upload do anexo.");
+                      } finally {
+                        setUploading(false);
+                      }
+                    }}
+                  />
+
+                  {/* Estado do anexo */}
                   <p>
-                    {ca?.arquivo_url ? (
+                    {preparedAttachment ? (
+                      <span className="inline-flex items-center gap-1 font-medium text-blue-700 dark:text-blue-400">
+                        <FileCheck2 className="h-3.5 w-3.5" />
+                        Anexo pronto para conclusão: {preparedAttachment.file_name} ({(preparedAttachment.file_size / 1024).toFixed(0)} KB)
+                      </span>
+                    ) : temAnexoExistente ? (
                       <span className="text-emerald-700 dark:text-emerald-400">Documento associado ao vínculo.</span>
                     ) : (
                       <span>Sem documento no vínculo.</span>
@@ -716,18 +805,40 @@ export function TaskEditModal({
                       <span className="text-slate-500 dark:text-slate-400"> Anexo opcional ao concluir.</span>
                     )}
                   </p>
-                  <button
-                    type="button"
-                    className="btn-secondary inline-flex items-center gap-1 py-1.5 text-xs"
-                    onClick={() =>
-                      toast.message("Upload de anexo será disponibilizado em breve.", {
-                        description: "Por agora registe o ficheiro na ficha da empresa, se necessário.",
-                      })
-                    }
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                    Adicionar anexo
-                  </button>
+
+                  {/* Botões de ação */}
+                  {isTarefaAberta && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn-secondary inline-flex items-center gap-1 py-1.5 text-xs"
+                        disabled={uploading}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {uploading ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            A enviar…
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-3.5 w-3.5" />
+                            {preparedAttachment ? "Substituir anexo" : "Adicionar anexo"}
+                          </>
+                        )}
+                      </button>
+                      {preparedAttachment && (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40"
+                          onClick={() => setPreparedAttachment(null)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Remover
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

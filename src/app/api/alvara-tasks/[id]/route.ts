@@ -31,7 +31,7 @@ type Body = {
   file_path?: string | null;
   file_name?: string | null;
   file_size?: number | null;
-  file_mime?: string | null;
+  file_mime_type?: string | null;
 };
 
 async function insertHistory(
@@ -207,7 +207,7 @@ export async function PATCH(
         p_file_path: body.file_path ?? null,
         p_file_name: body.file_name ?? null,
         p_file_size: body.file_size ? Number(body.file_size) : null,
-        p_file_mime: body.file_mime ?? null,
+        p_file_mime: body.file_mime_type ?? null,
         p_notes: sanitizeText(body.notes),
         p_user_id: auth.userId || null,
       });
