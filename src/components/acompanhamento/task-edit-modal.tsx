@@ -146,13 +146,15 @@ export function TaskEditModal({
       return;
     }
     const docs = task.company_alvaras.company_alvara_documents ?? [];
-    const currentDoc = Array.isArray(docs) ? docs.find((d: any) => d.is_current) : null;
-    const isIndef = currentDoc ? Boolean(currentDoc.is_indefinite) : false;
+    const activeDoc = task.status === "concluida"
+      ? (Array.isArray(docs) ? docs.find((d: any) => d.id === task.result_document_id || d.source_task_id === task.id) : null)
+      : (Array.isArray(docs) ? docs.find((d: any) => d.is_current) : null);
+    const isIndef = activeDoc ? Boolean(activeDoc.is_indefinite) : false;
     setIsIndefiniteDraft(isIndef);
 
     if (task.status === "concluida") {
-      setEmissaoDraft(formatIsoDateParaBR(task.completed_at ? task.completed_at.slice(0, 10) : (task.company_alvaras.data_emissao ?? null)));
-      setVencimentoDraft(isIndef ? "" : formatIsoDateParaBR(task.due_date ?? (task.company_alvaras.data_vencimento ?? null)));
+      setEmissaoDraft(formatIsoDateParaBR(activeDoc?.issue_date ?? task.completed_at?.slice(0, 10) ?? null));
+      setVencimentoDraft(isIndef ? "" : formatIsoDateParaBR(activeDoc?.expiration_date ?? task.due_date ?? null));
     } else {
       setEmissaoDraft(formatIsoDateParaBR(task.company_alvaras.data_emissao ?? null));
       setVencimentoDraft(isIndef ? "" : formatIsoDateParaBR(task.company_alvaras.data_vencimento ?? null));
@@ -360,8 +362,10 @@ export function TaskEditModal({
   const exigeAnexoTipo = a?.anexo_obrigatorio === true;
   // Anexo existente no documento vigente OU anexo preparado no estado local
   const docs = ca?.company_alvara_documents ?? [];
-  const currentDoc = Array.isArray(docs) ? docs.find((d: any) => d.is_current) : null;
-  const temAnexoExistente = Boolean(currentDoc?.file_path && String(currentDoc.file_path).trim());
+  const activeDoc = task && task.status === "concluida"
+    ? (Array.isArray(docs) ? docs.find((d: any) => d.id === task.result_document_id || d.source_task_id === task.id) : null)
+    : (Array.isArray(docs) ? docs.find((d: any) => d.is_current) : null);
+  const temAnexoExistente = Boolean(activeDoc?.file_path && String(activeDoc.file_path).trim());
   const temAnexo = temAnexoExistente || Boolean(preparedAttachment);
   const okAnexo = !exigeAnexoTipo || temAnexo;
   const exigeChecklist = a?.checklist_obrigatorio === true;
@@ -495,10 +499,10 @@ export function TaskEditModal({
                                   file_mime_type: preparedAttachment.file_mime_type,
                                 }
                               : {
-                                  file_path: currentDoc?.file_path ?? null,
-                                  file_name: currentDoc?.file_name ?? null,
-                                  file_size: currentDoc?.file_size ?? null,
-                                  file_mime_type: currentDoc?.file_mime_type ?? null,
+                                  file_path: activeDoc?.file_path ?? null,
+                                  file_name: activeDoc?.file_name ?? null,
+                                  file_size: activeDoc?.file_size ?? null,
+                                  file_mime_type: activeDoc?.file_mime_type ?? null,
                                 };
 
                             await apiJson("/api/alvara-tasks/" + taskId, {
@@ -787,22 +791,35 @@ export function TaskEditModal({
                     }}
                   />
 
-                  {/* Estado do anexo */}
-                  <p>
+                  <p className="flex flex-col gap-1">
                     {preparedAttachment ? (
                       <span className="inline-flex items-center gap-1 font-medium text-blue-700 dark:text-blue-400">
                         <FileCheck2 className="h-3.5 w-3.5" />
                         Anexo pronto para conclusão: {preparedAttachment.file_name} ({(preparedAttachment.file_size / 1024).toFixed(0)} KB)
                       </span>
-                    ) : temAnexoExistente ? (
-                      <span className="text-emerald-700 dark:text-emerald-400">Documento associado ao vínculo.</span>
+                    ) : temAnexoExistente && activeDoc ? (
+                      <a
+                        href={`/api/documents/${activeDoc.id}/view`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-medium text-emerald-700 hover:text-emerald-800 hover:underline dark:text-emerald-400 dark:hover:text-emerald-300"
+                        title="Clique para visualizar ou baixar o documento"
+                      >
+                        <FileCheck2 className="h-3.5 w-3.5" />
+                        <span>Visualizar anexo: {activeDoc.file_name || "Documento associado"}</span>
+                        {activeDoc.file_size && (
+                          <span className="text-[10px] text-slate-500 font-normal">
+                            ({(Number(activeDoc.file_size) / 1024).toFixed(0)} KB)
+                          </span>
+                        )}
+                      </a>
                     ) : (
-                      <span>Sem documento no vínculo.</span>
+                      <span className="text-slate-500 dark:text-slate-400">Sem documento associado ao vínculo.</span>
                     )}
-                    {exigeAnexoTipo ? (
-                      <span className="font-medium text-amber-900 dark:text-amber-300"> Este tipo exige anexo para concluir.</span>
-                    ) : (
-                      <span className="text-slate-500 dark:text-slate-400"> Anexo opcional ao concluir.</span>
+                    {exigeAnexoTipo && !temAnexo && (
+                      <span className="font-medium text-amber-600 dark:text-amber-400 text-[10px] mt-0.5">
+                        ⚠️ Este tipo exige anexo para concluir.
+                      </span>
                     )}
                   </p>
 

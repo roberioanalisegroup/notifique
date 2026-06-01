@@ -31,10 +31,24 @@ export async function POST(
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
 
-  // 2. Validar tarefa: existência, estado aberto e obter vínculo
+  // 2. Validar tarefa: existência, estado aberto e obter vínculo completo com empresa e tipo de alvará
   const { data: taskRow, error: tErr } = await supabase
     .from("alvara_tasks")
-    .select("id, company_alvara_id, status")
+    .select(`
+      id,
+      company_alvara_id,
+      status,
+      company_alvaras (
+        id,
+        companies (
+          numero_documento,
+          cnpj
+        ),
+        alvaras (
+          name
+        )
+      )
+    `)
     .eq("id", taskId)
     .single();
 
@@ -91,9 +105,29 @@ export async function POST(
     );
   }
 
-  // 6. Gerar storage key segura (extensão derivada do MIME, não do nome original)
+  // 6. Gerar storage key segura de forma organizada (empresas/[cnpj]/[alvara-slug]/uuid.ext)
+  const company = (taskRow.company_alvaras as any)?.companies;
+  const alvara = (taskRow.company_alvaras as any)?.alvaras;
+  
+  // Limpar documento para ter apenas dígitos no nome do diretório
+  const rawDoc = company?.cnpj || company?.numero_documento || "";
+  const companyDir = rawDoc.replace(/\D/g, "") || `sem-documento-${companyAlvaraId}`;
+  
+  const slugify = (text: string) => {
+    return text
+      .toString()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // remove acentos
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "-") // substitui espaços por -
+      .replace(/[^\w-]+/g, "") // remove caracteres especiais
+      .replace(/--+/g, "-");
+  };
+
+  const alvaraDir = alvara?.name ? slugify(alvara.name) : "documento";
   const uuid = crypto.randomUUID();
-  const storageKey = `company-alvaras/${companyAlvaraId}/tasks/${taskId}/${uuid}${extension}`;
+  const storageKey = `empresas/${companyDir}/${alvaraDir}/${uuid}${extension}`;
 
   // 7. Upload para o R2
   try {
