@@ -19,6 +19,7 @@ import type {
 import { differenceInCalendarDays } from "date-fns";
 import { AccessibleModal } from "@/components/ui/accessible-modal";
 import { ResponsiveTableShell } from "@/components/ui/responsive-table-shell";
+import { AlvaraDossierDrawer } from "@/components/empresas/alvara-dossier-drawer";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -29,13 +30,24 @@ type LinkRow = CompanyAlvara & {
   alvaras: Alvara & { alvara_groups: AlvaraGroup };
 };
 
+function getAlvaraStatusLabel(s: string) {
+  const map: Record<string, string> = {
+    emitido: "Vigente",
+    pendente: "Sem Documento",
+    vencido: "Vencido",
+    renovando: "Renovando",
+    cancelado: "Cancelado",
+  };
+  return map[s] ?? s;
+}
+
 function statusBadge(s: string) {
   const map: Record<string, string> = {
-    emitido: "bg-green-100 text-green-900",
-    pendente: "bg-amber-100 text-amber-900",
-    vencido: "bg-red-100 text-red-800",
-    renovando: "bg-blue-100 text-blue-900",
-    cancelado: "bg-slate-200 text-slate-800",
+    emitido: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
+    pendente: "bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800",
+    vencido: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800",
+    renovando: "bg-blue-100 text-blue-900 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800",
+    cancelado: "bg-slate-200 text-slate-800 dark:bg-slate-850 dark:text-slate-350 border border-slate-200 dark:border-slate-800",
   };
   return map[s] ?? "bg-slate-100 text-slate-800";
 }
@@ -88,6 +100,15 @@ const COMPANY_HISTORY_EVENT_LABEL: Record<CompanyHistoryEventType, string> = {
   tarefa_desvinculada: "Tarefa desvinculada",
   tarefa_atualizada: "Vínculo atualizado",
   codigo_empresa_atualizado: "Código da empresa",
+  company_alvara_observations_updated: "Observações do vínculo",
+  // Fase 2
+  company_alvara_monitoring_suspended: "Monitoramento suspenso",
+  company_alvara_monitoring_reactivated: "Monitoramento reativado",
+  company_alvara_archived: "Vínculo arquivado",
+  company_alvara_restored: "Vínculo restaurado",
+  company_alvara_document_archived: "Documento arquivado",
+  company_alvara_document_restored: "Documento restaurado",
+  company_alvara_task_force_completed: "Tarefa encerrada (admin)",
 };
 
 function companyHistoryEventBadgeClass(t: CompanyHistoryEventType): string {
@@ -99,6 +120,15 @@ function companyHistoryEventBadgeClass(t: CompanyHistoryEventType): string {
     tarefa_desvinculada: "bg-red-100 text-red-900",
     tarefa_atualizada: "bg-slate-200 text-slate-800",
     codigo_empresa_atualizado: "bg-teal-100 text-teal-900",
+    company_alvara_observations_updated: "bg-blue-100 text-blue-900",
+    // Fase 2
+    company_alvara_monitoring_suspended: "bg-orange-100 text-orange-900",
+    company_alvara_monitoring_reactivated: "bg-emerald-100 text-emerald-900",
+    company_alvara_archived: "bg-amber-100 text-amber-950",
+    company_alvara_restored: "bg-emerald-100 text-emerald-900",
+    company_alvara_document_archived: "bg-slate-200 text-slate-800",
+    company_alvara_document_restored: "bg-sky-100 text-sky-900",
+    company_alvara_task_force_completed: "bg-purple-100 text-purple-900",
   };
   return m[t] ?? "bg-slate-100 text-slate-800";
 }
@@ -133,6 +163,8 @@ export function CompanyDetailClient() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [tab, setTab] = useState<"dados" | "alvaras" | "historico">("dados");
+  const [dossierOpen, setDossierOpen] = useState(false);
+  const [dossierId, setDossierId] = useState<string | null>(null);
   const [historyRows, setHistoryRows] = useState<CompanyHistoryEvent[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
@@ -623,7 +655,7 @@ export function CompanyDetailClient() {
     }
     if (!confirm("Desvincular este alvará?")) return;
     try {
-      await apiFetch("/api/company-alvaras/" + row.id, { method: "DELETE" });
+      await apiJson("/api/company-alvaras/" + row.id, { method: "DELETE" });
       toast.success("Desvinculado");
       setSelectedLinkIds((p) => {
         const n = { ...p };
@@ -632,7 +664,11 @@ export function CompanyDetailClient() {
       });
       void load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro");
+      let msg = e instanceof Error ? e.message : "Erro";
+      if (msg.includes("violates foreign key constraint") || msg.includes("foreign key")) {
+        msg = "Não é possível desvincular: este alvará possui histórico de tarefas concluídas ou documentos arquivados que não podem ser apagados.";
+      }
+      toast.error(msg);
     }
   }
 
@@ -681,12 +717,16 @@ export function CompanyDetailClient() {
     try {
       for (const linkId of ids) {
         try {
-          await apiFetch("/api/company-alvaras/" + linkId, { method: "DELETE" });
+          await apiJson("/api/company-alvaras/" + linkId, { method: "DELETE" });
           ok++;
         } catch (e) {
           fail++;
           if (!firstErr) {
-            firstErr = e instanceof Error ? e.message : "Erro";
+            let msg = e instanceof Error ? e.message : "Erro";
+            if (msg.includes("violates foreign key constraint") || msg.includes("foreign key")) {
+              msg = "Não é possível desvincular: existem históricos ou documentos associados.";
+            }
+            firstErr = msg;
           }
         }
       }
@@ -1048,28 +1088,38 @@ export function CompanyDetailClient() {
                         <td>{formatDate(row.data_vencimento, { empty: "—" })}</td>
                         <td>{formatDate(row.data_notificacao, { empty: "—" })}</td>
                         <td>
-                          <span className={"rounded-md px-2 py-0.5 text-xs font-medium " + statusBadge(row.status)}>
-                            {row.status}
+                          <span className={"rounded-md px-2 py-0.5 text-xs font-semibold " + statusBadge(row.status)}>
+                            {getAlvaraStatusLabel(row.status)}
                           </span>
                         </td>
                         <td className="space-x-2">
                           <button
                             type="button"
+                            className="text-sm font-medium text-emerald-650 hover:text-emerald-750"
+                            onClick={() => {
+                              setDossierId(row.id);
+                              setDossierOpen(true);
+                            }}
+                          >
+                            Ver histórico
+                          </button>
+                          <button
+                            type="button"
                             className="text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40"
                             disabled={!!company.archived_at}
-                          onClick={() => {
+                            onClick={() => {
                               if (company.archived_at) {
                                 toast.error("Restaure a empresa para editar vínculos.");
                                 return;
                               }
-                            setEditing(row);
-                            setVinc({
-                              open: true,
-                              groupIds: [],
-                              alvarasSemGrupoIds: [],
-                              observacoes: row.observacoes ?? "",
-                            });
-                          }}
+                              setEditing(row);
+                              setVinc({
+                                open: true,
+                                groupIds: [],
+                                alvarasSemGrupoIds: [],
+                                observacoes: row.observacoes ?? "",
+                              });
+                            }}
                           >
                             Editar
                           </button>
@@ -1536,6 +1586,14 @@ export function CompanyDetailClient() {
           </div>
         </AccessibleModal>
       ) : null}
+      <AlvaraDossierDrawer
+        open={dossierOpen}
+        onClose={() => {
+          setDossierOpen(false);
+          setDossierId(null);
+        }}
+        companyAlvaraId={dossierId}
+      />
     </div>
   );
 }

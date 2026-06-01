@@ -22,7 +22,10 @@ export async function PATCH(
 ) {
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
-  const { supabase } = auth;
+  const { supabase, userId } = auth;
+  if (!userId) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
 
   const id = await resolveRouteId(context.params);
   if (!id) {
@@ -54,6 +57,26 @@ export async function PATCH(
   if (body.anexo_obrigatorio !== undefined && body.anexo_obrigatorio !== null) {
     if (typeof body.anexo_obrigatorio !== "boolean") {
       return NextResponse.json({ error: "anexo_obrigatorio deve ser booleano." }, { status: 400 });
+    }
+  }
+  if (body.checklist_obrigatorio !== undefined && typeof body.checklist_obrigatorio !== "boolean") {
+    return NextResponse.json({ error: "checklist_obrigatorio deve ser booleano." }, { status: 400 });
+  }
+  if (body.checklist_template_id !== undefined && body.checklist_template_id !== null) {
+    const tid = String(body.checklist_template_id).trim();
+    if (tid === "") {
+      body.checklist_template_id = null;
+    } else {
+      const { data: tpl } = await supabase
+        .from("alvara_checklist_templates")
+        .select("id")
+        .eq("id", tid)
+        .eq("created_by", userId)
+        .maybeSingle();
+      if (!tpl) {
+        return NextResponse.json({ error: "Template de checklist não encontrado" }, { status: 404 });
+      }
+      body.checklist_template_id = tid;
     }
   }
 

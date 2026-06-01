@@ -5,6 +5,7 @@ export type AcompanhamentoTaskRow = AlvaraTask & {
     | (CompanyAlvara & {
         companies: Company | null;
         alvaras: (Alvara & { alvara_groups: AlvaraGroup | null }) | null;
+        company_alvara_documents?: any[] | null;
       })
     | null;
 };

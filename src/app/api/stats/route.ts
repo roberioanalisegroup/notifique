@@ -1,6 +1,7 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
+import { computeDocumentStatus } from "@/lib/alvara-status";
 
 export async function GET(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
@@ -26,8 +27,6 @@ export async function GET(request: NextRequest) {
   in90.setDate(in90.getDate() + 90);
   const until90 = in90.toISOString().slice(0, 10);
 
-
-
   // 6 months ago for time series
   const sixMonthsAgo = new Date(now);
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
@@ -42,13 +41,13 @@ export async function GET(request: NextRequest) {
     rProfiles,
     rSixMonthTasks,
     rFileCounts,
-    rIndeterminados,
+    rIndefiniteValidityCount,
     rTotalAlvarasTipos,
     rSyncPending,
     rVencendoList,
     rCompanyAlvarasLinks
   ] = await Promise.all([
-    // 1. Fetch active companies directly from the table to bypass incomplete view columns
+    // 1. Fetch active companies directly from the table
     supabase
       .from("companies")
       .select("id, cnpj, uf, razao_social, nome_fantasia, responsible_user_id")
@@ -56,10 +55,11 @@ export async function GET(request: NextRequest) {
     
     // 2. Future expirations for 30, 60, 90 days projection
     supabase
-      .from("company_alvaras")
-      .select("id, data_vencimento")
-      .gte("data_vencimento", today)
-      .lte("data_vencimento", until90),
+      .from("company_alvara_documents")
+      .select("id, expiration_date")
+      .eq("is_current", true)
+      .gte("expiration_date", today)
+      .lte("expiration_date", until90),
       
     // 3. Current month tasks for throughput
     supabase
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
       .gte("created_at", monthStart)
       .lte("created_at", monthEnd + "T23:59:59Z"),
       
-    // 4. All active tasks for status distribution & frontend lane mapping
+    // 4. All active tasks for status distribution
     supabase
       .from("alvara_tasks")
       .select(`
@@ -82,7 +82,6 @@ export async function GET(request: NextRequest) {
         inicio_obrigatorio_ate,
         company_alvaras (
           id,
-          data_vencimento,
           companies (
             id,
             cnpj,
@@ -106,32 +105,36 @@ export async function GET(request: NextRequest) {
       .select("id, created_at, completed_at, status")
       .gte("created_at", sixMonthsAgoStr),
 
-    // 7. Company alvaras with file attachments + group details for category distribution
+    // 7. Company alvara current documents with file path + group details
     supabase
-      .from("company_alvaras")
+      .from("company_alvara_documents")
       .select(`
         id,
-        arquivo_url,
-        status,
-        data_vencimento,
-        alvaras (
+        file_path,
+        expiration_date,
+        company_alvaras!company_alvara_id (
           id,
-          name,
-          group_id,
-          alvara_groups!group_id (
+          status,
+          alvaras (
             id,
             name,
-            color
+            group_id,
+            alvara_groups!group_id (
+              id,
+              name,
+              color
+            )
           )
         )
-      `),
+      `)
+      .eq("is_current", true),
 
     // 8. Count of indefinite validity alvaras
     supabase
-      .from("company_alvaras")
+      .from("company_alvara_documents")
       .select("id", { count: "exact", head: true })
-      .is("data_vencimento", null)
-      .eq("status", "emitido"),
+      .eq("is_current", true)
+      .eq("is_indefinite", true),
 
     // Baseline stats
     supabase.from("alvaras").select("id", { count: "exact", head: true }),
@@ -144,26 +147,41 @@ export async function GET(request: NextRequest) {
       
     // Vencendo list for bottom section
     supabase
+      .from("company_alvara_documents")
+      .select(`
+        id,
+        expiration_date,
+        company_alvaras!company_alvara_id (
+          id,
+          numero,
+          companies!inner ( id, cnpj, razao_social, nome_fantasia ),
+          alvaras ( id, name, group_id )
+        )
+      `)
+      .is("company_alvaras.companies.archived_at", null)
+      .eq("is_current", true)
+      .not("expiration_date", "is", null)
+      .gte("expiration_date", today)
+      .lte("expiration_date", until30)
+      .order("expiration_date", { ascending: true })
+      .limit(5),
+
+    // 12. Active company_alvaras links for summary calculations joined with their documents
+    supabase
       .from("company_alvaras")
       .select(`
         id,
-        numero,
-        data_vencimento,
+        company_id,
         status,
-        companies!inner ( id, cnpj, razao_social, nome_fantasia ),
-        alvaras ( id, name, group_id )
+        company_alvara_documents (
+          id,
+          issue_date,
+          expiration_date,
+          is_indefinite,
+          is_current
+        )
       `)
-      .is("companies.archived_at", null)
-      .not("data_vencimento", "is", null)
-      .gte("data_vencimento", today)
-      .lte("data_vencimento", until30)
-      .order("data_vencimento", { ascending: true })
-      .limit(5),
-
-    // 12. Active company_alvaras links for summary calculations
-    supabase
-      .from("company_alvaras")
-      .select("id, company_id, status, data_notificacao, data_vencimento")
+      .is("archived_at", null)
   ]);
 
   const companiesList = rCompaniesSummary.data || [];
@@ -177,17 +195,6 @@ export async function GET(request: NextRequest) {
     alvaras_vencidos: number;
     alvaras_notificados: number;
   }> = {};
-
-  // Build a set of company_alvara_ids that have at least one completed task valid for the current/future cycle
-  const caWithValidCompletedTask = new Set<string>();
-  (rActiveTasks.data || []).forEach(t => {
-    if (t.status === "concluida" && t.due_date && t.due_date >= today) {
-      const caId = (t.company_alvaras as any)?.id;
-      if (caId) {
-        caWithValidCompletedTask.add(caId);
-      }
-    }
-  });
 
   alvarasLinks.forEach(link => {
     if (!link.company_id) return;
@@ -203,19 +210,20 @@ export async function GET(request: NextRequest) {
     const counts = alvarasByCompany[link.company_id];
     counts.total_alvaras++;
 
-    // An alvará is counted as active (emitido) if its status is literally 'emitido' 
-    // OR if its status is 'pendente' but it has a valid completed task for the cycle.
-    const isAtivo = link.status === "emitido" || 
-                    (link.status === "pendente" && caWithValidCompletedTask.has(link.id));
+    // Find the active document
+    const currentDoc = (link.company_alvara_documents as any[])?.find(d => d.is_current);
 
-    if (isAtivo) {
+    const docStatus = computeDocumentStatus(currentDoc, today);
+
+    if (docStatus === "vigente" || docStatus === "indeterminado") {
       counts.alvaras_emitidos++;
     } else {
       counts.alvaras_pendentes++;
     }
 
-    if (link.status === "vencido" || (link.data_vencimento && link.data_vencimento < today)) counts.alvaras_vencidos++;
-    if (link.data_notificacao != null) counts.alvaras_notificados++;
+    if (docStatus === "vencido") {
+      counts.alvaras_vencidos++;
+    }
   });
 
   // Emulate companies_alvara_summary view signature
@@ -242,7 +250,7 @@ export async function GET(request: NextRequest) {
     };
   });
   const totalEmpresas = summaryData.length;
-  const ativas = summaryData.filter(c => c.total_alvaras > 0 && c.alvaras_vencidos === 0).length; // "regular" or "active compliance"
+  const ativas = summaryData.filter(c => c.total_alvaras > 0 && c.alvaras_vencidos === 0).length;
   
   // 1. General Compliance Rate
   const complianceRate = totalEmpresas > 0 ? (ativas / totalEmpresas) * 100 : 0;
@@ -264,8 +272,8 @@ export async function GET(request: NextRequest) {
   let count90 = 0;
   
   rExpiringAlvaras.data?.forEach(item => {
-    if (!item.data_vencimento) return;
-    const vDate = item.data_vencimento;
+    if (!item.expiration_date) return;
+    const vDate = item.expiration_date;
     if (vDate <= until30) {
       count30++;
     } else if (vDate <= until60) {
@@ -283,13 +291,14 @@ export async function GET(request: NextRequest) {
   // 5. Backlog distribution by status
   const taskStatusCounts: Record<string, number> = {
     pendente: 0,
+    em_andamento: 0,
+    com_impedimento: 0,
     concluida: 0,
-    cancelada: 0,
   };
   
   const activeTasksList = rActiveTasks.data || [];
   activeTasksList.forEach(t => {
-    if (t.status === "pendente" || t.status === "concluida" || t.status === "cancelada") {
+    if (t.status in taskStatusCounts) {
       taskStatusCounts[t.status]++;
     }
   });
@@ -330,11 +339,9 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.count - a.count);
 
   // 8. Sazonal history (6 months timeline)
-  // We want to group created and completed tasks by month name
   const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
   const timelineData: Array<{ monthIndex: number; monthName: string; created: number; completed: number }> = [];
   
-  // Initialize last 6 months
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now);
     d.setMonth(d.getMonth() - i);
@@ -350,15 +357,12 @@ export async function GET(request: NextRequest) {
     const cDate = new Date(t.created_at);
     const compDate = t.completed_at ? new Date(t.completed_at) : null;
     
-    // Increment created counts
     timelineData.forEach(month => {
-      // created in month
       const matchCreated = cDate.getMonth() === month.monthIndex && cDate.getFullYear() === (2000 + parseInt(month.monthName.split("/")[1], 10));
       if (matchCreated) {
         month.created++;
       }
       
-      // completed in month
       if (compDate) {
         const matchCompleted = compDate.getMonth() === month.monthIndex && compDate.getFullYear() === (2000 + parseInt(month.monthName.split("/")[1], 10));
         if (matchCompleted) {
@@ -368,7 +372,6 @@ export async function GET(request: NextRequest) {
     });
   });
 
-  // Remove helper index from response
   const sazonalHistory = timelineData.map(({ monthName, created, completed }) => ({
     label: monthName,
     created,
@@ -378,17 +381,20 @@ export async function GET(request: NextRequest) {
   // 9. Document upload coverage rate & Categorization
   const alvarasWithGroups = rFileCounts.data || [];
   const totalAlvarasCount = alvarasLinks.length;
-  const alvarasWithFileCount = alvarasWithGroups.filter(f => f.arquivo_url != null && f.arquivo_url !== "").length;
+  const alvarasWithFileCount = alvarasWithGroups.filter(f => f.file_path != null && f.file_path !== "").length;
   const documentCoverageRate = totalAlvarasCount > 0 ? (alvarasWithFileCount / totalAlvarasCount) * 100 : 0;
-  const alvarasVencidos = alvarasLinks.filter(f => f.status === "vencido" || (f.data_vencimento && f.data_vencimento < today)).length;
+  
+  let alvarasVencidos = 0;
+  Object.values(alvarasByCompany).forEach(c => {
+    alvarasVencidos += c.alvaras_vencidos;
+  });
 
   const categoryCounts: Record<string, { count: number; color: string }> = {};
-  alvarasWithGroups.forEach(ca => {
-    // Safely unpack ca.alvaras which can be parsed as an array or a single object by TS
-    const alv: any = Array.isArray(ca.alvaras) ? ca.alvaras[0] : ca.alvaras;
+  alvarasWithGroups.forEach((ca: any) => {
+    const caLink = Array.isArray(ca.company_alvaras) ? ca.company_alvaras[0] : ca.company_alvaras;
+    const alv: any = Array.isArray(caLink?.alvaras) ? caLink?.alvaras[0] : caLink?.alvaras;
     if (!alv) return;
 
-    // Safely unpack alv.alvara_groups which can be parsed as an array or a single object by TS
     const group: any = Array.isArray(alv.alvara_groups) ? alv.alvara_groups[0] : alv.alvara_groups;
 
     const groupName = group?.name || "Sem Categoria";
@@ -408,11 +414,25 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.count - a.count);
 
   // 10. Indefinite validity count
-  const indefiniteValidityCount = rIndeterminados.count || 0;
+  const indefiniteValidityCount = rIndefiniteValidityCount.count || 0;
 
   const scoreRegularidade = totalAlvarasCount > 0
     ? ((totalAlvarasCount - alvarasVencidos) / totalAlvarasCount) * 100
     : 100;
+
+  // Adapt the bottom list output
+  const vencendoProx30Dias = (rVencendoList.data || []).map((item: any) => {
+    const caLink = Array.isArray(item.company_alvaras) ? item.company_alvaras[0] : item.company_alvaras;
+    const alv: any = Array.isArray(caLink?.alvaras) ? caLink?.alvaras[0] : caLink?.alvaras;
+    return {
+      id: item.id,
+      numero: caLink?.numero,
+      data_vencimento: item.expiration_date,
+      status: caLink?.status,
+      companies: caLink?.companies,
+      alvaras: alv
+    };
+  });
 
   return NextResponse.json({
     kpis: {
@@ -443,7 +463,7 @@ export async function GET(request: NextRequest) {
     sazonalHistory,
     alvarasPorCategoria,
     activeTasks: activeTasksList,
-    vencendoProx30Dias: rVencendoList.data || [],
+    vencendoProx30Dias,
     companiesSummary: summaryData,
   });
 }

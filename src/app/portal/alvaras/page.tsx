@@ -13,7 +13,7 @@ import {
   type AlvaraLegalDates,
   type WeekendAdjust,
 } from "@/lib/alvara-frequency";
-import type { Alvara, AlvaraGroup } from "@/types";
+import type { Alvara, AlvaraGroup, AlvaraChecklistTemplate } from "@/types";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
@@ -42,6 +42,9 @@ type ModalState = {
   legal_dias_uteis: number;
   prazo_inicio_dias: number;
   anexo_obrigatorio: boolean;
+  checklist_template_id: string;
+  checklist_obrigatorio: boolean;
+  apply_template_on_save: boolean;
   dias_frequencia_personalizada?: number | null;
   is_active: boolean;
 };
@@ -61,6 +64,9 @@ function defaultModal(): ModalState {
     legal_dias_uteis: 5,
     prazo_inicio_dias: 30,
     anexo_obrigatorio: false,
+    checklist_template_id: "",
+    checklist_obrigatorio: false,
+    apply_template_on_save: false,
     dias_frequencia_personalizada: null,
     is_active: true,
   };
@@ -82,6 +88,9 @@ function rowToModal(r: Row): ModalState {
     legal_dias_uteis: r.legal_dias_uteis ?? 5,
     prazo_inicio_dias: r.prazo_inicio_dias ?? 30,
     anexo_obrigatorio: r.anexo_obrigatorio === true,
+    checklist_template_id: r.checklist_template_id ?? "",
+    checklist_obrigatorio: r.checklist_obrigatorio === true,
+    apply_template_on_save: false,
     dias_frequencia_personalizada: r.dias_frequencia_personalizada ?? null,
     is_active: r.is_active,
   };
@@ -242,6 +251,8 @@ function AlvarasContent() {
   });
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState | null>(null);
+  const [checklistTemplates, setChecklistTemplates] = useState<AlvaraChecklistTemplate[]>([]);
+  const [currentItemsCount, setCurrentItemsCount] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRowsById, setSelectedRowsById] = useState<Record<string, Row>>({});
   const [massBusy, setMassBusy] = useState(false);
@@ -334,7 +345,7 @@ function AlvarasContent() {
 
       const [a, g] = await Promise.all([
         apiJson<{ alvaras: Row[] }>(alvarasUrl),
-        apiJson<{ groups: AlvaraGroup[] }>("/api/alvara-groups"),
+        apiJson<{ groups: AlvaraGroup[] }>("/api/alvara-groups?only_active=true"),
       ]);
       setRows(a.alvaras);
       setGroups(g.groups);
@@ -348,6 +359,32 @@ function AlvarasContent() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!modal) {
+      setCurrentItemsCount(null);
+      return;
+    }
+    void (async () => {
+      try {
+        const d = await apiJson<{ templates: AlvaraChecklistTemplate[] }>("/api/checklist-templates");
+        setChecklistTemplates(d.templates ?? []);
+      } catch {
+        setChecklistTemplates([]);
+      }
+
+      if (modal.id) {
+        try {
+          const d = await apiJson<{ items: any[] }>("/api/alvaras/" + modal.id + "/checklist");
+          setCurrentItemsCount(d.items?.length ?? 0);
+        } catch {
+          setCurrentItemsCount(0);
+        }
+      } else {
+        setCurrentItemsCount(0);
+      }
+    })();
+  }, [modal]);
 
   async function save() {
     if (!modal?.name.trim()) {
@@ -379,16 +416,47 @@ function AlvarasContent() {
         legal_dias_uteis: legal.legal_dias_uteis,
         prazo_inicio_dias: modal.prazo_inicio_dias,
         anexo_obrigatorio: modal.anexo_obrigatorio,
+        checklist_template_id: modal.checklist_template_id.trim() || null,
+        checklist_obrigatorio: modal.checklist_obrigatorio,
         is_active: modal.is_active,
         dias_frequencia_personalizada: modal.frequencia === "personalizada" ? modal.dias_frequencia_personalizada : null,
       };
+      let alvaraId = modal.id;
       if (modal.id) {
         await apiJson("/api/alvaras/" + modal.id, { method: "PATCH", body: JSON.stringify(body) });
         toast.success("Alvará atualizado");
       } else {
-        await apiJson("/api/alvaras", { method: "POST", body: JSON.stringify(body) });
+        const created = await apiJson<{ alvara: Alvara }>("/api/alvaras", {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        alvaraId = created.alvara?.id;
         toast.success("Alvará criado");
       }
+
+      if (
+        modal.apply_template_on_save &&
+        modal.checklist_template_id.trim() &&
+        alvaraId
+      ) {
+        const checklist = await apiJson<{ items: { id: string }[] }>(
+          "/api/alvaras/" + alvaraId + "/checklist"
+        );
+        const mode = (checklist.items?.length ?? 0) > 0 ? "append" : "replace";
+        await apiJson("/api/alvaras/" + alvaraId + "/checklist/apply-template", {
+          method: "POST",
+          body: JSON.stringify({
+            template_id: modal.checklist_template_id.trim(),
+            mode,
+          }),
+        });
+        toast.success(
+          mode === "replace"
+            ? "Etapas do template aplicadas"
+            : "Etapas do template acrescentadas"
+        );
+      }
+
       setModal(null);
       void load();
     } catch (e) {
@@ -773,6 +841,84 @@ function AlvarasContent() {
                     Se for obrigatório, o utilizador só pode concluir a tarefa com um ficheiro associado ao vínculo
                     empresa–alvará.
                   </p>
+                </div>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-[minmax(7rem,9.5rem)_1fr] sm:items-start">
+                <label className="pt-2.5 text-sm font-semibold text-slate-800" htmlFor="alvara-checklist-template">
+                  Checklist
+                </label>
+                <div className="space-y-3">
+                  <select
+                    id="alvara-checklist-template"
+                    className="select-field w-full max-w-md"
+                    value={modal.checklist_template_id}
+                    onChange={(e) =>
+                      setModal({
+                        ...modal,
+                        checklist_template_id: e.target.value,
+                        apply_template_on_save: e.target.value ? modal.apply_template_on_save : false,
+                      })
+                    }
+                  >
+                    <option value="">— Sem template —</option>
+                    {checklistTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.item_count ?? 0} etapas)
+                      </option>
+                    ))}
+                  </select>
+                  {checklistTemplates.length === 0 ? (
+                    <p className="text-xs text-slate-500">
+                      Crie templates em{" "}
+                      <Link href="/portal/alvaras/etapas" className="font-medium text-blue-600 hover:underline">
+                        Alvarás → Etapas
+                      </Link>
+                      .
+                    </p>
+                  ) : null}
+                  {modal.checklist_template_id ? (
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30"
+                        checked={modal.apply_template_on_save}
+                        onChange={(e) =>
+                          setModal({ ...modal, apply_template_on_save: e.target.checked })
+                        }
+                      />
+                      Aplicar etapas do template ao guardar
+                    </label>
+                  ) : null}
+                  {modal.apply_template_on_save && modal.checklist_template_id ? (
+                    <p className="text-xs text-slate-500">
+                      Se este tipo já tiver etapas, as do template serão acrescentadas no fim; caso contrário,
+                      substituem a lista vazia.
+                    </p>
+                  ) : null}
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30"
+                      checked={modal.checklist_obrigatorio}
+                      onChange={(e) =>
+                        setModal({ ...modal, checklist_obrigatorio: e.target.checked })
+                      }
+                    />
+                    Checklist obrigatória para concluir a tarefa
+                  </label>
+                  <p className="text-xs text-slate-500">
+                    Quando ativo, o utilizador só pode concluir a tarefa depois de marcar todas as etapas da
+                    checklist no acompanhamento.
+                  </p>
+                  {modal.id ? (
+                    <Link
+                      href={"/portal/alvaras/etapas?alvara=" + encodeURIComponent(modal.id)}
+                      className="inline-block text-xs font-medium text-blue-600 hover:underline"
+                    >
+                      Editar etapas deste tipo →
+                    </Link>
+                  ) : null}
                 </div>
               </div>
 

@@ -93,7 +93,7 @@ export default function ImportarAlvarasPage() {
   useEffect(() => {
     (async () => {
       try {
-        const d = await apiJson<{ groups: AlvaraGroup[] }>("/api/alvara-groups");
+        const d = await apiJson<{ groups: AlvaraGroup[] }>("/api/alvara-groups?only_active=true");
         setGroupNames(new Set(d.groups.map((g) => g.name.trim())));
       } catch {
         setGroupNames(new Set());

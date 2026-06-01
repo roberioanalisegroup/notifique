@@ -103,6 +103,17 @@ export function formatDate(
   options?: { empty?: string; includeTime?: boolean }
 ): string {
   if (date == null) return options?.empty ?? "—";
+
+  // Formatação segura de data pura YYYY-MM-DD usando regex na string inteira
+  if (
+    typeof date === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(date.trim()) &&
+    !options?.includeTime
+  ) {
+    const [y, m, d] = date.trim().split("-");
+    return `${d}/${m}/${y}`;
+  }
+
   const d = typeof date === "string" ? new Date(date) : date;
   if (Number.isNaN(d.getTime())) return options?.empty ?? "—";
   const dt = d.toLocaleDateString("pt-BR", {

@@ -52,7 +52,16 @@ export type CompanyHistoryEventType =
   | "tarefa_vinculada"
   | "tarefa_desvinculada"
   | "tarefa_atualizada"
-  | "codigo_empresa_atualizado";
+  | "codigo_empresa_atualizado"
+  | "company_alvara_observations_updated"
+  // Fase 2: Administrative actions
+  | "company_alvara_monitoring_suspended"
+  | "company_alvara_monitoring_reactivated"
+  | "company_alvara_archived"
+  | "company_alvara_restored"
+  | "company_alvara_document_archived"
+  | "company_alvara_document_restored"
+  | "company_alvara_task_force_completed";
 
 /** Linha do histórico da empresa (aba Histórico no cadastro). */
 export interface CompanyHistoryEvent {
@@ -171,6 +180,10 @@ export interface Alvara {
   prazo_inicio_dias: number;
   /** Se verdadeiro, concluir a tarefa exige documento em `company_alvaras.arquivo_url`. */
   anexo_obrigatorio?: boolean;
+  /** Template de etapas associado (opcional). */
+  checklist_template_id?: string | null;
+  /** Se verdadeiro, todas as etapas da checklist devem estar concluídas para concluir a tarefa. */
+  checklist_obrigatorio?: boolean;
   is_active: boolean;
   dias_frequencia_personalizada?: number | null;
   created_at: string;
@@ -186,6 +199,27 @@ export interface AlvaraChecklistItem {
   sort_order: number;
   created_at: string;
   updated_at: string;
+}
+
+/** Template reutilizável de etapas (criado pelo utilizador em Alvarás → Etapas). */
+export interface AlvaraChecklistTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  created_by: string;
+  source_alvara_id: string | null;
+  created_at: string;
+  updated_at: string;
+  item_count?: number;
+  items?: AlvaraChecklistTemplateItem[];
+}
+
+export interface AlvaraChecklistTemplateItem {
+  id: string;
+  template_id: string;
+  label: string;
+  sort_order: number;
+  created_at: string;
 }
 
 /** Linha da checklist num cartão / tarefa (template + estado). */
@@ -206,13 +240,24 @@ export interface AlvaraTask {
   due_date: string | null;
   /** Só 1.º ciclo: último dia para passar o card a Em andamento (Pendente). Ciclos seguintes: null. */
   inicio_obrigatorio_ate: string | null;
-  status: "pendente" | "concluida" | "cancelada";
+  status: "pendente" | "em_andamento" | "com_impedimento" | "concluida" | "cancelada";
   title: string | null;
   completed_at: string | null;
   notes: string | null;
   protocolo?: string | null;
   created_at: string;
   updated_at: string;
+  start_after?: string | null;
+  task_type?: string;
+  priority?: string;
+  assigned_to?: string | null;
+  opened_from_document_id?: string | null;
+  result_document_id?: string | null;
+  completed_by?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
+  cancellation_reason?: string | null;
+  impediment_reason?: string | null;
 }
 
 export interface CompanyAlvara {

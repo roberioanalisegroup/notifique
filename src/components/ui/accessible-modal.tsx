@@ -119,20 +119,26 @@ export function AccessibleModal({
   return createPortal(
     <div
       className={cn(
-        "fixed inset-0 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm",
+        "fixed inset-0 flex items-center justify-center p-4",
         overlayClassName || "z-50"
       )}
-      onMouseDown={(e) => {
-        if (closeOnBackdrop && e.target === e.currentTarget) onClose();
-      }}
     >
+      {/* Backdrop overlay (handles background color and blur separately) */}
+      <div
+        className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity"
+        onMouseDown={(e) => {
+          if (closeOnBackdrop) onClose();
+        }}
+      />
+
+      {/* Modal panel container (completely independent sibling) */}
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
         aria-describedby={describedBy}
-        className={panelClassName}
+        className={cn("relative z-10 transition-all", panelClassName)}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {children}

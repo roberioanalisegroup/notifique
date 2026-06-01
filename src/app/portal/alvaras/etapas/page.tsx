@@ -1,5 +1,6 @@
 "use client";
 
+import { ChecklistTemplatesPanel } from "@/components/alvaras/checklist-templates-panel";
 import { apiJson } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { Alvara, AlvaraChecklistItem, AlvaraGroup } from "@/types";
@@ -17,6 +18,7 @@ import {
   Layers,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -238,6 +240,7 @@ function EtapaRow({
 
 /* ──────────────────── MAIN PAGE ──────────────────── */
 export default function AlvarasEtapasPage() {
+  const searchParams = useSearchParams();
   const [alvaras, setAlvaras] = useState<AlvaraRow[]>([]);
   const [alvaraId, setAlvaraId] = useState("");
   const [items, setItems] = useState<AlvaraChecklistItem[]>([]);
@@ -301,7 +304,9 @@ export default function AlvarasEtapasPage() {
         const d = await apiJson<{ alvaras: AlvaraRow[] }>("/api/alvaras");
         const list = d.alvaras ?? [];
         setAlvaras(list);
+        const fromUrl = searchParams.get("alvara")?.trim();
         setAlvaraId((cur) => {
+          if (fromUrl && list.some((a) => a.id === fromUrl)) return fromUrl;
           if (cur && list.some((a) => a.id === cur)) return cur;
           return list[0]?.id ?? "";
         });
@@ -312,7 +317,7 @@ export default function AlvarasEtapasPage() {
         setLoadingList(false);
       }
     })();
-  }, []);
+  }, [searchParams]);
 
   const selected = useMemo(() => alvaras.find((a) => a.id === alvaraId) ?? null, [alvaras, alvaraId]);
 
@@ -677,6 +682,13 @@ export default function AlvarasEtapasPage() {
             </div>
           </div>
         </div>
+
+        <ChecklistTemplatesPanel
+          alvaraId={alvaraId}
+          alvaraLabel={selected ? labelTipo(selected) : ""}
+          currentItemCount={items.length}
+          onApplied={() => void loadItems()}
+        />
       </div>
     </>
   );

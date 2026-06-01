@@ -28,12 +28,14 @@ import { AccessibleModal } from "@/components/ui/accessible-modal";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { TaskCardChecklist } from "@/components/acompanhamento/task-card-checklist";
+import { isChecklistFullyCompleted } from "@/lib/alvara-checklist-completion";
 
 type TaskDetail = AlvaraTask & {
   company_alvaras:
     | (CompanyAlvara & {
         companies: Company | null;
         alvaras: (Alvara & { alvara_groups: AlvaraGroup | null }) | null;
+        company_alvara_documents?: any[] | null;
       })
     | null;
 };
@@ -80,6 +82,7 @@ export function TaskEditModal({
   const [saving, setSaving] = useState(false);
   const [emissaoDraft, setEmissaoDraft] = useState("");
   const [vencimentoDraft, setVencimentoDraft] = useState("");
+  const [isIndefiniteDraft, setIsIndefiniteDraft] = useState(false);
   const [checklistRows, setChecklistRows] = useState<AlvaraTaskChecklistRow[]>([]);
   const emissaoDatePickerRef = useRef<HTMLInputElement>(null);
   const vencimentoDatePickerRef = useRef<HTMLInputElement>(null);
@@ -116,6 +119,7 @@ export function TaskEditModal({
       setProtocolo("");
       setEmissaoDraft("");
       setVencimentoDraft("");
+      setIsIndefiniteDraft(false);
     }
   }, [open, taskId, load]);
 
@@ -123,14 +127,20 @@ export function TaskEditModal({
     if (!task?.company_alvaras) {
       setEmissaoDraft("");
       setVencimentoDraft("");
+      setIsIndefiniteDraft(false);
       return;
     }
+    const docs = task.company_alvaras.company_alvara_documents ?? [];
+    const currentDoc = Array.isArray(docs) ? docs.find((d: any) => d.is_current) : null;
+    const isIndef = currentDoc ? Boolean(currentDoc.is_indefinite) : false;
+    setIsIndefiniteDraft(isIndef);
+
     if (task.status === "concluida") {
       setEmissaoDraft(formatIsoDateParaBR(task.completed_at ? task.completed_at.slice(0, 10) : (task.company_alvaras.data_emissao ?? null)));
-      setVencimentoDraft(formatIsoDateParaBR(task.due_date ?? (task.company_alvaras.data_vencimento ?? null)));
+      setVencimentoDraft(isIndef ? "" : formatIsoDateParaBR(task.due_date ?? (task.company_alvaras.data_vencimento ?? null)));
     } else {
       setEmissaoDraft(formatIsoDateParaBR(task.company_alvaras.data_emissao ?? null));
-      setVencimentoDraft(formatIsoDateParaBR(task.company_alvaras.data_vencimento ?? null));
+      setVencimentoDraft(isIndef ? "" : formatIsoDateParaBR(task.company_alvaras.data_vencimento ?? null));
     }
   }, [task]);
 
@@ -190,9 +200,13 @@ export function TaskEditModal({
       toast.error("Data de emissão inválida. Use o formato dia/mês/ano (dd/mm/aaaa).");
       return;
     }
-    const isoVenc = parseDataBRParaIso(vencimentoDraft);
-    if (vencimentoDraft.trim() !== "" && isoVenc === null) {
+    const isoVenc = isIndefiniteDraft ? null : parseDataBRParaIso(vencimentoDraft);
+    if (!isIndefiniteDraft && vencimentoDraft.trim() !== "" && isoVenc === null) {
       toast.error("Data de vencimento inválida. Use o formato dia/mês/ano (dd/mm/aaaa).");
+      return;
+    }
+    if (!isIndefiniteDraft && isoVenc && isoEm && isoVenc < isoEm) {
+      toast.error("A data de vencimento não pode ser anterior à data de emissão.");
       return;
     }
     setSaving(true);
@@ -202,9 +216,10 @@ export function TaskEditModal({
         body: JSON.stringify({
           data_emissao: isoEm,
           data_vencimento: isoVenc,
+          is_indefinite: isIndefiniteDraft,
         }),
       });
-      toast.success("Datas do vínculo atualizadas");
+      toast.success("Dados do documento salvos com sucesso!");
       await load();
       onSaved();
     } catch (e) {
@@ -321,15 +336,20 @@ export function TaskEditModal({
   }
 
   const ca = task?.company_alvaras;
+  const isTarefaAberta = task ? ["pendente", "em_andamento", "com_impedimento"].includes(task.status) : false;
   const c = ca?.companies;
   const a = ca?.alvaras;
   const g = a?.alvara_groups;
-  const hasEmissao = Boolean(ca?.data_emissao && String(ca.data_emissao).trim());
-  const hasVencimentoTarefa = Boolean(task?.due_date && String(task.due_date).trim());
+  const hasEmissao = Boolean(emissaoDraft && emissaoDraft.trim());
+  const hasVencimento = Boolean(vencimentoDraft && vencimentoDraft.trim());
   const exigeAnexoTipo = a?.anexo_obrigatorio === true;
   const temAnexo = Boolean(ca?.arquivo_url && String(ca.arquivo_url).trim());
   const okAnexo = !exigeAnexoTipo || temAnexo;
-  const podeConcluirModal = Boolean(task && hasEmissao && hasVencimentoTarefa && okAnexo && notes.trim() !== "");
+  const exigeChecklist = a?.checklist_obrigatorio === true;
+  const okChecklist = !exigeChecklist || isChecklistFullyCompleted(checklistRows);
+  const podeConcluirModal = Boolean(
+    task && hasEmissao && (isIndefiniteDraft || hasVencimento) && okAnexo && okChecklist
+  );
   const primeiroCicloModal = Boolean(
     task?.inicio_obrigatorio_ate && String(task.inicio_obrigatorio_ate).trim() !== ""
   );
@@ -339,19 +359,21 @@ export function TaskEditModal({
 
   function motivoNaoConclusaoModal(): string {
     if (!task) return "";
-    if (notes.trim() === "") {
-      return "A descrição / comentário é obrigatória para concluir a tarefa.";
-    }
+    const list: string[] = [];
     if (!hasEmissao) {
-      return "Registe a data de emissão no vínculo para poder concluir.";
+      list.push("Data de Emissão");
     }
-    if (!hasVencimentoTarefa) {
-      return "A data de vencimento no vínculo é obrigatória para concluir.";
+    if (!isIndefiniteDraft && !hasVencimento) {
+      list.push("Data de Vencimento (ou marque Validade Legal Indeterminada)");
     }
     if (exigeAnexoTipo && !temAnexo) {
-      return "Este tipo exige documento anexado ao vínculo.";
+      list.push("Anexo do documento (obrigatório para este tipo de alvará)");
     }
-    return "";
+    if (exigeChecklist && !okChecklist) {
+      list.push("Todas as etapas da checklist");
+    }
+    if (list.length === 0) return "";
+    return "Falta preencher os seguintes requisitos obrigatórios para concluir: " + list.join(", ") + ".";
   }
 
   const timeline = [...history].sort(
@@ -405,7 +427,93 @@ export function TaskEditModal({
               </div>
 
               <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">{a?.name ?? "Tarefa de alvará"}</h3>
+                <div className="flex items-center justify-between gap-4">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">{a?.name ?? "Tarefa de alvará"}</h3>
+                  {isTarefaAberta && (
+                    <span title={!podeConcluirModal ? motivoNaoConclusaoModal() : "Clique para concluir este ciclo"}>
+                      <button
+                        type="button"
+                        className={cn(
+                          "rounded-lg px-4 py-1.5 text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5",
+                          podeConcluirModal
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                            : "bg-slate-100 text-slate-400 border border-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700 cursor-not-allowed"
+                        )}
+                        disabled={saving || !podeConcluirModal}
+                        onClick={async () => {
+                          const isoEm = parseDataBRParaIso(emissaoDraft);
+                          const isoVenc = isIndefiniteDraft ? null : parseDataBRParaIso(vencimentoDraft);
+
+                          // Validações
+                          if (emissaoDraft.trim() !== "" && isoEm === null) {
+                            toast.error("Data de emissão inválida. Use o formato dia/mês/ano (dd/mm/aaaa).");
+                            return;
+                          }
+                          if (!isIndefiniteDraft && vencimentoDraft.trim() !== "" && isoVenc === null) {
+                            toast.error("Data de vencimento inválida. Use o formato dia/mês/ano (dd/mm/aaaa).");
+                            return;
+                          }
+                          if (!isIndefiniteDraft && isoVenc && isoEm && isoVenc < isoEm) {
+                            toast.error("A data de vencimento não pode ser anterior à data de emissão.");
+                            return;
+                          }
+                          if (exigeAnexoTipo && !temAnexo) {
+                            toast.error("Este tipo de alvará exige documento anexado ao vínculo.");
+                            return;
+                          }
+
+                          // Bloqueio de clique duplo
+                          setSaving(true);
+                          try {
+                            const finalNotes = notes.trim() !== "" ? notes.trim() : "Documento cadastrado e ciclo operacional concluído pelo portal.";
+
+                            await apiJson("/api/alvara-tasks/" + taskId, {
+                              method: "PATCH",
+                              body: JSON.stringify({
+                                status: "concluida",
+                                notes: finalNotes,
+                                protocolo: protocolo.trim() || null,
+                                issue_date: isoEm,
+                                expiration_date: isoVenc,
+                                is_indefinite: isIndefiniteDraft,
+                                file_path: ca?.arquivo_url ?? null,
+                                file_name: (ca as any)?.file_name ?? null,
+                                file_size: (ca as any)?.file_size ?? null,
+                                file_mime: (ca as any)?.file_mime_type ?? null,
+                              }),
+                            });
+
+                            toast.success("Documento salvo e ciclo concluído com sucesso.");
+
+                            if (isIndefiniteDraft) {
+                              toast.info("Documento salvo como validade indeterminada. Nenhuma renovação futura foi criada.");
+                            } else if (ca?.frequencia_override === "personalizada" || a?.frequencia === "personalizada") {
+                              toast.info("Documento salvo. Como a frequência é personalizada, a próxima renovação deverá ser planejada manualmente.");
+                            } else {
+                              toast.info("A próxima renovação foi planejada automaticamente.");
+                            }
+
+                            onClose();
+                            onSaved();
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Erro ao concluir ciclo");
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                      >
+                        {saving ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            A concluir…
+                          </>
+                        ) : (
+                          "Concluir"
+                        )}
+                      </button>
+                    </span>
+                  )}
+                </div>
                 <p className="mt-1 flex items-center gap-1 text-emerald-800 dark:text-emerald-300">
                   <Building2 className="h-4 w-4 shrink-0" />
                   {empresaHref ? (
@@ -436,12 +544,12 @@ export function TaskEditModal({
               <TaskCardChecklist
                 idPrefix={"modal-" + task.id}
                 items={checklistRows}
-                readOnly={task.status !== "pendente"}
+                readOnly={!isTarefaAberta}
                 onToggle={(itemId, completed, comment, attachmentUrl) => void patchChecklistModal(itemId, completed, comment, attachmentUrl)}
               />
 
               <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs dark:border-slate-600 dark:bg-slate-900/60">
-                <p className="mb-2 font-semibold text-slate-800 dark:text-slate-200">Datas do vínculo</p>
+                <p className="mb-2 font-semibold text-slate-800 dark:text-slate-200">Dados do documento</p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="form-label mb-1 block text-slate-700 dark:text-slate-300">Data de emissão</span>
@@ -453,7 +561,7 @@ export function TaskEditModal({
                         placeholder="dd/mm/aaaa"
                         className="input-field w-full pr-10"
                         value={emissaoDraft}
-                        disabled={task.status !== "pendente"}
+                        disabled={!isTarefaAberta}
                         onChange={(e) => setEmissaoDraft(maskDataBRInput(e.target.value))}
                       />
                       <input
@@ -471,7 +579,7 @@ export function TaskEditModal({
                       />
                       <button
                         type="button"
-                        disabled={task.status !== "pendente"}
+                        disabled={!isTarefaAberta}
                         className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 disabled:opacity-50 disabled:pointer-events-none"
                         aria-label="Abrir calendário"
                         title="Abrir calendário"
@@ -504,7 +612,7 @@ export function TaskEditModal({
                         placeholder="dd/mm/aaaa"
                         className="input-field w-full pr-10"
                         value={vencimentoDraft}
-                        disabled={task.status !== "pendente"}
+                        disabled={!isTarefaAberta || isIndefiniteDraft}
                         onChange={(e) => setVencimentoDraft(maskDataBRInput(e.target.value))}
                       />
                       <input
@@ -522,7 +630,7 @@ export function TaskEditModal({
                       />
                       <button
                         type="button"
-                        disabled={task.status !== "pendente"}
+                        disabled={!isTarefaAberta || isIndefiniteDraft}
                         className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 disabled:opacity-50 disabled:pointer-events-none"
                         aria-label="Abrir calendário"
                         title="Abrir calendário"
@@ -545,17 +653,50 @@ export function TaskEditModal({
                     </p>
                   </label>
                 </div>
+
+                <div className="mt-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700"
+                      checked={isIndefiniteDraft}
+                      disabled={!isTarefaAberta}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setIsIndefiniteDraft(checked);
+                        if (checked) {
+                          setVencimentoDraft("");
+                        }
+                      }}
+                    />
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Validade Legal Indeterminada (AVCB/Dispensa/etc)
+                    </span>
+                  </label>
+                </div>
+
                 <p className="mt-2 text-[0.7rem] leading-snug text-slate-500 dark:text-slate-400">
                   A <strong>data de emissão</strong> e a <strong>data de vencimento</strong> devem ser preenchidas manualmente conforme o documento real.
                 </p>
+
                 <button
                   type="button"
-                  className="btn-secondary mt-3 text-xs"
-                  disabled={saving || !ca?.id || task.status !== "pendente"}
+                  className="btn-primary mt-4 w-full justify-center text-sm font-semibold py-2 flex items-center gap-2"
+                  disabled={saving || !isTarefaAberta || !hasEmissao || (!isIndefiniteDraft && !hasVencimento)}
                   onClick={() => void saveVinculo()}
                 >
-                  Guardar datas no vínculo
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      A salvar dados…
+                    </>
+                  ) : (
+                    "Salvar dados do documento"
+                  )}
                 </button>
+                <p className="mt-2 text-center text-[0.7rem] text-slate-500 dark:text-slate-400 italic">
+                  Esta ação salva as datas, mas não conclui a tarefa. Para finalizar o ciclo, clique em Concluir no topo.
+                </p>
               </div>
 
 
@@ -601,14 +742,14 @@ export function TaskEditModal({
                       type="text"
                       className="input-field max-w-sm text-xs py-1.5"
                       value={protocolo}
-                      disabled={task.status !== "pendente"}
+                      disabled={!isTarefaAberta}
                       onChange={(e) => setProtocolo(e.target.value)}
                       placeholder="Ex: 2026/12345-AB..."
                     />
                     <button
                       type="button"
                       className="btn-primary text-xs py-1.5 px-3 shrink-0"
-                      disabled={saving || task.status !== "pendente" || protocolo === (task.protocolo ?? "")}
+                      disabled={saving || !isTarefaAberta || protocolo === (task.protocolo ?? "")}
                       onClick={() => void saveProtocolo()}
                     >
                       {saving ? "A guardar…" : "Guardar protocolo"}
@@ -671,51 +812,18 @@ export function TaskEditModal({
 
               <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-700">
                 {task.status === "pendente" ? (
-                  <>
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      disabled={saving || !podeConcluirModal}
-                      title={!podeConcluirModal ? motivoNaoConclusaoModal() || undefined : undefined}
-                      onClick={() => void patchStatus({ status: "concluida" })}
-                    >
-                      Concluir tarefa
-                    </button>
-                    {!podeConcluirModal ? (
-                      <p className="text-xs text-amber-800 dark:text-amber-300">{motivoNaoConclusaoModal()}</p>
-                    ) : null}
-                    {/*
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      disabled={saving}
-                      onClick={() => {
-                        if (
-                          !confirm(
-                            "Registar baixa no vínculo (emissão hoje, vencimento recalculado) e concluir a tarefa?"
-                          )
-                        ) {
-                          return;
-                        }
-                        void patchStatus({ registrarBaixaNoVinculo: true, status: "concluida" });
-                      }}
-                    >
-                      Dar baixa no vínculo e concluir
-                    </button>
-                    */}
-                    <button
-                      type="button"
-                      className="text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                      disabled={saving}
-                      onClick={() => {
-                        if (!confirm("Cancelar esta tarefa?")) return;
-                        void patchStatus({ status: "cancelada" });
-                        onClose();
-                      }}
-                    >
-                      Cancelar tarefa
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    disabled={saving}
+                    onClick={() => {
+                      if (!confirm("Cancelar esta tarefa?")) return;
+                      void patchStatus({ status: "cancelada" });
+                      onClose();
+                    }}
+                  >
+                    Cancelar tarefa
+                  </button>
                 ) : (
                   <button
                     type="button"

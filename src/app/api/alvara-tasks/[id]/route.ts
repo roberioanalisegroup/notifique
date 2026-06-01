@@ -1,38 +1,38 @@
 import { COMPANY_IN_TASK_SELECT } from "@/lib/alvara-task-company-select";
 import { getSupabaseForRequest } from "@/lib/api-auth";
-import {
-  computeDataVencimentoISO,
-  isAlvaraFrequencia,
-  isWeekendAdjust,
-  type AlvaraFrequencia,
-} from "@/lib/alvara-frequency";
-import { proximoVencimentoISOFromEmissao } from "@/lib/alvara-task-generation";
 import { sanitizeText } from "@/lib/utils";
-import type { Alvara, AlvaraTask } from "@/types";
+import type { AlvaraTask } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { format } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
+import { validateChecklistObrigatoriaForTask } from "@/lib/alvara-checklist-completion";
+import { validarCombinacaoStatus } from "@/lib/validations/alvara-status";
 
 const TASK_SELECT = `
   *,
   company_alvaras (
     *,
     companies ( ${COMPANY_IN_TASK_SELECT} ),
-    alvaras ( *, alvara_groups!group_id ( id, name, color ) )
+    alvaras ( *, alvara_groups!group_id ( id, name, color ) ),
+    company_alvara_documents ( * )
   )
 `;
 
 type Body = {
-  status?: "pendente" | "concluida" | "cancelada";
+  status?: "pendente" | "em_andamento" | "com_impedimento" | "concluida" | "cancelada";
   notes?: string | null;
-  registrarBaixaNoVinculo?: boolean;
-  arquivo_url?: string | null;
   protocolo?: string | null;
+  cancellation_reason?: string | null;
+  impediment_reason?: string | null;
+  
+  // Document parameters passed specifically on completion
+  issue_date?: string | null;
+  expiration_date?: string | null;
+  is_indefinite?: boolean;
+  file_path?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  file_mime?: string | null;
 };
-
-function isPgUniqueViolation(err: { code?: string; message?: string } | null) {
-  return err?.code === "23505" || (err?.message?.toLowerCase().includes("duplicate") ?? false);
-}
 
 async function insertHistory(
   supabase: SupabaseClient,
@@ -107,16 +107,18 @@ export async function PATCH(
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
+  const newStatus = body.status;
   if (
-    body.status != null &&
-    !["pendente", "concluida", "cancelada"].includes(body.status)
+    newStatus != null &&
+    !["pendente", "em_andamento", "com_impedimento", "concluida", "cancelada"].includes(newStatus)
   ) {
     return NextResponse.json({ error: "Status inválido" }, { status: 400 });
   }
 
+  // Fetch the current task row
   const { data: taskRow, error: tErr } = await supabase
     .from("alvara_tasks")
-    .select("id, company_alvara_id, status, notes, due_date, protocolo")
+    .select("id, company_alvara_id, status, notes, due_date, protocolo, result_document_id")
     .eq("id", id)
     .single();
 
@@ -124,398 +126,235 @@ export async function PATCH(
     return NextResponse.json({ error: "Tarefa não encontrada" }, { status: 404 });
   }
 
-  const { data: ca0, error: caErr } = await supabase
-    .from("company_alvaras")
-    .select("id, data_emissao, arquivo_url")
-    .eq("id", taskRow.company_alvara_id)
-    .single();
-
-  if (caErr || !ca0) {
-    return NextResponse.json({ error: "Vínculo não encontrado" }, { status: 404 });
-  }
-
-  let ca = ca0 as { id: string; data_emissao: string | null; arquivo_url: string | null };
-
-  const hasArquivo = Object.prototype.hasOwnProperty.call(body, "arquivo_url");
-  if (hasArquivo) {
-    const nextUrl = body.arquivo_url ?? null;
-    if (nextUrl !== ca.arquivo_url) {
-      const { error: uArq } = await supabase
-        .from("company_alvaras")
-        .update({
-          arquivo_url: nextUrl,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", ca.id);
-      if (uArq) {
-        return NextResponse.json({ error: uArq.message }, { status: 500 });
-      }
-      await insertHistory(supabase, id, "attachment", "Anexo do vínculo atualizado", {
-        anterior: ca.arquivo_url,
-        novo: nextUrl,
-      });
-      ca = { ...ca, arquivo_url: nextUrl };
-    }
-  }
-
-  /*
-  if (body.registrarBaixaNoVinculo) {
-    const { data: caFull, error: cErr } = await supabase
-      .from("company_alvaras")
-      .select("id, alvara_id")
-      .eq("id", taskRow.company_alvara_id)
-      .single();
-
-    if (cErr || !caFull) {
-      return NextResponse.json({ error: "Vínculo não encontrado" }, { status: 404 });
-    }
-
-    const { data: alvara, error: aErr } = await supabase
-      .from("alvaras")
-      .select("*")
-      .eq("id", caFull.alvara_id)
-      .single();
-
-    if (aErr || !alvara) {
-      return NextResponse.json({ error: "Tipo de alvará não encontrado" }, { status: 404 });
-    }
-
-    const a = alvara as Alvara;
-    if (a.frequencia === "personalizada") {
-      return NextResponse.json(
-        { error: "Frequência personalizada exige preenchimento manual das datas de emissão e vencimento no card." },
-        { status: 400 }
-      );
-    }
-    if (!isAlvaraFrequencia(a.frequencia) || !isWeekendAdjust(a.weekend_adjust)) {
-      return NextResponse.json(
-        { error: "Frequência / ajuste de fim de semana inválidos no tipo" },
-        { status: 400 }
-      );
-    }
-
-    const hoje = format(new Date(), "yyyy-MM-dd");
-    let dataVencimento: string;
-    try {
-      dataVencimento = computeDataVencimentoISO(hoje, a.frequencia, a.weekend_adjust, {
-        legal_dia: a.legal_dia,
-        legal_mes: a.legal_mes,
-        legal_dia_semana: a.legal_dia_semana,
-        legal_dias_uteis: a.legal_dias_uteis,
-      });
-    } catch (e) {
-      return NextResponse.json(
-        { error: e instanceof Error ? e.message : "Não foi possível calcular o próximo vencimento" },
-        { status: 400 }
-      );
-    }
-
-    const { error: uErr } = await supabase
-      .from("company_alvaras")
-      .update({
-        data_emissao: hoje,
-        data_vencimento: dataVencimento,
-        status: "emitido",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", caFull.id);
-
-    if (uErr) {
-      return NextResponse.json({ error: uErr.message }, { status: 500 });
-    }
-
-    const { error: uDue } = await supabase
-      .from("alvara_tasks")
-      .update({
-        due_date: dataVencimento,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id);
-
-    if (uDue) {
-      return NextResponse.json({ error: uDue.message }, { status: 500 });
-    }
-
-    ca = { ...ca, data_emissao: hoje };
-
-    await insertHistory(supabase, id, "system", "Baixa registada no vínculo", {
-      data_emissao: hoje,
-      data_vencimento: dataVencimento,
-    });
-  }
-  */
-
-  const newStatus: AlvaraTask["status"] | undefined = body.status;
-
-  const hasNotes = Object.prototype.hasOwnProperty.call(body, "notes");
-  const hasProtocolo = Object.prototype.hasOwnProperty.call(body, "protocolo");
-
-  if (
-    newStatus == null &&
-    !hasNotes &&
-    !body.registrarBaixaNoVinculo &&
-    !hasArquivo &&
-    !hasProtocolo
-  ) {
+  // 1. Garantir no backend que tarefas já encerradas (concluídas ou canceladas) não possam ser re-submetidas/concluídas novamente
+  if (taskRow.status === "concluida" || taskRow.status === "cancelada") {
     return NextResponse.json(
-      { error: "Informe status, notas, anexo, protocolo ou registrarBaixaNoVinculo" },
+      { error: "Esta tarefa já foi encerrada (concluída ou cancelada) e não pode sofrer novas alterações." },
       { status: 400 }
     );
   }
 
+  // Fetch the link details
+  const { data: linkRow, error: caErr } = await supabase
+    .from("company_alvaras")
+    .select("id, status, monitoring_status, archived_at")
+    .eq("id", taskRow.company_alvara_id)
+    .single();
+
+  if (caErr || !linkRow) {
+    return NextResponse.json({ error: "Vínculo não encontrado" }, { status: 404 });
+  }
+
+  // ==========================================
+  // CASE A: TASK COMPLETION (RPC CALL)
+  // ==========================================
   if (newStatus === "concluida") {
-    const { data: caCheck, error: caCheckErr } = await supabase
-      .from("company_alvaras")
-      .select("data_emissao, data_vencimento, arquivo_url, alvara_id")
-      .eq("id", taskRow.company_alvara_id)
-      .single();
-
-    if (caCheckErr) {
-      return NextResponse.json({ error: caCheckErr.message }, { status: 500 });
-    }
-
+    // 1. Rígidas validações de backend
     const activeNotes = body.notes !== undefined ? body.notes : taskRow.notes;
-    if (activeNotes == null || String(activeNotes).trim() === "") {
+    if (!activeNotes || String(activeNotes).trim() === "") {
       return NextResponse.json(
         { error: "A descrição / comentário é obrigatória para concluir a tarefa." },
         { status: 400 }
       );
     }
 
-    const em = caCheck?.data_emissao;
-    if (em == null || String(em).trim() === "") {
+    if (!body.issue_date) {
       return NextResponse.json(
-        { error: "A data de emissão no vínculo é obrigatória para concluir a tarefa." },
+        { error: "A data de emissão é obrigatória para concluir a tarefa." },
         { status: 400 }
       );
     }
 
-    const venc = caCheck?.data_vencimento;
-    if (venc == null || String(venc).trim() === "") {
+    if (!body.is_indefinite && !body.expiration_date) {
       return NextResponse.json(
-        { error: "A data de vencimento no vínculo é obrigatória para concluir a tarefa." },
+        { error: "A data de vencimento é obrigatória para validade determinada." },
         { status: 400 }
       );
     }
 
-    let exigeAnexo = false;
-    const aid = caCheck?.alvara_id;
-    if (aid) {
-      const r = await supabase.from("alvaras").select("anexo_obrigatorio").eq("id", aid).maybeSingle();
-      if (!r.error && r.data && (r.data as { anexo_obrigatorio?: boolean }).anexo_obrigatorio === true) {
-        exigeAnexo = true;
+    if (!body.is_indefinite && body.expiration_date && body.expiration_date < body.issue_date) {
+      return NextResponse.json(
+        { error: "A data de vencimento não pode ser anterior à data de emissão." },
+        { status: 400 }
+      );
+    }
+
+    const { data: linkAlvara } = await supabase
+      .from("company_alvaras")
+      .select("alvara_id, alvaras ( checklist_obrigatorio )")
+      .eq("id", taskRow.company_alvara_id)
+      .maybeSingle();
+
+    const alvaraRow = linkAlvara?.alvaras as { checklist_obrigatorio?: boolean } | null;
+    if (alvaraRow?.checklist_obrigatorio === true && linkAlvara?.alvara_id) {
+      const checklistErr = await validateChecklistObrigatoriaForTask(
+        supabase,
+        id,
+        linkAlvara.alvara_id
+      );
+      if (checklistErr) {
+        return NextResponse.json({ error: checklistErr }, { status: 400 });
       }
     }
 
-    const arq = caCheck?.arquivo_url;
-    if (exigeAnexo && (arq == null || String(arq).trim() === "")) {
-      return NextResponse.json(
-        {
-          error:
-            "Este tipo de alvará exige um documento anexado ao vínculo. Associe o ficheiro antes de concluir a tarefa.",
-        },
-        { status: 400 }
-      );
-    }
+    try {
+      // 2. Executar a RPC transacional
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc("complete_alvara_task", {
+        p_task_id: id,
+        p_issue_date: body.issue_date,
+        p_expiration_date: body.is_indefinite ? null : body.expiration_date,
+        p_is_indefinite: body.is_indefinite ?? false,
+        p_file_path: body.file_path ?? null,
+        p_file_name: body.file_name ?? null,
+        p_file_size: body.file_size ? Number(body.file_size) : null,
+        p_file_mime: body.file_mime ?? null,
+        p_notes: sanitizeText(body.notes),
+        p_user_id: auth.userId || null,
+      });
 
-    const { data: dueRow } = await supabase
-      .from("alvara_tasks")
-      .select("due_date")
-      .eq("id", id)
-      .single();
-    const due = dueRow?.due_date;
-    if (due == null || String(due).trim() === "") {
-      return NextResponse.json(
-        {
-          error:
-            "O vencimento da tarefa é obrigatório para concluir. Edite o vínculo e salve antes de concluir.",
-        },
-        { status: 400 }
-      );
-    }
+      if (rpcErr) {
+        throw rpcErr;
+      }
 
-    if (due && venc && venc.slice(0, 10) <= due.slice(0, 10)) {
+      // 3. Atualizar o protocolo se tiver sido fornecido
+      if (body.protocolo !== undefined && body.protocolo !== taskRow.protocolo) {
+        await supabase
+          .from("alvara_tasks")
+          .update({ protocolo: sanitizeText(body.protocolo), updated_at: new Date().toISOString() })
+          .eq("id", id);
+      }
+
+      // Return the updated task row
+      const { data: updatedTask } = await supabase
+        .from("alvara_tasks")
+        .select(TASK_SELECT)
+        .eq("id", id)
+        .single();
+
+      const { data: updatedHistory } = await supabase
+        .from("alvara_task_history")
+        .select("*")
+        .eq("task_id", id)
+        .order("created_at", { ascending: false });
+
+      return NextResponse.json({
+        task: updatedTask,
+        history: updatedHistory ?? [],
+      });
+
+    } catch (lifecycleError: any) {
+      console.error("[CRITICAL RPC RENEWAL ERROR]", lifecycleError);
+
+      // Persistência resiliente de erro fora da transação
+      try {
+        await supabase.from("lifecycle_errors").insert({
+          company_alvara_id: taskRow.company_alvara_id,
+          task_id: id,
+          operation: "concluir_tarefa",
+          error_message: lifecycleError.message || String(lifecycleError),
+          payload: { body, error_details: lifecycleError },
+        });
+      } catch (logErr) {
+        console.error("Erro ao registrar erro em lifecycle_errors:", logErr);
+      }
+
       return NextResponse.json(
-        {
-          error:
-            "O vencimento do vínculo deve ser maior que o vencimento da tarefa atual para registrar o novo ciclo de validade.",
-        },
+        { error: lifecycleError.message || "Erro no processamento do ciclo de renovação automática." },
         { status: 400 }
       );
     }
   }
 
-  const patch: Record<string, unknown> = {
+  // ==========================================
+  // CASE B: NORMAL UPDATE (STATUS, NOTES, PROTOCOLO, Impedimento, Cancelamento)
+  // ==========================================
+  if (newStatus != null && newStatus !== taskRow.status) {
+    const validation = validarCombinacaoStatus(newStatus, linkRow.status);
+    if (!validation.valido) {
+      return NextResponse.json({ error: validation.mensagem }, { status: 400 });
+    }
+  }
+
+  const patch: Record<string, any> = {
     updated_at: new Date().toISOString(),
   };
+
   if (newStatus != null) {
     patch.status = newStatus;
-    if (newStatus === "concluida" || newStatus === "cancelada") {
-      patch.completed_at = new Date().toISOString();
-    }
-    if (newStatus === "pendente") {
+    if (newStatus === "cancelada") {
+      patch.cancelled_at = new Date().toISOString();
+      patch.cancelled_by = auth.userId || null;
+      patch.cancellation_reason = sanitizeText(body.cancellation_reason) || null;
+    } else if (newStatus === "com_impedimento") {
+      patch.impediment_reason = sanitizeText(body.impediment_reason) || null;
+    } else if (newStatus === "pendente" || newStatus === "em_andamento") {
       patch.completed_at = null;
+      patch.cancelled_at = null;
+      patch.cancelled_by = null;
+      patch.cancellation_reason = null;
+      patch.impediment_reason = null;
     }
   }
-  if (hasNotes) {
+
+  if (body.notes !== undefined) {
     patch.notes = sanitizeText(body.notes);
   }
 
-  if (hasProtocolo) {
+  if (body.protocolo !== undefined) {
     patch.protocolo = sanitizeText(body.protocolo);
   }
 
-  const needsTaskUpdate = newStatus != null || hasNotes || hasProtocolo;
+  const { error: patchErr } = await supabase
+    .from("alvara_tasks")
+    .update(patch)
+    .eq("id", id);
 
-  if (needsTaskUpdate) {
-    const { error: u2 } = await supabase.from("alvara_tasks").update(patch).eq("id", id);
-    if (u2) {
-      if (isPgUniqueViolation(u2)) {
-        return NextResponse.json(
-          { error: "Já existe uma tarefa pendente para este vínculo com o mesmo vencimento. Não é possível reativar esta tarefa." },
-          { status: 409 }
-        );
-      }
-      return NextResponse.json({ error: u2.message }, { status: 500 });
+  if (patchErr) {
+    if (patchErr.code === "23505" || patchErr.message?.toLowerCase().includes("duplicate")) {
+      return NextResponse.json(
+        { error: "Já existe uma tarefa de renovação aberta para este ciclo neste alvará." },
+        { status: 409 }
+      );
     }
-    if (newStatus != null && newStatus !== taskRow.status) {
-      await insertHistory(supabase, id, "status", `Estado: ${taskRow.status} → ${newStatus}`, {
-        de: taskRow.status,
-        para: newStatus,
-      });
-    }
-    if (hasNotes && body.notes !== taskRow.notes) {
-      await insertHistory(supabase, id, "notes", "Descrição / comentário atualizado", {
-        anterior: taskRow.notes,
-        novo: body.notes,
-      });
-    }
-    if (hasProtocolo && body.protocolo !== taskRow.protocolo) {
-      await insertHistory(supabase, id, "system", "Número de protocolo atualizado", {
-        anterior: taskRow.protocolo,
-        novo: body.protocolo,
-      });
-    }
+    return NextResponse.json({ error: patchErr.message }, { status: 500 });
   }
 
-  if (newStatus === "concluida") {
-    const { data: caLink } = await supabase
-      .from("company_alvaras")
-      .select("data_emissao, data_vencimento, alvara_id, frequencia_override, dias_frequencia_personalizada")
-      .eq("id", taskRow.company_alvara_id)
-      .single();
-
-    if (caLink?.alvara_id && caLink?.data_emissao) {
-      const { data: alvFull } = await supabase.from("alvaras").select("*").eq("id", caLink.alvara_id).single();
-      const alv = alvFull as Alvara | null;
-
-      if (alv?.is_active) {
-        let nextDue: string | null = null;
-        let inicioOb: string | null = null;
-
-        const activeFreq = caLink.frequencia_override || alv.frequencia;
-        const activeDias = caLink.frequencia_override
-          ? caLink.dias_frequencia_personalizada
-          : alv.dias_frequencia_personalizada;
-
-        let nextVencimento: string | null = null;
-        if (activeFreq === "personalizada") {
-          const prazoDias = Math.min(3650, Math.max(1, Number(alv.prazo_inicio_dias ?? 30) || 30));
-          const dt = new Date();
-          dt.setDate(dt.getDate() + prazoDias);
-          const y = dt.getFullYear();
-          const m = String(dt.getMonth() + 1).padStart(2, "0");
-          const d = String(dt.getDate()).padStart(2, "0");
-          inicioOb = `${y}-${m}-${d}`;
-
-          // Reset the link dates and status for the next cycle
-          await supabase
-            .from("company_alvaras")
-            .update({
-              data_emissao: null,
-              data_vencimento: null, // Keep expiration empty initially for next cycle
-              status: "pendente",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", taskRow.company_alvara_id);
-        } else {
-          // 1. Calculate nextVencimento = data_vencimento_anterior + frequency
-          const baseVenc = caLink.data_vencimento || caLink.data_emissao;
-          if (baseVenc) {
-            try {
-              nextVencimento = computeDataVencimentoISO(
-                String(baseVenc).slice(0, 10),
-                activeFreq as AlvaraFrequencia,
-                alv.weekend_adjust,
-                {
-                  legal_dia: alv.legal_dia,
-                  legal_mes: alv.legal_mes,
-                  legal_dia_semana: alv.legal_dia_semana,
-                  legal_dias_uteis: alv.legal_dias_uteis,
-                },
-                activeDias
-              );
-            } catch {
-              nextVencimento = null;
-            }
-          }
-
-          // 2. Calculate nextDue (task renewal deadline) = exactly data_vencimento_anterior
-          if (caLink.data_vencimento) {
-            nextDue = String(caLink.data_vencimento).slice(0, 10);
-          } else {
-            return NextResponse.json(
-              { error: "A data de vencimento do vínculo anterior é obrigatória." },
-              { status: 400 }
-            );
-          }
-
-          // 3. Update the link to reset emission and set next validity for the next cycle
-          await supabase
-            .from("company_alvaras")
-            .update({
-              data_emissao: null,
-              data_vencimento: null,
-              status: "pendente",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", taskRow.company_alvara_id);
-        }
-
-        const { error: insE } = await supabase.from("alvara_tasks").insert({
-          company_alvara_id: taskRow.company_alvara_id,
-          due_date: nextDue,
-          inicio_obrigatorio_ate: inicioOb,
-          status: "pendente",
-          title: null,
-        });
-
-        if (!insE) {
-          await insertHistory(
-            supabase,
-            id,
-            "system",
-            nextDue
-              ? `Próxima tarefa criada com vencimento ${nextDue} (a partir da emissão do ciclo).`
-              : `Próxima tarefa criada (frequência personalizada - prazo de definição até ${inicioOb ? format(new Date(inicioOb + "T00:00:00"), "dd/MM/yyyy") : "—"}).`,
-            { proxima_data: nextDue, inicio_obrigatorio_ate: inicioOb }
-          );
-        } else if (!isPgUniqueViolation(insE)) {
-          console.warn("[alvara-tasks] próxima instância:", insE.message);
-        }
-      }
+  // Gravar no histórico correspondente
+  if (newStatus != null && newStatus !== taskRow.status) {
+    let summary = `Estado: ${taskRow.status} → ${newStatus}`;
+    if (newStatus === "cancelada" && body.cancellation_reason) {
+      summary += ` (Motivo: ${body.cancellation_reason})`;
+    } else if (newStatus === "com_impedimento" && body.impediment_reason) {
+      summary += ` (Impedimento: ${body.impediment_reason})`;
     }
+
+    await insertHistory(supabase, id, "status", summary, {
+      de: taskRow.status,
+      para: newStatus,
+      motivo: body.cancellation_reason || body.impediment_reason || null,
+    });
   }
 
-  const { data: updated, error: u3 } = await supabase
+  if (body.notes !== undefined && body.notes !== taskRow.notes) {
+    await insertHistory(supabase, id, "notes", "Descrição / comentário atualizado", {
+      anterior: taskRow.notes,
+      novo: body.notes,
+    });
+  }
+
+  if (body.protocolo !== undefined && body.protocolo !== taskRow.protocolo) {
+    await insertHistory(supabase, id, "system", "Número de protocolo atualizado", {
+      anterior: taskRow.protocolo,
+      novo: body.protocolo,
+    });
+  }
+
+  // Fetch updated task and history to return
+  const { data: updated } = await supabase
     .from("alvara_tasks")
     .select(TASK_SELECT)
     .eq("id", id)
     .single();
-
-  if (u3 || !updated) {
-    return NextResponse.json({ error: u3?.message ?? "Erro" }, { status: 500 });
-  }
 
   const { data: history } = await supabase
     .from("alvara_task_history")
@@ -524,7 +363,7 @@ export async function PATCH(
     .order("created_at", { ascending: false });
 
   return NextResponse.json({
-    task: updated as AlvaraTask & Record<string, unknown>,
+    task: updated,
     history: history ?? [],
   });
 }

@@ -7,6 +7,7 @@ import {
   type AlvaraFrequencia,
 } from "@/lib/alvara-frequency";
 import { NextRequest, NextResponse } from "next/server";
+import { validarCombinacaoStatus, type AlvaraStatus, type TarefaStatus } from "@/lib/validations/alvara-status";
 
 export async function PATCH(
   request: NextRequest,
@@ -22,6 +23,25 @@ export async function PATCH(
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+
+  if (body.status !== undefined) {
+    const newAlvaraStatus = body.status as AlvaraStatus;
+    // Fetch all non-cancelled tasks for this vínculo to validate the combination
+    const { data: tasks, error: taskFetchErr } = await supabase
+      .from("alvara_tasks")
+      .select("status")
+      .eq("company_alvara_id", id)
+      .neq("status", "cancelada");
+
+    if (!taskFetchErr && tasks && tasks.length > 0) {
+      for (const t of tasks) {
+        const validation = validarCombinacaoStatus(t.status as TarefaStatus, newAlvaraStatus);
+        if (!validation.valido) {
+          return NextResponse.json({ error: validation.mensagem }, { status: 400 });
+        }
+      }
+    }
   }
 
   const { data: beforeRow } = await supabase
@@ -106,9 +126,12 @@ export async function PATCH(
     }
   }
 
+  const updatePayload = { ...patch };
+  delete updatePayload.is_indefinite;
+
   const { data, error } = await supabase
     .from("company_alvaras")
-    .update(patch)
+    .update(updatePayload)
     .eq("id", id)
     .select(
       `
@@ -120,6 +143,53 @@ export async function PATCH(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Synchronize company_alvara_documents (the robust document-centric approach)
+  if (
+    Object.prototype.hasOwnProperty.call(patch, "data_emissao") ||
+    Object.prototype.hasOwnProperty.call(patch, "data_vencimento") ||
+    Object.prototype.hasOwnProperty.call(patch, "arquivo_url") ||
+    Object.prototype.hasOwnProperty.call(patch, "is_indefinite")
+  ) {
+    const { data: currentDoc } = await supabase
+      .from("company_alvara_documents")
+      .select("id")
+      .eq("company_alvara_id", id)
+      .eq("is_current", true)
+      .maybeSingle();
+
+    const docUpdate: Record<string, any> = {};
+    if (Object.prototype.hasOwnProperty.call(patch, "data_emissao")) {
+      docUpdate.issue_date = patch.data_emissao;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "data_vencimento")) {
+      docUpdate.expiration_date = patch.is_indefinite ? null : patch.data_vencimento;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "arquivo_url")) {
+      docUpdate.file_path = patch.arquivo_url;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "is_indefinite")) {
+      docUpdate.is_indefinite = patch.is_indefinite;
+    }
+
+    if (currentDoc) {
+      await supabase
+        .from("company_alvara_documents")
+        .update(docUpdate)
+        .eq("id", currentDoc.id);
+    } else {
+      await supabase
+        .from("company_alvara_documents")
+        .insert({
+          company_alvara_id: id,
+          issue_date: patch.data_emissao || null,
+          expiration_date: patch.is_indefinite ? null : (patch.data_vencimento || null),
+          file_path: patch.arquivo_url || null,
+          is_indefinite: patch.is_indefinite ?? false,
+          is_current: true,
+        });
+    }
   }
 
   const updated = data as {

@@ -2353,6 +2353,38 @@ export default function DashboardPage() {
 
         {/* Modal Content */}
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden p-6 space-y-5">
+          {(() => {
+            const attentionTasks = allTasks.filter(t => {
+              const ca = t.company_alvaras;
+              if (!ca) return false;
+              const lane = localLanes[t.id] || t.status || "pendente";
+              return (
+                (lane === "pendente" || lane === "em_andamento") &&
+                (ca as any).status === "emitido"
+              );
+            });
+            if (attentionTasks.length === 0) return null;
+
+            const uniqueResponsibles = Array.from(
+              new Set(
+                attentionTasks.map(
+                  t => t.company_alvaras?.companies?.responsible?.display_name || "Sem Responsável"
+                )
+              )
+            );
+
+            return (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-600 dark:text-amber-400 text-xs animate-in slide-in-from-top-4 duration-300">
+                <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 shrink-0 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/25">
+                  ⚠️ Inconsistência de Fluxo
+                </span>
+                <p className="flex-1">
+                  Alvarás marcados como emitidos mas com tarefas pendentes no Kanban. Responsável indicado:{" "}
+                  <strong>{uniqueResponsibles.join(", ")}</strong>. Triar e regularizar em até 48 horas úteis.
+                </p>
+              </div>
+            );
+          })()}
           {/* Barra de Filtros */}
           <div className="grid gap-4 sm:grid-cols-4 bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-slate-100 dark:border-white/5">
             {/* Input de Busca */}

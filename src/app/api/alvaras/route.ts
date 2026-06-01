@@ -98,7 +98,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
-  const { supabase } = auth;
+  const { supabase, userId } = auth;
+  if (!userId) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
 
   let body: {
     group_id?: string;
@@ -114,6 +117,8 @@ export async function POST(request: NextRequest) {
     legal_dias_uteis?: number | null;
     prazo_inicio_dias?: number;
     anexo_obrigatorio?: boolean;
+    checklist_template_id?: string | null;
+    checklist_obrigatorio?: boolean;
     is_active?: boolean;
     dias_frequencia_personalizada?: number | null;
   };
@@ -165,6 +170,23 @@ export async function POST(request: NextRequest) {
   const group_ids = body.group_ids || (body.group_id ? [body.group_id] : []);
   const group_id = group_ids.length > 0 ? group_ids[0] : null;
 
+  let checklist_template_id: string | null = null;
+  if (body.checklist_template_id != null && String(body.checklist_template_id).trim() !== "") {
+    checklist_template_id = String(body.checklist_template_id).trim();
+    const { data: tpl } = await supabase
+      .from("alvara_checklist_templates")
+      .select("id")
+      .eq("id", checklist_template_id)
+      .eq("created_by", userId)
+      .maybeSingle();
+    if (!tpl) {
+      return NextResponse.json({ error: "Template de checklist não encontrado" }, { status: 404 });
+    }
+  }
+  if (body.checklist_obrigatorio !== undefined && typeof body.checklist_obrigatorio !== "boolean") {
+    return NextResponse.json({ error: "checklist_obrigatorio deve ser booleano." }, { status: 400 });
+  }
+
   const rowBase = {
     group_id,
     name: body.name.trim(),
@@ -188,6 +210,8 @@ export async function POST(request: NextRequest) {
     .insert({
       ...rowBase,
       anexo_obrigatorio: body.anexo_obrigatorio === true,
+      checklist_template_id,
+      checklist_obrigatorio: body.checklist_obrigatorio === true,
     })
     .select(selectAlvara)
     .single();

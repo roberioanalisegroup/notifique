@@ -168,15 +168,19 @@ function companyLabel(c: Company | null | undefined): string {
   return (c.razao_social ?? c.nome_fantasia ?? "—").trim() || "—";
 }
 
-function taskMotivoNaoConclusao(t: TaskRow): string {
-  const em = t.company_alvaras?.data_emissao;
+function taskMotivoNaoConclusao(
+  t: TaskRow,
+  checklistRows: AlvaraTaskChecklistRow[] = []
+): string {
+  const currentDoc = t.company_alvaras?.company_alvara_documents?.find((d: any) => d.is_current);
+  const em = currentDoc?.issue_date;
   const hasEmissao = em != null && String(em).trim() !== "";
   if (!hasEmissao) {
     return "Para concluir é preciso registar a data de emissão no vínculo (ou usar «Dar baixa no vínculo»).";
   }
   const exigeAnexo = t.company_alvaras?.alvaras?.anexo_obrigatorio === true;
   if (exigeAnexo) {
-    const url = t.company_alvaras?.arquivo_url;
+    const url = currentDoc?.file_path;
     if (!url || String(url).trim() === "") {
       return "Este tipo de alvará exige um documento anexo no vínculo antes de concluir.";
     }
@@ -186,41 +190,52 @@ function taskMotivoNaoConclusao(t: TaskRow): string {
     return "O vencimento da tarefa preenche-se ao registar a emissão no vínculo; use também «Dar baixa» se aplicável.";
   }
 
-  const caVenc = t.company_alvaras?.data_vencimento;
+  const caVenc = currentDoc?.expiration_date;
   if (caVenc && t.due_date && caVenc.slice(0, 10) <= t.due_date.slice(0, 10)) {
     return "Para concluir, é preciso atualizar as datas do vínculo no modal para as datas da nova renovação futura.";
+  }
+
+  const exigeChecklist = t.company_alvaras?.alvaras?.checklist_obrigatorio === true;
+  if (exigeChecklist && checklistRows.length > 0 && !checklistRows.every((r) => r.completed)) {
+    return "Conclua todas as etapas da checklist antes de concluir a tarefa.";
   }
 
   return "Não é possível concluir esta tarefa.";
 }
 
-function taskPodeConcluir(t: TaskRow): boolean {
-  const em = t.company_alvaras?.data_emissao;
+function taskPodeConcluir(t: TaskRow, checklistRows: AlvaraTaskChecklistRow[] = []): boolean {
+  const currentDoc = t.company_alvaras?.company_alvara_documents?.find((d: any) => d.is_current);
+  const em = currentDoc?.issue_date;
   const hasEmissao = em != null && String(em).trim() !== "";
   const hasVencimentoTarefa = t.due_date != null && String(t.due_date).trim() !== "";
   if (!hasEmissao || !hasVencimentoTarefa) return false;
 
-  const caVenc = t.company_alvaras?.data_vencimento;
+  const caVenc = currentDoc?.expiration_date;
   if (caVenc && t.due_date && caVenc.slice(0, 10) <= t.due_date.slice(0, 10)) {
     return false;
   }
 
   const exigeAnexo = t.company_alvaras?.alvaras?.anexo_obrigatorio === true;
   if (exigeAnexo) {
-    const url = t.company_alvaras?.arquivo_url;
+    const url = currentDoc?.file_path;
     if (!url || String(url).trim() === "") return false;
+  }
+  const exigeChecklist = t.company_alvaras?.alvaras?.checklist_obrigatorio === true;
+  if (exigeChecklist && checklistRows.length > 0 && !checklistRows.every((r) => r.completed)) {
+    return false;
   }
   return true;
 }
 
 function vinculoTemEmissao(ca: TaskRow["company_alvaras"]): boolean {
-  const em = ca?.data_emissao;
+  const currentDoc = ca?.company_alvara_documents?.find((d: any) => d.is_current);
+  const em = currentDoc?.issue_date;
   return em != null && String(em).trim() !== "";
 }
 
 function taskAtrasoInicio(t: TaskRow, uiColumn: ColumnId, hoje: string): boolean {
-  if (t.status !== "pendente") return false;
-  if (uiColumn !== "pendente") return false;
+  if (t.status !== "pendente" && t.status !== "em_andamento") return false;
+  if (uiColumn !== "pendente" && uiColumn !== "andamento") return false;
   if (vinculoTemEmissao(t.company_alvaras)) return false;
   const lim =
     prazoInicioPrimeiroCiclo(t.created_at, t.company_alvaras?.alvaras?.prazo_inicio_dias) ??
@@ -230,7 +245,7 @@ function taskAtrasoInicio(t: TaskRow, uiColumn: ColumnId, hoje: string): boolean
 }
 
 function taskAtrasoVencimento(t: TaskRow, hoje: string): boolean {
-  if (t.status !== "pendente") return false;
+  if (t.status !== "pendente" && t.status !== "em_andamento") return false;
   if (!t.due_date || String(t.due_date).trim() === "") return false;
   return t.due_date < hoje;
 }
@@ -262,10 +277,9 @@ export type FilterCondition = {
 function matchesCondition(
   t: TaskRow,
   cond: FilterCondition,
-  hoje: string,
-  laneMap: Record<string, string>
+  hoje: string
 ): boolean {
-  const lane = t.status === "cancelada" ? "cancelada" : (t.status === "concluida" ? "concluido" : (laneMap[t.id] ?? "pendente"));
+  const lane = t.status === "cancelada" ? "cancelada" : (t.status === "concluida" ? "concluido" : (t.status === "em_andamento" ? "andamento" : (t.status === "com_impedimento" ? "impedimento" : "pendente")));
 
   if (cond.field === "atraso") {
     const isAtrasada = taskAtrasoInicio(t, lane as any, hoje) || taskAtrasoVencimento(t, hoje);
@@ -338,13 +352,13 @@ export default function AcompanhamentoPage() {
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [companyMenuOpen, setCompanyMenuOpen] = useState(false);
   const [yearMenuOpen, setYearMenuOpen] = useState(false);
-  const [laneMap, setLaneMap] = useState<Record<string, UiLane>>({});
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [selectedAlvaraNames, setSelectedAlvaraNames] = useState<string[]>([]);
   const [taskQuery, setTaskQuery] = useState("");
   const [taskMenuOpen, setTaskMenuOpen] = useState(false);
   const [helpPanelOpen, setHelpPanelOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(() => readViewMode());
+  const [showFutureTasks, setShowFutureTasks] = useState(false);
   const [detailModal, setDetailModal] = useState<{ taskId: string; column: ColumnId } | null>(
     null
   );
@@ -372,10 +386,6 @@ export default function AcompanhamentoPage() {
   const hoje = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
 
   useEffect(() => {
-    setLaneMap(readLaneMap());
-  }, []);
-
-  useEffect(() => {
     try {
       localStorage.setItem(VIEW_MODE_KEY, viewMode);
     } catch {
@@ -400,19 +410,6 @@ export default function AcompanhamentoPage() {
   }, [collapsedSwimlanes]);
 
   useEffect(() => {
-    function onStorage(e: StorageEvent) {
-      if (e.key !== LANES_STORAGE_KEY || e.newValue == null) return;
-      try {
-        setLaneMap(parseLaneMapJson(e.newValue));
-      } catch {
-        // ignore
-      }
-    }
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (!companyMenuRef.current?.contains(e.target as Node)) setCompanyMenuOpen(false);
       if (!yearMenuRef.current?.contains(e.target as Node)) setYearMenuOpen(false);
@@ -420,11 +417,6 @@ export default function AcompanhamentoPage() {
     }
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
-  }, []);
-
-  const persistLanes = useCallback((next: Record<string, UiLane>) => {
-    setLaneMap(next);
-    writeLaneMap(next);
   }, []);
 
   const buildQuery = useCallback(() => {
@@ -607,6 +599,11 @@ export default function AcompanhamentoPage() {
       if (isOculta && !showOcultos) {
         return false;
       }
+      // Regra de Ocultação Padrão de Tarefas Futuras (start_after > hoje)
+      const isActive = !["concluida", "cancelada"].includes(t.status);
+      if (isActive && t.start_after && t.start_after > hojeStr && !showFutureTasks) {
+        return false;
+      }
       // Filtro de Anos (em memória)
       if (numericYears.length > 0) {
         const tYear = getTaskYear(t);
@@ -614,7 +611,7 @@ export default function AcompanhamentoPage() {
       }
       // Filtros Personalizados Lógicos (E/OU)
       if (conditions.length > 0) {
-        const results = conditions.map((cond) => matchesCondition(t, cond, hojeStr, laneMap));
+        const results = conditions.map((cond) => matchesCondition(t, cond, hojeStr));
         const matched = logicalOperator === "and"
           ? results.every((r) => r === true)
           : results.some((r) => r === true);
@@ -622,7 +619,7 @@ export default function AcompanhamentoPage() {
       }
       return true;
     });
-  }, [tasks, selectedCompanies, selectedAlvaraNames, selectedYears, hoje, conditions, logicalOperator]);
+  }, [tasks, selectedCompanies, selectedAlvaraNames, selectedYears, hoje, conditions, logicalOperator, showFutureTasks]);
 
   const tasksByColumn = useMemo(() => {
     const pendente: TaskRow[] = [];
@@ -634,16 +631,11 @@ export default function AcompanhamentoPage() {
     for (const t of filteredTasks) {
       if (t.status === "cancelada") {
         cancelada.push(t);
-        continue;
-      }
-      if (t.status === "concluida") {
+      } else if (t.status === "concluida") {
         concluido.push(t);
-        continue;
-      }
-      const lane = laneMap[t.id] ?? "pendente";
-      if (lane === "andamento") {
+      } else if (t.status === "em_andamento") {
         andamento.push(t);
-      } else if (lane === "impedimento") {
+      } else if (t.status === "com_impedimento") {
         impedimento.push(t);
       } else {
         pendente.push(t);
@@ -657,7 +649,7 @@ export default function AcompanhamentoPage() {
     cancelada.sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""));
 
     return { pendente, andamento, concluido, impedimento, cancelada };
-  }, [filteredTasks, laneMap]);
+  }, [filteredTasks]);
 
   const swimlaneGroups = useMemo((): {
     id: string;
@@ -718,16 +710,11 @@ export default function AcompanhamentoPage() {
       for (const t of val.tasks) {
         if (t.status === "cancelada") {
           cancelada.push(t);
-          continue;
-        }
-        if (t.status === "concluida") {
+        } else if (t.status === "concluida") {
           concluido.push(t);
-          continue;
-        }
-        const lane = laneMap[t.id] ?? "pendente";
-        if (lane === "andamento") {
+        } else if (t.status === "em_andamento") {
           andamento.push(t);
-        } else if (lane === "impedimento") {
+        } else if (t.status === "com_impedimento") {
           impedimento.push(t);
         } else {
           pendente.push(t);
@@ -748,62 +735,18 @@ export default function AcompanhamentoPage() {
     });
 
     return groupsList.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
-  }, [filteredTasks, laneMap, swimlaneMode]);
+  }, [filteredTasks, swimlaneMode]);
 
   const getTaskUiColumn = useCallback(
     (t: TaskRow): ColumnId => {
       if (t.status === "cancelada") return "cancelada";
       if (t.status === "concluida") return "concluido";
-      const lane = laneMap[t.id] ?? "pendente";
-      if (lane === "andamento") return "andamento";
-      if (lane === "impedimento") return "impedimento";
+      if (t.status === "em_andamento") return "andamento";
+      if (t.status === "com_impedimento") return "impedimento";
       return "pendente";
     },
-    [laneMap]
+    []
   );
-
-  async function darBaixaNoVinculo(t: TaskRow) {
-    if (
-      !confirm(
-        "Concluir esta tarefa e registar a baixa no vínculo (emissão hoje, próximo vencimento recalculado)?"
-      )
-    ) {
-      return;
-    }
-    try {
-      await apiJson("/api/alvara-tasks/" + t.id, {
-        method: "PATCH",
-        body: JSON.stringify({ registrarBaixaNoVinculo: true, status: "concluida" }),
-      });
-      const next = { ...laneMap };
-      delete next[t.id];
-      persistLanes(next);
-      toast.success("Baixa registada e vínculo atualizado");
-      void load({ silent: true });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro");
-    }
-  }
-
-  async function soConcluir(t: TaskRow) {
-    if (!taskPodeConcluir(t)) {
-      toast.error(taskMotivoNaoConclusao(t));
-      return;
-    }
-    try {
-      await apiJson("/api/alvara-tasks/" + t.id, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "concluida" }),
-      });
-      const next = { ...laneMap };
-      delete next[t.id];
-      persistLanes(next);
-      toast.success("Tarefa concluída");
-      void load({ silent: true });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro");
-    }
-  }
 
   async function reabrir(t: TaskRow) {
     try {
@@ -819,15 +762,13 @@ export default function AcompanhamentoPage() {
   }
 
   async function cancelarTarefa(t: TaskRow) {
-    if (!confirm("Cancelar esta tarefa?")) return;
+    const reason = prompt("Motivo do cancelamento da tarefa:");
+    if (reason === null) return;
     try {
       await apiJson("/api/alvara-tasks/" + t.id, {
         method: "PATCH",
-        body: JSON.stringify({ status: "cancelada" }),
+        body: JSON.stringify({ status: "cancelada", cancellation_reason: reason || null }),
       });
-      const next = { ...laneMap };
-      delete next[t.id];
-      persistLanes(next);
       toast.success("Tarefa cancelada");
       void load({ silent: true });
     } catch (e) {
@@ -846,6 +787,7 @@ export default function AcompanhamentoPage() {
     setCompanyQuery("");
     setTaskQuery("");
     setConditions([]);
+    setShowFutureTasks(false);
     toast.message("Filtros limpos");
   }
 
@@ -867,11 +809,7 @@ export default function AcompanhamentoPage() {
   async function moveTaskToColumn(task: TaskRow, target: ColumnId) {
     if (target === "concluido") {
       if (task.status === "concluida") return;
-      if (!taskPodeConcluir(task)) {
-        toast.error(taskMotivoNaoConclusao(task));
-        return;
-      }
-      await soConcluir(task);
+      onOpenTaskDetail(task.id, "concluido");
       return;
     }
 
@@ -883,22 +821,35 @@ export default function AcompanhamentoPage() {
 
     if (task.status === "concluida" || task.status === "cancelada") {
       await reabrir(task);
-      const lane: UiLane = target === "andamento" ? "andamento" : target === "impedimento" ? "impedimento" : "pendente";
-      const next: Record<string, UiLane> = { ...laneMap, [task.id]: lane };
-      persistLanes(next);
-      return;
     }
 
-    const lane: UiLane = target === "andamento" ? "andamento" : target === "impedimento" ? "impedimento" : "pendente";
-    const next: Record<string, UiLane> = { ...laneMap, [task.id]: lane };
-    persistLanes(next);
-    toast.message(
-      target === "andamento" 
-        ? "Movido para Em andamento" 
-        : target === "impedimento" 
-          ? "Movido para Impedimento" 
-          : "Movido para Pendente"
-    );
+    let status = "pendente";
+    let impediment_reason: string | null = null;
+    if (target === "andamento") {
+      status = "em_andamento";
+    } else if (target === "impedimento") {
+      status = "com_impedimento";
+      const reason = prompt("Motivo do impedimento:");
+      if (reason === null) return;
+      impediment_reason = reason;
+    }
+
+    try {
+      await apiJson("/api/alvara-tasks/" + task.id, {
+        method: "PATCH",
+        body: JSON.stringify({ status, impediment_reason }),
+      });
+      toast.message(
+        target === "andamento"
+          ? "Movido para Em andamento"
+          : target === "impedimento"
+            ? "Movido para Impedimento"
+            : "Movido para Pendente"
+      );
+      void load({ silent: true });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao mover tarefa");
+    }
   }
 
   async function onDropColumn(e: React.DragEvent, target: ColumnId) {
@@ -1419,6 +1370,18 @@ export default function AcompanhamentoPage() {
           ) : null}
         </div>
 
+        <label className="flex items-center gap-2 self-end pb-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showFutureTasks}
+            onChange={(e) => setShowFutureTasks(e.target.checked)}
+            className="rounded border-slate-300 text-emerald-800 focus:ring-emerald-800"
+          />
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+            Visualizar Tarefas Futuras
+          </span>
+        </label>
+
         <button
           type="button"
           onClick={() => setAdvancedFiltersOpen((o) => !o)}
@@ -1818,8 +1781,6 @@ export default function AcompanhamentoPage() {
                                         void patchChecklist(t.id, itemId, completed, comment, attachmentUrl)
                                       }
                                       onOpenDetail={() => onOpenTaskDetail(t.id, col.id)}
-                                      onBaixa={() => void darBaixaNoVinculo(t)}
-                                      onConcluir={() => void soConcluir(t)}
                                       onReabrir={() => void reabrir(t)}
                                       onCancelar={() => void cancelarTarefa(t)}
                                       onMoveToColumn={(target) => void moveTaskToColumn(t, target)}
@@ -1926,8 +1887,6 @@ export default function AcompanhamentoPage() {
                             void patchChecklist(t.id, itemId, completed, comment, attachmentUrl)
                           }
                           onOpenDetail={() => onOpenTaskDetail(t.id, col.id)}
-                          onBaixa={() => void darBaixaNoVinculo(t)}
-                          onConcluir={() => void soConcluir(t)}
                           onReabrir={() => void reabrir(t)}
                           onCancelar={() => void cancelarTarefa(t)}
                           onMoveToColumn={(target) => void moveTaskToColumn(t, target)}
@@ -1975,8 +1934,6 @@ function TaskCard({
   checklistRows,
   onChecklistToggle,
   onOpenDetail,
-  onBaixa,
-  onConcluir,
   onReabrir,
   onCancelar,
   onMoveToColumn,
@@ -1987,8 +1944,6 @@ function TaskCard({
   checklistRows: AlvaraTaskChecklistRow[];
   onChecklistToggle: (itemId: string, completed: boolean, comment?: string, attachmentUrl?: string) => void;
   onOpenDetail: () => void;
-  onBaixa: () => void;
-  onConcluir: () => void;
   onReabrir: () => void;
   onCancelar: () => void;
   onMoveToColumn: (target: ColumnId) => void;
