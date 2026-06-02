@@ -591,7 +591,9 @@ export default function AcompanhamentoPage() {
       // Filtro de Anos (em memória)
       if (selectedYears.length > 0) {
         const tYear = getTaskYear(t);
-        if (!selectedYears.includes(tYear)) return false;
+        const isTaskActive = ["pendente", "em_andamento", "com_impedimento"].includes(t.status);
+        const isFutureActive = isTaskActive && showFutureTasks;
+        if (!selectedYears.includes(tYear) && !isFutureActive) return false;
       }
       // Filtros Personalizados Lógicos (E/OU)
       if (conditions.length > 0) {

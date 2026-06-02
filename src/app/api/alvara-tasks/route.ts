@@ -38,11 +38,11 @@ export async function GET(request: NextRequest) {
     q = q.eq("status", status);
   }
   if (from && to) {
-    q = q.or(`due_date.is.null,and(due_date.gte.${from},due_date.lte.${to})`);
+    q = q.or(`due_date.is.null,and(due_date.gte.${from},due_date.lte.${to}),status.in.(pendente,em_andamento,com_impedimento)`);
   } else if (from) {
-    q = q.or(`due_date.is.null,due_date.gte.${from}`);
+    q = q.or(`due_date.is.null,due_date.gte.${from},status.in.(pendente,em_andamento,com_impedimento)`);
   } else if (to) {
-    q = q.or(`due_date.is.null,due_date.lte.${to}`);
+    q = q.or(`due_date.is.null,due_date.lte.${to},status.in.(pendente,em_andamento,com_impedimento)`);
   }
 
   const { data, error } = await q;
