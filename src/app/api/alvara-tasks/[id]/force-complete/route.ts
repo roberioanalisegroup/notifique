@@ -30,7 +30,7 @@ export async function POST(
   const role = prof?.role || "user";
   if (role !== "admin") {
     return NextResponse.json(
-      { error: "Acesso não autorizado. Somente admin pode forçar o encerramento de tarefas." },
+      { error: "Acesso não autorizado. Somente administradores podem realizar o Encerramento Administrativo de tarefas." },
       { status: 403 }
     );
   }
@@ -45,7 +45,7 @@ export async function POST(
 
   if (!body.reason || body.reason.trim().length < 10) {
     return NextResponse.json(
-      { error: "É obrigatório informar uma justificativa com no mínimo 10 caracteres." },
+      { error: "É obrigatório informar uma justificativa de Encerramento Administrativo com no mínimo 10 caracteres." },
       { status: 400 }
     );
   }
@@ -67,7 +67,7 @@ export async function POST(
   // 4. Validação: não encerrar tarefas já concluídas/canceladas
   if (task.status === "concluida" || task.status === "cancelada") {
     return NextResponse.json(
-      { error: `Tarefa já está ${task.status} e não pode ser encerrada novamente.` },
+      { error: `Tarefa já está ${task.status} e não pode sofrer Encerramento Administrativo novamente.` },
       { status: 400 }
     );
   }
@@ -102,7 +102,7 @@ export async function POST(
   await supabase.from("alvara_task_history").insert({
     task_id: taskId,
     event_type: "status",
-    summary: `Tarefa encerrada administrativamente. Motivo: ${body.reason.trim()}`,
+    summary: `Encerramento Administrativo realizado. Motivo: ${body.reason.trim()}`,
     from_status: task.status,
     to_status: "cancelada",
     created_by: userId,

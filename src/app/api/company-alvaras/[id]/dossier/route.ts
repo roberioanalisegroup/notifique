@@ -1,5 +1,6 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { computeDocumentStatus, computeTaskStatus } from "@/lib/alvara-status";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -119,15 +120,25 @@ export async function GET(
     .eq("company_id", link.company_id)
     .eq("event_type", "company_alvara_observations_updated");
 
-  // Lifecycle errors (only if admin/gestor)
+  // Lifecycle errors (only if admin/gestor) - Consultas com RLS Lockdown via service_role
   let lifecycleErrors: any[] = [];
   if (isAdminOrGestor) {
-    const { data: errors } = await supabase
-      .from("lifecycle_errors")
-      .select("*")
-      .eq("company_alvara_id", id)
-      .order("created_at", { ascending: false });
-    lifecycleErrors = errors || [];
+    try {
+      const serviceRoleClient = createServiceRoleClient();
+      const { data: errors, error: fetchErrorsErr } = await serviceRoleClient
+        .from("lifecycle_errors")
+        .select("*")
+        .eq("company_alvara_id", id)
+        .order("created_at", { ascending: false });
+      
+      if (!fetchErrorsErr) {
+        lifecycleErrors = errors || [];
+      } else {
+        console.warn("Falha ao recuperar lifecycle_errors no dossiê (admin/gestor):", fetchErrorsErr.message);
+      }
+    } catch (clientErr) {
+      console.warn("createServiceRoleClient falhou ao buscar lifecycle_errors no dossiê:", clientErr instanceof Error ? clientErr.message : clientErr);
+    }
   }
 
   // 8. Resolve names/profiles for events creators
@@ -246,23 +257,32 @@ export async function GET(
     }
   });
 
-  // Add Operational errors (Lifecycle errors - restricted)
+  // Add Operational errors (Lifecycle errors - restricted to admin/gestor, fully sanitized)
   if (isAdminOrGestor) {
     lifecycleErrors.forEach((err) => {
+      // Mensagem tratada: remove caminhos de arquivos absolutos ou detalhes sensíveis se houver
+      const mensagemTratada = err.error_message
+        ? err.error_message.replace(/([a-zA-Z]:\\[\w\s\\.-]+|(?:\/[\w\s.-]+)+)/g, "[caminho-sistema]")
+        : "Erro operacional desconhecido.";
+
       timeline.push({
         id: err.id,
         source: "error",
         event_type: "lifecycle_error",
-        title: `Erro operacional: ${err.operation}`,
-        description: err.error_message,
+        title: `Erro operacional: ${err.operation || "Geral"}`,
+        description: mensagemTratada,
         created_at: err.created_at,
         created_by: null,
         severity: "error",
         metadata: {
-          task_id: err.task_id,
-          payload: err.payload,
-          resolved_at: err.resolved_at,
-          resolution_notes: err.resolution_notes,
+          id: err.id,
+          operation: err.operation || "Geral",
+          mensagem_tratada: mensagemTratada,
+          created_at: err.created_at,
+          resolved_at: err.resolved_at || null,
+          resolved_status: err.resolved_at != null ? "resolvido" : "pendente",
+          severity: "error",
+          // O payload bruto (err.payload) NÃO é retornado!
         },
       });
     });

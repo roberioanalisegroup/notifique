@@ -265,12 +265,15 @@ export interface CompanyAlvara {
   company_id: string;
   alvara_id: string;
   numero: string | null;
+  /** @deprecated [LEGADO] data_emissao na tabela de vínculos é obsoleto e não deve ser usado como fonte oficial. */
   data_emissao: string | null;
-  /** Até haver emissão: prazo de início (criação da tarefa + dias do tipo). Após emissão: validade legal do certificado. */
+  /** @deprecated [LEGADO] data_vencimento na tabela de vínculos é obsoleto e não deve ser usado como fonte oficial. */
   data_vencimento: string | null;
   data_notificacao: string | null;
+  /** @deprecated [LEGADO] status na tabela de vínculos é obsoleto e não deve ser usado como fonte oficial. */
   status: string;
   observacoes: string | null;
+  /** @deprecated [LEGADO] arquivo_url na tabela de vínculos é obsoleto e não deve ser usado como fonte oficial. */
   arquivo_url: string | null;
   frequencia_override?: string | null;
   dias_frequencia_personalizada?: number | null;

@@ -250,14 +250,6 @@ function taskAtrasoVencimento(t: TaskRow, hoje: string): boolean {
   return t.due_date < hoje;
 }
 
-function isTaskOculta(t: TaskRow, hojeStr: string): boolean {
-  if (t.status !== "pendente") return false;
-  if (!t.due_date || String(t.due_date).trim() === "") return false;
-  const diffTime = new Date(t.due_date).getTime() - new Date(hojeStr).getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays > 90;
-}
-
 function getTaskYear(t: TaskRow): number {
   const cy = new Date().getFullYear();
   const y = yearFromIso(t.due_date);
@@ -344,7 +336,7 @@ export default function AcompanhamentoPage() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [checklistByTaskId, setChecklistByTaskId] = useState<Record<string, AlvaraTaskChecklistRow[]>>({});
   const [loading, setLoading] = useState(true);
-  const [selectedYears, setSelectedYears] = useState<(number | "ocultos")[]>(() => [new Date().getFullYear()]);
+  const [selectedYears, setSelectedYears] = useState<number[]>(() => [new Date().getFullYear()]);
   const [companyQuery, setCompanyQuery] = useState("");
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [conditions, setConditions] = useState<FilterCondition[]>([]);
@@ -421,9 +413,8 @@ export default function AcompanhamentoPage() {
 
   const buildQuery = useCallback(() => {
     const sp = new URLSearchParams();
-    const numericYears = selectedYears.filter((y): y is number => typeof y === "number");
-    if (numericYears.length > 0 && !selectedYears.includes("ocultos")) {
-      const ys = [...numericYears].sort((a, b) => a - b);
+    if (selectedYears.length > 0) {
+      const ys = [...selectedYears].sort((a, b) => a - b);
       const fromY = ys[0];
       const toY = ys[ys.length - 1];
       sp.set("from", `${fromY}-01-01`);
@@ -582,8 +573,6 @@ export default function AcompanhamentoPage() {
 
   const filteredTasks = useMemo(() => {
     const hojeStr = hoje;
-    const showOcultos = selectedYears.includes("ocultos");
-    const numericYears = selectedYears.filter((y): y is number => typeof y === "number");
 
     return tasks.filter((t) => {
       if (selectedCompanies.length > 0) {
@@ -594,20 +583,15 @@ export default function AcompanhamentoPage() {
         const an = t.company_alvaras?.alvaras?.name?.trim() ?? "";
         if (!selectedAlvaraNames.includes(an)) return false;
       }
-      // Regra de Visibilidade de 90 dias para tarefas pendentes
-      const isOculta = isTaskOculta(t, hojeStr);
-      if (isOculta && !showOcultos) {
-        return false;
-      }
       // Regra de Ocultação Padrão de Tarefas Futuras (start_after > hoje)
       const isActive = !["concluida", "cancelada"].includes(t.status);
       if (isActive && t.start_after && t.start_after > hojeStr && !showFutureTasks) {
         return false;
       }
       // Filtro de Anos (em memória)
-      if (numericYears.length > 0) {
+      if (selectedYears.length > 0) {
         const tYear = getTaskYear(t);
-        if (!numericYears.includes(tYear)) return false;
+        if (!selectedYears.includes(tYear)) return false;
       }
       // Filtros Personalizados Lógicos (E/OU)
       if (conditions.length > 0) {
@@ -863,21 +847,9 @@ export default function AcompanhamentoPage() {
 
   const selectedYearsLabel = useMemo(() => {
     if (selectedYears.length === 0) return "Todos os anos";
-    const hasOcultos = selectedYears.includes("ocultos");
-    const numericYears = selectedYears.filter((y): y is number => typeof y === "number");
-    
-    if (numericYears.length === 0) {
-      return "Ocultos";
-    }
-    
-    const yearsStr = numericYears.length === 1 
-      ? String(numericYears[0]) 
-      : `${numericYears.length} anos selecionados`;
-      
-    if (hasOcultos) {
-      return `${yearsStr} + Ocultos`;
-    }
-    return yearsStr;
+    return selectedYears.length === 1 
+      ? String(selectedYears[0]) 
+      : `${selectedYears.length} anos selecionados`;
   }, [selectedYears]);
 
   const selectedCompaniesLabel = useMemo(() => {
@@ -1154,25 +1126,6 @@ export default function AcompanhamentoPage() {
                 </button>
               </div>
               <div className="max-h-56 overflow-y-auto p-1">
-                {/* Opção Especial: Ocultos */}
-                <label
-                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30 border-b border-slate-100 dark:border-slate-700/80 mb-1 pb-2"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedYears.includes("ocultos")}
-                    onChange={(e) => {
-                      setSelectedYears((prev) => {
-                        const next = e.target.checked ? [...prev, "ocultos" as const] : prev.filter((x) => x !== "ocultos");
-                        const nums = next.filter((x): x is number => typeof x === "number").sort((a, b) => b - a);
-                        return next.includes("ocultos") ? [...nums, "ocultos" as const] : nums;
-                      });
-                    }}
-                  />
-                  <EyeOff className="h-4 w-4 shrink-0" />
-                  <span>Ocultos (&gt; 90 dias)</span>
-                </label>
-
                 {yearOptions.map((y) => {
                   const checked = selectedYears.includes(y);
                   return (
@@ -1186,8 +1139,7 @@ export default function AcompanhamentoPage() {
                         onChange={(e) => {
                           setSelectedYears((prev) => {
                             const next = e.target.checked ? [...prev, y] : prev.filter((x) => x !== y);
-                            const nums = next.filter((x): x is number => typeof x === "number").sort((a, b) => b - a);
-                            return next.includes("ocultos") ? [...nums, "ocultos" as const] : nums;
+                            return next.sort((a, b) => b - a);
                           });
                         }}
                       />

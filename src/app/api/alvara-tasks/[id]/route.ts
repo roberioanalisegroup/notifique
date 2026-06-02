@@ -1,6 +1,7 @@
 import { COMPANY_IN_TASK_SELECT } from "@/lib/alvara-task-company-select";
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { sanitizeText } from "@/lib/utils";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import type { AlvaraTask } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
@@ -135,12 +136,41 @@ export async function PATCH(
     return NextResponse.json({ error: "Tarefa não encontrada" }, { status: 404 });
   }
 
-  // 1. Garantir no backend que tarefas já encerradas (concluídas ou canceladas) não possam ser re-submetidas/concluídas novamente
+  // 1. Garantir no backend que tarefas já encerradas (concluídas ou canceladas) não possam ser re-submetidas/concluídas novamente, exceto via Reabertura Administrativa
   if (taskRow.status === "concluida" || taskRow.status === "cancelada") {
-    return NextResponse.json(
-      { error: "Esta tarefa já foi encerrada (concluída ou cancelada) e não pode sofrer novas alterações." },
-      { status: 400 }
-    );
+    const isReopening = newStatus != null && ["pendente", "em_andamento", "com_impedimento"].includes(newStatus);
+    
+    if (isReopening && !auth.isServiceRole) {
+      // Reabertura Administrativa Excepcional
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", auth.userId)
+        .single();
+        
+      if (profile?.role !== "admin") {
+        return NextResponse.json(
+          { error: "A reabertura de tarefas concluídas ou canceladas é restrita a administradores e deve ser tratada como exceção." },
+          { status: 403 }
+        );
+      }
+      
+      const justificativa = (body as any).justificativa || (body as any).reopening_reason;
+      if (!justificativa || String(justificativa).trim().length < 10) {
+        return NextResponse.json(
+          { error: "Uma justificativa de reabertura administrativa com pelo menos 10 caracteres é obrigatória para reabrir esta tarefa." },
+          { status: 400 }
+        );
+      }
+      
+      // Armazena a justificativa no PATCH para ser incluída nas notas ou histórico
+      (body as any)._administrative_justification = String(justificativa).trim();
+    } else if (!auth.isServiceRole) {
+      return NextResponse.json(
+        { error: "Esta tarefa já foi encerrada (concluída ou cancelada) e não pode sofrer novas alterações." },
+        { status: 400 }
+      );
+    }
   }
 
   // Fetch the link details
@@ -254,17 +284,18 @@ export async function PATCH(
     } catch (lifecycleError: any) {
       console.error("[CRITICAL RPC RENEWAL ERROR]", lifecycleError);
 
-      // Persistência resiliente de erro fora da transação
+      // Persistência resiliente de erro fora da transação via service_role (RSL Lockdown)
       try {
-        await supabase.from("lifecycle_errors").insert({
+        const serviceRoleClient = createServiceRoleClient();
+        await serviceRoleClient.from("lifecycle_errors").insert({
           company_alvara_id: taskRow.company_alvara_id,
           task_id: id,
           operation: "concluir_tarefa",
           error_message: lifecycleError.message || String(lifecycleError),
-          payload: { body, error_details: lifecycleError },
+          payload: { body, error_details: { message: lifecycleError.message, name: lifecycleError.name } },
         });
       } catch (logErr) {
-        console.error("Erro ao registrar erro em lifecycle_errors:", logErr);
+        console.error("Erro ao registrar erro em lifecycle_errors via service_role:", logErr);
       }
 
       return NextResponse.json(
@@ -331,7 +362,11 @@ export async function PATCH(
   // Gravar no histórico correspondente
   if (newStatus != null && newStatus !== taskRow.status) {
     let summary = `Estado: ${taskRow.status} → ${newStatus}`;
-    if (newStatus === "cancelada" && body.cancellation_reason) {
+    const just = (body as any)._administrative_justification;
+    
+    if (just) {
+      summary += ` [REABERTURA ADMINISTRATIVA]. Justificativa: ${just}`;
+    } else if (newStatus === "cancelada" && body.cancellation_reason) {
       summary += ` (Motivo: ${body.cancellation_reason})`;
     } else if (newStatus === "com_impedimento" && body.impediment_reason) {
       summary += ` (Impedimento: ${body.impediment_reason})`;
@@ -340,7 +375,8 @@ export async function PATCH(
     await insertHistory(supabase, id, "status", summary, {
       de: taskRow.status,
       para: newStatus,
-      motivo: body.cancellation_reason || body.impediment_reason || null,
+      motivo: body.cancellation_reason || body.impediment_reason || just || null,
+      justificativa: just ?? null,
     });
   }
 

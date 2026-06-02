@@ -6,6 +6,7 @@ import {
   type AlvaraFrequencia,
 } from "@/lib/alvara-frequency";
 import type { Alvara } from "@/types";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import fs from "fs";
 import path from "path";
 
@@ -58,30 +59,41 @@ async function persistirErroLifecycle(
     console.error("Falha ao gravar erro de ciclo de vida no arquivo local:", fsErr);
   }
 
-  // 3. Tentar persistência na tabela customizada 'lifecycle_errors'
+  // 3. Tentar persistência na tabela customizada 'lifecycle_errors' usando service_role
+  let dbSuccess = false;
   try {
-    const { error } = await supabase.from("lifecycle_errors").insert({
+    const serviceRoleClient = createServiceRoleClient();
+    const { error } = await serviceRoleClient.from("lifecycle_errors").insert({
       company_alvara_id: companyAlvaraId,
+      operation: "ciclo_renovacao_automatica",
       error_message: errorMessage,
-      original_state: originalState,
-      failed_state: failedState,
+      payload: { original_state: originalState, failed_state: failedState }
     });
 
     if (error) {
       throw new Error(error.message);
     }
-    console.log("Erro de ciclo de vida registrado com sucesso na tabela 'lifecycle_errors'.");
-    return;
+    console.log("Erro de ciclo de vida registrado com sucesso na tabela 'lifecycle_errors' via service_role.");
+    dbSuccess = true;
   } catch (dbErr) {
     console.warn(
-      `Tabela 'lifecycle_errors' indisponível ou falhou. Tentando fallback para 'audit_logs':`,
+      `Gravação na tabela 'lifecycle_errors' via service_role falhou/indisponível. Indo direto para o fallback:`,
       dbErr instanceof Error ? dbErr.message : dbErr
     );
   }
 
-  // 4. Fallback: Logar na tabela padrão 'audit_logs' que é garantida
+  if (dbSuccess) return;
+
+  // 4. Fallback: Logar na tabela padrão 'audit_logs' via service_role (ou supabase se service_role falhar)
   try {
-    const { error } = await supabase.from("audit_logs").insert({
+    let clientForAudit = supabase;
+    try {
+      clientForAudit = createServiceRoleClient();
+    } catch {
+      // usa o supabase do request caso não consiga instanciar o admin client (ex: em testes locais)
+    }
+
+    const { error } = await clientForAudit.from("audit_logs").insert({
       event_type: "lifecycle_transaction_failure",
       metadata: {
         ...errorPayload,
@@ -94,7 +106,7 @@ async function persistirErroLifecycle(
     }
     console.log("Erro de ciclo de vida registrado com sucesso na tabela de fallback 'audit_logs'.");
   } catch (auditErr) {
-    console.error("Falha ao registrar erro no banco no fallback final:", auditErr);
+    console.error("Falha ao registrar erro no banco no fallback final de audit_logs:", auditErr);
   }
 }
 

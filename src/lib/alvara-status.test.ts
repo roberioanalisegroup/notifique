@@ -39,6 +39,14 @@ describe("Dossiê Alvará Status - Testes Unitários Puros", () => {
       const res = computeDocumentStatus({ expiration_date: "2026-05-31" }, hoje);
       expect(res).toBe("vencido");
     });
+
+    it("Cenário Dispensado -> deve computar 'dispensado'", () => {
+      const res = computeDocumentStatus(null, hoje, { monitoring_status: "dispensado" });
+      expect(res).toBe("dispensado");
+
+      const res2 = computeDocumentStatus({ expiration_date: "2025-01-01" }, hoje, { is_exempt: true });
+      expect(res2).toBe("dispensado");
+    });
   });
 
   describe("computeTaskStatus", () => {

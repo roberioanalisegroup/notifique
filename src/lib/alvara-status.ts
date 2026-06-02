@@ -3,11 +3,16 @@
  * ISOLAÇÃO ABSOLUTA: Sem dependência de Supabase, React, localStorage ou APIs de navegador.
  */
 
-export type DocumentStatus = "sem_documento" | "indeterminado" | "vigente" | "vencido";
+export type DocumentStatus = "sem_documento" | "indeterminado" | "vigente" | "vencido" | "dispensado";
 
 export interface SimpleDocument {
   is_indefinite?: boolean | null;
   expiration_date?: string | null;
+}
+
+export interface SimpleVinculo {
+  is_exempt?: boolean | null;
+  monitoring_status?: string | null;
 }
 
 /**
@@ -15,8 +20,13 @@ export interface SimpleDocument {
  */
 export function computeDocumentStatus(
   currentDoc: SimpleDocument | null | undefined,
-  hojeStr: string
+  hojeStr: string,
+  vinculo?: SimpleVinculo | null
 ): DocumentStatus {
+  if (vinculo && (vinculo.monitoring_status === "dispensado" || vinculo.is_exempt === true)) {
+    return "dispensado";
+  }
+
   if (!currentDoc) {
     return "sem_documento";
   }
@@ -59,7 +69,9 @@ export interface SimpleTask {
   created_at?: string | null;
   start_after?: string | null;
   company_alvaras?: {
+    /** @deprecated [LEGADO] data_vencimento na tabela de vínculos é obsoleto e não deve ser usado como fonte oficial. */
     data_vencimento?: string | null;
+    /** @deprecated [LEGADO] data_emissao na tabela de vínculos é obsoleto e não deve ser usado como fonte oficial. */
     data_emissao?: string | null;
     alvaras?: {
       prazo_inicio_dias?: number | null;

@@ -115,6 +115,8 @@ export async function GET(request: NextRequest) {
         company_alvaras!company_alvara_id (
           id,
           status,
+          is_exempt,
+          monitoring_status,
           alvaras (
             id,
             name,
@@ -173,6 +175,8 @@ export async function GET(request: NextRequest) {
         id,
         company_id,
         status,
+        is_exempt,
+        monitoring_status,
         company_alvara_documents (
           id,
           issue_date,
@@ -198,6 +202,12 @@ export async function GET(request: NextRequest) {
 
   alvarasLinks.forEach(link => {
     if (!link.company_id) return;
+    
+    // Tratamento de Vínculos Suspensos: Excluídos de forma absoluta dos cálculos de conformidade
+    if (link.monitoring_status === "suspenso") {
+      return;
+    }
+
     if (!alvarasByCompany[link.company_id]) {
       alvarasByCompany[link.company_id] = {
         total_alvaras: 0,
@@ -209,6 +219,13 @@ export async function GET(request: NextRequest) {
     }
     const counts = alvarasByCompany[link.company_id];
     counts.total_alvaras++;
+
+    // Tratamento de Vínculos Dispensados: Recebem status documental dispensado próprio
+    const isDispensado = link.is_exempt === true || link.monitoring_status === "dispensado";
+    if (isDispensado) {
+      counts.alvaras_emitidos++; // Regular por dispensa
+      return; // Não gera vencidos ou pendentes
+    }
 
     // Find the active document
     const currentDoc = (link.company_alvara_documents as any[])?.find(d => d.is_current);
@@ -379,8 +396,13 @@ export async function GET(request: NextRequest) {
   }));
 
   // 9. Document upload coverage rate & Categorization
-  const alvarasWithGroups = rFileCounts.data || [];
-  const totalAlvarasCount = alvarasLinks.length;
+  // Exclui suspensos de todos os contadores de conformidade/score conforme regras do portal
+  const alvarasWithGroups = (rFileCounts.data || []).filter((f: any) => {
+    const caLink = Array.isArray(f.company_alvaras) ? f.company_alvaras[0] : f.company_alvaras;
+    return caLink?.monitoring_status !== "suspenso";
+  });
+  const activeAlvarasLinks = alvarasLinks.filter(link => link.monitoring_status !== "suspenso");
+  const totalAlvarasCount = activeAlvarasLinks.length;
   const alvarasWithFileCount = alvarasWithGroups.filter(f => f.file_path != null && f.file_path !== "").length;
   const documentCoverageRate = totalAlvarasCount > 0 ? (alvarasWithFileCount / totalAlvarasCount) * 100 : 0;
   
