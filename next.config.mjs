@@ -7,8 +7,11 @@ const PERMISSIONS_POLICY =
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ["@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"],
   experimental: {
     allowedDevOrigins: ["192.168.56.1", "192.168.56.1:3000", "localhost:3000"],
+    /** Uploads de anexos (multipart) até 12 MB via route handler. */
+    proxyClientMaxBodySize: "12mb",
   },
   async headers() {
     /** CSP dinâmica (nonce) é aplicada no middleware. */

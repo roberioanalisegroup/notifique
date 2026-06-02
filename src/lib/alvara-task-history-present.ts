@@ -30,8 +30,26 @@ export function linhasHistoricoTarefa(h: AlvaraTaskHistory): string[] {
       const para = meta.para != null ? labelStatus(String(meta.para)) : "—";
       return [`Estado alterado de «${de}» para «${para}».`];
     }
-    case "notes":
+    case "notes": {
+      if (meta.evidence_attachments && Array.isArray(meta.evidence_attachments) && meta.evidence_attachments.length > 0) {
+        const attachStr = meta.evidence_attachments.length > 1 
+          ? `Foram anexadas ${meta.evidence_attachments.length} evidências/apoios à tarefa.`
+          : "Foi anexada uma nova evidência/apoio à tarefa.";
+        
+        const temAnterior = meta.anterior != null && String(meta.anterior).trim() !== "";
+        const temNovo = meta.novo != null && String(meta.novo).trim() !== "";
+        
+        if (temNovo && meta.novo !== meta.anterior) {
+           return ["Comentário e evidência adicionados.", attachStr];
+        }
+        return [attachStr];
+      }
+
+      const temAnterior = meta.anterior != null && String(meta.anterior).trim() !== "";
+      const temNovo = meta.novo != null && String(meta.novo).trim() !== "";
+      if (!temAnterior && temNovo) return ["Comentário adicionado à tarefa."];
       return ["A descrição ou comentário da tarefa foi atualizado."];
+    }
     case "attachment": {
       const antes = meta.anterior;
       const novo = meta.novo;

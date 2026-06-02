@@ -17,6 +17,8 @@ import type {
 import {
   Building2,
   CalendarDays,
+  ChevronDown,
+  ChevronUp,
   FileCheck2,
   History,
   Loader2,
@@ -31,6 +33,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { TaskCardChecklist } from "@/components/acompanhamento/task-card-checklist";
 import { isChecklistFullyCompleted } from "@/lib/alvara-checklist-completion";
+import { uploadTaskAttachment } from "@/lib/upload-task-attachment";
 
 type TaskDetail = AlvaraTask & {
   company_alvaras:
@@ -92,6 +95,7 @@ export function TaskEditModal({
   const [overrideFreq, setOverrideFreq] = useState<string>("inherit");
   const [overrideDias, setOverrideDias] = useState<number | "">("");
   const [regerando, setRegerando] = useState(false);
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
 
   // ── Estado de upload de anexo (Cloudflare R2) ──
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,6 +107,17 @@ export function TaskEditModal({
     file_size: number;
     file_mime_type: string;
   } | null>(null);
+
+  // ── Estado de upload de evidência (Cloudflare R2) ──
+  const evidenceInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const [evidenceAttachments, setEvidenceAttachments] = useState<Array<{
+    storage_key: string;
+    public_url: string;
+    file_name: string;
+    file_size: number;
+    file_mime_type: string;
+  }>>([]);
 
   const load = useCallback(async () => {
     if (!taskId) return;
@@ -124,8 +139,13 @@ export function TaskEditModal({
   }, [taskId, onClose]);
 
   useEffect(() => {
-    if (open && taskId) void load();
-    else if (!open) {
+    if (open && taskId) {
+      void load();
+      try {
+        const saved = localStorage.getItem("draftAttachment_" + taskId);
+        if (saved) setPreparedAttachment(JSON.parse(saved));
+      } catch {}
+    } else if (!open) {
       setTask(null);
       setHistory([]);
       setNotes("");
@@ -135,6 +155,8 @@ export function TaskEditModal({
       setIsIndefiniteDraft(false);
       setPreparedAttachment(null);
       setUploading(false);
+      setEvidenceAttachments([]);
+      setUploadingEvidence(false);
     }
   }, [open, taskId, load]);
 
@@ -304,13 +326,17 @@ export function TaskEditModal({
     try {
       await apiJson("/api/alvara-tasks/" + taskId, {
         method: "PATCH",
-        body: JSON.stringify({ notes: notes.trim() || null }),
+        body: JSON.stringify({ 
+          notes: notes.trim() || null,
+          evidence_attachments: evidenceAttachments.length > 0 ? evidenceAttachments : null 
+        }),
       });
-      toast.success("Descrição guardada");
+      toast.success(evidenceAttachments.length > 0 ? "Comentário e evidências salvos" : "Comentário salvo");
+      setEvidenceAttachments([]);
       await load();
       onSaved();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro");
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar comentário");
     } finally {
       setSaving(false);
     }
@@ -527,7 +553,7 @@ export function TaskEditModal({
                             } else {
                               toast.info("A próxima renovação foi planejada automaticamente.");
                             }
-
+                            try { localStorage.removeItem("draftAttachment_" + taskId); } catch {}
                             onClose();
                             onSaved();
                           } catch (e) {
@@ -739,6 +765,50 @@ export function TaskEditModal({
               <div className="flex flex-wrap items-start gap-2 text-xs text-slate-600 dark:text-slate-400">
                 <Paperclip className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <h3 className="font-semibold text-slate-800 dark:text-slate-200">Alvará</h3>
+                    
+                    {/* Botões de ação alinhados com o título */}
+                    {isTarefaAberta && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="btn-secondary inline-flex items-center gap-1 py-1 px-2.5 text-[0.7rem]"
+                          disabled={uploading}
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          {uploading ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              A enviar…
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-3 w-3" />
+                              {preparedAttachment ? "Substituir anexo" : "Adicionar anexo"}
+                            </>
+                          )}
+                        </button>
+                        {preparedAttachment && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-[0.7rem] font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40"
+                            onClick={() => {
+                              setPreparedAttachment(null);
+                              try { localStorage.removeItem("draftAttachment_" + taskId); } catch {}
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Remover
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[0.7rem] text-slate-500 dark:text-slate-400">
+                    Use este campo apenas para o documento oficial emitido. Ele será salvo no repositório documental da empresa ao concluir o ciclo.
+                  </p>
+                  
                   {/* Input invisível de ficheiro */}
                   <input
                     ref={fileInputRef}
@@ -748,40 +818,15 @@ export function TaskEditModal({
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file || !taskId) return;
-                      // Reset para permitir re-seleção do mesmo ficheiro
                       e.target.value = "";
-
-                      // Validação rápida no frontend (backend valida novamente)
-                      const allowedMimes = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
-                      if (!allowedMimes.includes(file.type)) {
-                        toast.error(`Tipo de ficheiro não permitido: ${file.type}. Use PDF ou imagens (PNG, JPEG, WebP).`);
-                        return;
-                      }
-                      const maxBytes = 10 * 1024 * 1024;
-                      if (file.size > maxBytes) {
-                        toast.error("Ficheiro excede o limite de 10 MB.");
-                        return;
-                      }
 
                       setUploading(true);
                       try {
-                        const fd = new FormData();
-                        fd.append("file", file);
-                        const res = await fetch(`/api/alvara-tasks/${taskId}/attachment`, {
-                          method: "POST",
-                          body: fd,
-                        });
-                        const json = await res.json();
-                        if (!res.ok) {
-                          throw new Error(json.error || "Erro no upload.");
-                        }
-                        setPreparedAttachment({
-                          storage_key: json.storage_key,
-                          public_url: json.public_url,
-                          file_name: json.file_name,
-                          file_size: json.file_size,
-                          file_mime_type: json.file_mime_type,
-                        });
+                        const meta = await uploadTaskAttachment(taskId, file);
+                        setPreparedAttachment(meta);
+                        try {
+                          localStorage.setItem("draftAttachment_" + taskId, JSON.stringify(meta));
+                        } catch {}
                         toast.success("Anexo enviado! Pronto para conclusão.");
                       } catch (err) {
                         toast.error(err instanceof Error ? err.message : "Falha no upload do anexo.");
@@ -793,10 +838,16 @@ export function TaskEditModal({
 
                   <p className="flex flex-col gap-1">
                     {preparedAttachment ? (
-                      <span className="inline-flex items-center gap-1 font-medium text-blue-700 dark:text-blue-400">
+                      <a
+                        href={preparedAttachment.public_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                        title="Clique para visualizar o anexo preparado"
+                      >
                         <FileCheck2 className="h-3.5 w-3.5" />
                         Anexo pronto para conclusão: {preparedAttachment.file_name} ({(preparedAttachment.file_size / 1024).toFixed(0)} KB)
-                      </span>
+                      </a>
                     ) : temAnexoExistente && activeDoc ? (
                       <a
                         href={`/api/documents/${activeDoc.id}/view`}
@@ -822,40 +873,6 @@ export function TaskEditModal({
                       </span>
                     )}
                   </p>
-
-                  {/* Botões de ação */}
-                  {isTarefaAberta && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        className="btn-secondary inline-flex items-center gap-1 py-1.5 text-xs"
-                        disabled={uploading}
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        {uploading ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            A enviar…
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="h-3.5 w-3.5" />
-                            {preparedAttachment ? "Substituir anexo" : "Adicionar anexo"}
-                          </>
-                        )}
-                      </button>
-                      {preparedAttachment && (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40"
-                          onClick={() => setPreparedAttachment(null)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Remover
-                        </button>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -886,56 +903,188 @@ export function TaskEditModal({
                 </div>
 
                 <div>
-                  <label className="form-label mb-1.5 block" htmlFor="task-notes">
-                    Descrição / comentário
-                  </label>
-                  <textarea
-                    id="task-notes"
-                    className="textarea-field min-h-[6rem]"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Notas internas sobre esta tarefa…"
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="form-label" htmlFor="task-notes">
+                      Descrição / comentário
+                    </label>
+                    <span className="text-[0.65rem] text-slate-500 dark:text-slate-400">
+                      Anexos de Evidência / Apoio (Max: 10)
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <textarea
+                      id="task-notes"
+                      className="textarea-field min-h-[6rem] pb-8"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Notas internas sobre esta tarefa…"
+                    />
+                    
+                    {isTarefaAberta && (
+                      <div className="absolute bottom-2 right-2 flex items-center">
+                        <button
+                          type="button"
+                          disabled={uploadingEvidence || evidenceAttachments.length >= 10}
+                          onClick={() => evidenceInputRef.current?.click()}
+                          className="flex h-6 w-6 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                          title="Anexar arquivos"
+                        >
+                          {uploadingEvidence ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Paperclip className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <input
+                    ref={evidenceInputRef}
+                    type="file"
+                    className="hidden"
+                    multiple
+                    accept=".pdf,image/png,image/jpeg,image/webp"
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (!files.length || !taskId) return;
+                      e.target.value = "";
+
+                      const availableSlots = 10 - evidenceAttachments.length;
+                      const filesToProcess = files.slice(0, availableSlots);
+                      
+                      if (files.length > availableSlots) {
+                        toast.warning(`Limite de 10 ficheiros atingido. Apenas ${availableSlots} foram processados.`);
+                      }
+
+                      setUploadingEvidence(true);
+                      const newAttachments = [];
+                      try {
+                        for (const file of filesToProcess) {
+                          const meta = await uploadTaskAttachment(taskId, file);
+                          newAttachments.push(meta);
+                        }
+                        setEvidenceAttachments(prev => [...prev, ...newAttachments]);
+                        toast.success(`${newAttachments.length} evidência(s) anexada(s)! Guarde o comentário para confirmar.`);
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Falha no upload da evidência.");
+                      } finally {
+                        setUploadingEvidence(false);
+                      }
+                    }}
                   />
+
+                  {evidenceAttachments.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-1.5">
+                      {evidenceAttachments.map((att, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-xs rounded-md bg-slate-50 px-2 py-1.5 border border-slate-100 dark:bg-slate-800/50 dark:border-slate-700">
+                          <a
+                            href={att.public_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex flex-1 items-center gap-1 font-medium text-blue-700 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300 truncate"
+                            title="Visualizar evidência"
+                          >
+                            <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{att.file_name}</span> 
+                            <span className="shrink-0 text-slate-500">({(att.file_size / 1024).toFixed(0)} KB)</span>
+                          </a>
+                          <button
+                            type="button"
+                            className="rounded p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 shrink-0"
+                            onClick={() => setEvidenceAttachments(prev => prev.filter((_, i) => i !== idx))}
+                            title="Remover evidência"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <button
                     type="button"
-                    className="btn-primary mt-2"
-                    disabled={saving || notes === (task.notes ?? "")}
+                    className="btn-primary mt-3"
+                    disabled={saving || (notes === (task.notes ?? "") && evidenceAttachments.length === 0)}
                     onClick={() => void saveNotes()}
                   >
-                    {saving ? "A guardar…" : "Guardar descrição"}
+                    {saving ? "A guardar…" : (evidenceAttachments.length > 0 ? "Salvar comentário e evidências" : "Salvar comentário")}
                   </button>
                 </div>
               </div>
 
               <div className="card-portal overflow-hidden">
-                <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
-                  <History className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                  <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Histórico</h4>
-                </div>
-                <div className="max-h-72 overflow-y-auto px-4 py-4">
-                  {timeline.length === 0 ? (
-                    <p className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">Sem registos ainda.</p>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                  onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                >
+                  <div className="flex items-center gap-2">
+                    <History className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                    <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Histórico</h4>
+                  </div>
+                  {isHistoryExpanded ? (
+                    <ChevronUp className="h-4 w-4 text-slate-400" />
                   ) : (
-                    <div className="relative ms-2 border-l-2 border-violet-200 pl-6 dark:border-violet-800/80">
-                      {timeline.map((h) => (
-                        <div key={h.id} className="relative pb-8 last:pb-1">
-                          <span
-                            className="absolute -left-[calc(0.375rem+5px)] top-1.5 h-2.5 w-2.5 rounded-full bg-violet-500 ring-4 ring-white dark:ring-slate-900"
-                            aria-hidden
-                          />
-                          <time className="block text-[0.7rem] font-medium tabular-nums text-slate-500 dark:text-slate-400">
-                            {formatDate(h.created_at, { empty: "—", includeTime: true })}
-                          </time>
-                          <div className="mt-1.5 space-y-1 text-[0.8125rem] leading-snug text-slate-700 dark:text-slate-300">
-                            {linhasHistoricoTarefa(h).map((line, i) => (
-                              <p key={i}>{line}</p>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <ChevronDown className="h-4 w-4 text-slate-400" />
                   )}
-                </div>
+                </button>
+
+                {isHistoryExpanded && (
+                  <div className="max-h-72 overflow-y-auto px-4 py-4">
+                    {timeline.length === 0 ? (
+                      <p className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">Sem registos ainda.</p>
+                    ) : (
+                      <div className="relative ms-2 border-l-2 border-violet-200 pl-6 dark:border-violet-800/80">
+                        {timeline.map((h) => (
+                          <div key={h.id} className="relative pb-8 last:pb-1">
+                            <span
+                              className="absolute -left-[calc(0.375rem+5px)] top-1.5 h-2.5 w-2.5 rounded-full bg-violet-500 ring-4 ring-white dark:ring-slate-900"
+                              aria-hidden
+                            />
+                            <time className="block text-[0.7rem] font-medium tabular-nums text-slate-500 dark:text-slate-400">
+                              {formatDate(h.created_at, { empty: "—", includeTime: true })}
+                            </time>
+                            <div className="mt-1.5 space-y-1 text-[0.8125rem] leading-snug text-slate-700 dark:text-slate-300">
+                              {linhasHistoricoTarefa(h).map((line, i) => (
+                                <p key={i}>{line}</p>
+                              ))}
+                              {(h.event_type === "notes") && h.metadata?.evidence_attachments && (
+                                <div className="mt-1 flex flex-col gap-1">
+                                  {(h.metadata.evidence_attachments as any[]).map((att, idx) => (
+                                    <a
+                                      key={idx}
+                                      href={att.public_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                                    >
+                                      <Paperclip className="h-3.5 w-3.5" />
+                                      Evidência Anexada: {att.file_name}
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                              {(h.event_type === "notes") && h.metadata?.evidence_attachment && !h.metadata?.evidence_attachments && (
+                                <div className="mt-1 flex items-center">
+                                  <a
+                                    href={(h.metadata.evidence_attachment as any).public_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                                  >
+                                    <Paperclip className="h-3.5 w-3.5" />
+                                    Evidência Anexada: {(h.metadata.evidence_attachment as any).file_name}
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-700">

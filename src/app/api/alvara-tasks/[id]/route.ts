@@ -32,6 +32,15 @@ type Body = {
   file_name?: string | null;
   file_size?: number | null;
   file_mime_type?: string | null;
+
+  // Evidence attachments
+  evidence_attachments?: Array<{
+    storage_key: string;
+    public_url: string;
+    file_name: string;
+    file_size: number;
+    file_mime_type: string;
+  }> | null;
 };
 
 async function insertHistory(
@@ -335,11 +344,43 @@ export async function PATCH(
     });
   }
 
-  if (body.notes !== undefined && body.notes !== taskRow.notes) {
-    await insertHistory(supabase, id, "notes", "Descrição / comentário atualizado", {
-      anterior: taskRow.notes,
-      novo: body.notes,
-    });
+  const notesChanged = body.notes !== undefined && body.notes !== taskRow.notes;
+  const hasEvidence = !!body.evidence_attachments && body.evidence_attachments.length > 0;
+
+  if (hasEvidence && (taskRow.status === "concluida" || taskRow.status === "cancelada")) {
+    return NextResponse.json(
+      { error: "Não é possível adicionar evidências a uma tarefa já fechada." },
+      { status: 400 }
+    );
+  }
+
+  if (notesChanged || hasEvidence) {
+    const isCombined = notesChanged && hasEvidence;
+    const isOnlyEvidence = !notesChanged && hasEvidence;
+
+    let eventType: Parameters<typeof insertHistory>[2] = "notes";
+    let summary = "";
+    if (isCombined) summary = "Comentário e evidência adicionados";
+    else if (isOnlyEvidence) {
+      summary = "Evidência adicionada";
+    } else {
+      summary = "Descrição / comentário atualizado";
+    }
+
+    const metadata: Record<string, unknown> = {};
+    if (notesChanged) {
+      metadata.anterior = taskRow.notes;
+      metadata.novo = body.notes;
+    }
+    if (hasEvidence) {
+      metadata.evidence_attachments = body.evidence_attachments!.map(att => ({
+        ...att,
+        uploaded_at: new Date().toISOString(),
+        uploaded_by: auth.userId || null,
+      }));
+    }
+
+    await insertHistory(supabase, id, eventType, summary, metadata);
   }
 
   if (body.protocolo !== undefined && body.protocolo !== taskRow.protocolo) {
