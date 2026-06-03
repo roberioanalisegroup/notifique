@@ -358,3 +358,51 @@ export function getTaskStatusMeta(
     text: `Válido até ${exp.toLocaleDateString("pt-BR")}`,
   };
 }
+
+/**
+ * Calcula a diferença de dias de forma segura contra fuso horário (UTC)
+ * para strings de data date-only 'YYYY-MM-DD'.
+ */
+export function getDiffDaysUTC(dateStr1: string, dateStr2: string): number {
+  const [y1, m1, d1] = dateStr1.split("-").map(Number);
+  const [y2, m2, d2] = dateStr2.split("-").map(Number);
+
+  if (y1 === undefined || m1 === undefined || d1 === undefined ||
+      y2 === undefined || m2 === undefined || d2 === undefined) {
+    return 0;
+  }
+
+  const utc1 = Date.UTC(y1, m1 - 1, d1);
+  const utc2 = Date.UTC(y2, m2 - 1, d2);
+
+  const diffMs = utc1 - utc2;
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Retorna true se a tarefa deve ser oculta quando o filtro "mostrar futuras/ocultas"
+ * estiver desativado.
+ */
+export function isTaskHiddenByOperationalWindow(
+  task: { status: string; start_after?: string | null; due_date?: string | null },
+  hoje: string
+): boolean {
+  const isActive = !["concluida", "cancelada"].includes(task.status);
+  if (!isActive) return false;
+
+  // Regra 1: Se tarefa ativa tiver start_after > hoje
+  if (task.start_after && task.start_after > hoje) {
+    return true;
+  }
+
+  // Regra 2: Se tarefa pendente tiver due_date > hoje + 90 dias
+  const isPendente = !["concluida", "cancelada", "em_andamento", "com_impedimento"].includes(task.status);
+  if (isPendente && task.due_date) {
+    const diffDays = getDiffDaysUTC(task.due_date, hoje);
+    if (diffDays > 90) {
+      return true;
+    }
+  }
+
+  return false;
+}

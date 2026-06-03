@@ -3,7 +3,7 @@
 import { apiJson } from "@/lib/api-client";
 import { FREQUENCIA_LABELS } from "@/lib/alvara-frequency";
 import { prazoInicioPrimeiroCiclo } from "@/lib/alvara-task-generation";
-import { cn, formatDate, getTaskStatusMeta } from "@/lib/utils";
+import { cn, formatDate, getTaskStatusMeta, isTaskHiddenByOperationalWindow } from "@/lib/utils";
 import type { Company } from "@/types";
 import { format } from "date-fns";
 import {
@@ -332,6 +332,25 @@ function matchesCondition(
   return false;
 }
 
+function getTaskSortDate(t: TaskRow): string {
+  if (t.due_date) return t.due_date.slice(0, 10);
+  if (t.inicio_obrigatorio_ate) return t.inicio_obrigatorio_ate.slice(0, 10);
+  if (t.start_after) return t.start_after.slice(0, 10);
+  return "9999-12-31";
+}
+
+function sortOperationalTasks(a: TaskRow, b: TaskRow): number {
+  const byDate = getTaskSortDate(a).localeCompare(getTaskSortDate(b));
+  if (byDate !== 0) return byDate;
+
+  const aCreated = a.created_at?.slice(0, 10) ?? "";
+  const bCreated = b.created_at?.slice(0, 10) ?? "";
+  const byCreated = aCreated.localeCompare(bCreated);
+  if (byCreated !== 0) return byCreated;
+
+  return String(a.id).localeCompare(String(b.id));
+}
+
 export default function AcompanhamentoPage() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [checklistByTaskId, setChecklistByTaskId] = useState<Record<string, AlvaraTaskChecklistRow[]>>({});
@@ -583,9 +602,8 @@ export default function AcompanhamentoPage() {
         const an = t.company_alvaras?.alvaras?.name?.trim() ?? "";
         if (!selectedAlvaraNames.includes(an)) return false;
       }
-      // Regra de Ocultação Padrão de Tarefas Futuras (start_after > hoje)
-      const isActive = !["concluida", "cancelada"].includes(t.status);
-      if (isActive && t.start_after && t.start_after > hojeStr && !showFutureTasks) {
+      // Regra de Ocultação Padrão de Tarefas Futuras e Ocultação > 90 dias
+      if (!showFutureTasks && isTaskHiddenByOperationalWindow(t, hojeStr)) {
         return false;
       }
       // Filtro de Anos (em memória)
@@ -628,10 +646,10 @@ export default function AcompanhamentoPage() {
       }
     }
 
-    pendente.sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
-    andamento.sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+    pendente.sort(sortOperationalTasks);
+    andamento.sort(sortOperationalTasks);
     concluido.sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""));
-    impedimento.sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+    impedimento.sort(sortOperationalTasks);
     cancelada.sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""));
 
     return { pendente, andamento, concluido, impedimento, cancelada };
@@ -1332,7 +1350,7 @@ export default function AcompanhamentoPage() {
             className="rounded border-slate-300 text-emerald-800 focus:ring-emerald-800"
           />
           <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-            Visualizar Tarefas Futuras
+            Mostrar tarefas futuras e ocultas
           </span>
         </label>
 

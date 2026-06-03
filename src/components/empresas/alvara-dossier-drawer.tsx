@@ -25,7 +25,7 @@ import {
   ArchiveRestore,
   ShieldAlert,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, isTaskHiddenByOperationalWindow } from "@/lib/utils";
 
 export interface AlvaraDossierDrawerProps {
   open: boolean;
@@ -523,12 +523,15 @@ export function AlvaraDossierDrawer({
 
   // Tasks filters application
   const filteredTasks = (data?.tasks || []).filter((task) => {
-    const isFuture = task.status === "pendente" && task.start_after && task.start_after > hoje;
-    if (isFuture && !showFutureTasks) return false;
+    if (!showFutureTasks && isTaskHiddenByOperationalWindow(task, hoje)) return false;
     if (task.status === "concluida" && !showCompletedTasks) return false;
     if (task.status === "cancelada" && !showCancelledTasks) return false;
     return true;
   });
+
+  const temTarefasOcultasPeloFiltro = !showFutureTasks && (data?.tasks || []).some((task) =>
+    isTaskHiddenByOperationalWindow(task, hoje)
+  );
 
   // Timeline filters application
   const filteredTimeline = (data?.timeline || []).filter((item) => {
@@ -908,7 +911,7 @@ export function AlvaraDossierDrawer({
                           onChange={(e) => setShowFutureTasks(e.target.checked)}
                           className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                         />
-                        <span>Mostrar Futuras</span>
+                        <span>Mostrar tarefas futuras e ocultas</span>
                       </label>
                       <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
                         <input
@@ -931,6 +934,15 @@ export function AlvaraDossierDrawer({
                     </div>
                   </div>
 
+                  {temTarefasOcultasPeloFiltro && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                      <span>
+                        Há tarefas futuras ou fora da janela operacional ocultas. Ative “Mostrar tarefas futuras e ocultas” para visualizar.
+                      </span>
+                    </div>
+                  )}
+
                   {/* Tasks list */}
                   {filteredTasks.length > 0 ? (
                     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -945,13 +957,13 @@ export function AlvaraDossierDrawer({
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                           {filteredTasks.map((t) => {
-                            const isFuture = t.status === "pendente" && t.start_after && t.start_after > hoje;
+                            const isOculta = isTaskHiddenByOperationalWindow(t, hoje);
                             return (
                               <tr
                                 key={t.id}
                                 className={cn(
                                   "hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors",
-                                  isFuture && "bg-slate-50/30 text-slate-400"
+                                  isOculta && "bg-slate-50/30 text-slate-400"
                                 )}
                               >
                                 <td className="px-4 py-3">
@@ -973,9 +985,9 @@ export function AlvaraDossierDrawer({
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                  {isFuture ? (
+                                  {isOculta ? (
                                     <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-450 dark:bg-slate-800 dark:text-slate-500 border border-slate-200">
-                                      Futura
+                                      Oculta
                                     </span>
                                   ) : t.status === "concluida" ? (
                                     <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
@@ -996,7 +1008,7 @@ export function AlvaraDossierDrawer({
                                   )}
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  {t.status !== "cancelada" && t.status !== "concluida" && !isFuture ? (
+                                  {t.status !== "cancelada" && t.status !== "concluida" && !isOculta ? (
                                     <a
                                       href={`/portal/acompanhamento?taskId=${t.id}`}
                                       className="inline-flex items-center gap-0.5 text-xs font-bold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
