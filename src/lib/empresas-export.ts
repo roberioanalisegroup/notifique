@@ -46,10 +46,46 @@ function docFmt(tipo: CompanyCadastroTipo, num: string, cnpj: string | null): st
   return formatCompanyDocumento(tipo, num, cnpj?.length === 14 ? cnpj : null);
 }
 
+/**
+ * Collect all unique alvará names across every company and build
+ * a per-company map of alvará-name → most-recent emission date.
+ */
+function buildAlvaraPivot(
+  summaries: CompanyAlvaraSummary[],
+  linksByCompany: Map<string, CompanyAlvaraExportRow[]>
+): {
+  alvaraNames: string[];
+  datesByCompany: Map<string, Map<string, string>>;
+} {
+  const nameSet = new Set<string>();
+  const datesByCompany = new Map<string, Map<string, string>>();
+
+  for (const s of summaries) {
+    const links = linksByCompany.get(s.id) ?? [];
+    const dateMap = new Map<string, string>();
+    for (const L of links) {
+      const name = L.alvaras?.name ?? "Sem nome";
+      nameSet.add(name);
+      const cur = dateMap.get(name);
+      const iso = L.data_emissao ?? "";
+      // keep the most recent date
+      if (!cur || iso > cur) {
+        dateMap.set(name, iso);
+      }
+    }
+    datesByCompany.set(s.id, dateMap);
+  }
+
+  const alvaraNames = [...nameSet].sort((a, b) => a.localeCompare(b, "pt"));
+  return { alvaraNames, datesByCompany };
+}
+
 export async function buildEmpresasExportXlsx(
   summaries: CompanyAlvaraSummary[],
   linksByCompany: Map<string, CompanyAlvaraExportRow[]>
 ): Promise<Buffer> {
+  const { alvaraNames, datesByCompany } = buildAlvaraPivot(summaries, linksByCompany);
+
   const wb = new ExcelJS.Workbook();
   wb.creator = "Analise Alvará";
   wb.created = new Date();
@@ -57,7 +93,8 @@ export async function buildEmpresasExportXlsx(
   const ws1 = wb.addWorksheet("Empresas", {
     views: [{ state: "frozen", ySplit: 1 }],
   });
-  ws1.columns = [
+
+  const fixedCols: Partial<ExcelJS.Column>[] = [
     { header: "Documento", key: "doc", width: 22 },
     { header: "Tipo", key: "tipo", width: 18 },
     { header: "Razão social", key: "razao", width: 36 },
@@ -72,10 +109,17 @@ export async function buildEmpresasExportXlsx(
     { header: "Vencidos", key: "v", width: 10 },
     { header: "Com notificação", key: "n", width: 14 },
   ];
+  const alvaraCols: Partial<ExcelJS.Column>[] = alvaraNames.map((name, i) => ({
+    header: name,
+    key: `alv_${i}`,
+    width: 14,
+  }));
+  ws1.columns = [...fixedCols, ...alvaraCols];
   ws1.getRow(1).font = { bold: true };
+
   for (const r of summaries) {
     const tipo = (r.cadastro_tipo ?? "cnpj") as CompanyCadastroTipo;
-    ws1.addRow({
+    const row: Record<string, unknown> = {
       doc: docFmt(tipo, r.numero_documento ?? "", r.cnpj ?? null),
       tipo: cadastroTipoLabel(tipo),
       razao: r.razao_social ?? "",
@@ -89,7 +133,13 @@ export async function buildEmpresasExportXlsx(
       p: r.alvaras_pendentes ?? 0,
       v: r.alvaras_vencidos ?? 0,
       n: r.alvaras_notificados ?? 0,
-    });
+    };
+    const dateMap = datesByCompany.get(r.id);
+    for (let i = 0; i < alvaraNames.length; i++) {
+      const iso = dateMap?.get(alvaraNames[i]) ?? "";
+      row[`alv_${i}`] = iso ? fmtPtDate(iso) : "—";
+    }
+    ws1.addRow(row);
   }
 
   const ws2 = wb.addWorksheet("Vínculos alvarás", {
@@ -169,25 +219,31 @@ export function buildEmpresasExportPdf(
   doc.text("Empresas — resumo", 14, 16);
   doc.setFontSize(8);
 
-  const headEmpresa = [
-    [
-      "Documento",
-      "Tipo",
-      "Razão social",
-      "Município",
-      "UF",
-      "Situação",
-      "Últ. sync",
-      "Tot.",
-      "Em.",
-      "Pend.",
-      "Ven.",
-      "Notif.",
-    ],
+  const { alvaraNames, datesByCompany } = buildAlvaraPivot(summaries, linksByCompany);
+
+  const fixedHeads = [
+    "Documento",
+    "Tipo",
+    "Razão social",
+    "Município",
+    "UF",
+    "Situação",
+    "Últ. sync",
+    "Tot.",
+    "Em.",
+    "Pend.",
+    "Ven.",
+    "Notif.",
   ];
-  const bodyEmpresa = summaries.map((r) => {
+  const headEmpresa = [[
+    ...fixedHeads,
+    ...alvaraNames.map((n) => n.slice(0, 30)),
+  ]];
+
+  const bodyEmpresa: string[][] = [];
+  for (const r of summaries) {
     const tipo = (r.cadastro_tipo ?? "cnpj") as CompanyCadastroTipo;
-    return [
+    const base = [
       docFmt(tipo, r.numero_documento ?? "", r.cnpj ?? null),
       cadastroTipoLabel(tipo),
       (r.razao_social ?? "—").slice(0, 80),
@@ -201,20 +257,26 @@ export function buildEmpresasExportPdf(
       String(r.alvaras_vencidos ?? 0),
       String(r.alvaras_notificados ?? 0),
     ];
-  });
+    const dateMap = datesByCompany.get(r.id);
+    const alvCells = alvaraNames.map((name) => {
+      const iso = dateMap?.get(name) ?? "";
+      return iso ? fmtPtDate(iso) : "—";
+    });
+    bodyEmpresa.push([...base, ...alvCells]);
+  }
 
   autoTable(doc, {
     head: headEmpresa,
     body: bodyEmpresa,
     startY: 20,
-    margin: { left: 14, right: 14 },
-    styles: { fontSize: 7, cellPadding: 1.5, overflow: "linebreak", minCellHeight: 4 },
+    margin: { left: 10, right: 10 },
+    styles: { fontSize: 6, cellPadding: 1.2, overflow: "linebreak", minCellHeight: 4 },
     headStyles: { fillColor: [37, 99, 235], textColor: 255 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     tableWidth: "auto",
     columnStyles: {
-      0: { cellWidth: 32 },
-      2: { cellWidth: 48 },
+      0: { cellWidth: 28 },
+      2: { cellWidth: 36 },
     },
   });
 
