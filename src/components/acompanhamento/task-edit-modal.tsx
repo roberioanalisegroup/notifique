@@ -33,7 +33,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { TaskCardChecklist } from "@/components/acompanhamento/task-card-checklist";
 import { isChecklistFullyCompleted } from "@/lib/alvara-checklist-completion";
-import { uploadTaskAttachment } from "@/lib/upload-task-attachment";
+import { uploadTaskAttachment, type PreparedTaskAttachment } from "@/lib/upload-task-attachment";
 
 type TaskDetail = AlvaraTask & {
   company_alvaras:
@@ -958,7 +958,7 @@ export function TaskEditModal({
                       }
 
                       setUploadingEvidence(true);
-                      const newAttachments = [];
+                      const newAttachments: PreparedTaskAttachment[] = [];
                       try {
                         for (const file of filesToProcess) {
                           const meta = await uploadTaskAttachment(taskId, file);
@@ -1049,7 +1049,7 @@ export function TaskEditModal({
                               {linhasHistoricoTarefa(h).map((line, i) => (
                                 <p key={i}>{line}</p>
                               ))}
-                              {(h.event_type === "notes") && h.metadata?.evidence_attachments && (
+                              {h.event_type === "notes" && Boolean(h.metadata?.evidence_attachments) && (
                                 <div className="mt-1 flex flex-col gap-1">
                                   {(h.metadata.evidence_attachments as any[]).map((att, idx) => (
                                     <a
@@ -1065,7 +1065,7 @@ export function TaskEditModal({
                                   ))}
                                 </div>
                               )}
-                              {(h.event_type === "notes") && h.metadata?.evidence_attachment && !h.metadata?.evidence_attachments && (
+                              {h.event_type === "notes" && Boolean(h.metadata?.evidence_attachment) && !h.metadata?.evidence_attachments && (
                                 <div className="mt-1 flex items-center">
                                   <a
                                     href={(h.metadata.evidence_attachment as any).public_url}

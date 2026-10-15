@@ -32,7 +32,7 @@ export async function uploadTaskAttachment(taskId: string, file: File): Promise<
       content_type: mime,
     }),
   });
-  const presignJson = (await presignRes.json()) as PresignResponse & { error?: string; detail?: string };
+  const presignJson = (await presignRes.json()) as PresignResponse & { error?: string; detail?: string; errorName?: string };
 
   if (presignRes.ok && presignJson.upload_url) {
     try {
