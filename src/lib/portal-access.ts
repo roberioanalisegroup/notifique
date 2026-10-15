@@ -20,8 +20,8 @@ export function resolveMatchedScreen(normalizedPortalPathname: string) {
 }
 
 /**
- * Para utilizadores não admin: portal_permissions=null → acesso "edit" a todas as áreas não adminOnly (legado).
- * Mapa definido só com chaves configuradas → chaves omitidas ficam como "none" exceto se null legacy.
+ * Para utilizadores não admin: portal_permissions=null → nenhum acesso (conta nova ou perfil sem permissões).
+ * Mapa definido só com chaves configuradas → chaves omitidas ficam como "none".
  */
 export function effectivePortalAccess(params: {
   role: string | null | undefined;
@@ -37,7 +37,7 @@ export function effectivePortalAccess(params: {
   }
   const raw = params.portal_permissions;
   if (raw == null) {
-    return "edit";
+    return "none";
   }
   const v = raw[params.screenKey];
   if (v === "read" || v === "edit") return v;

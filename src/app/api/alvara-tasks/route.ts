@@ -74,6 +74,9 @@ export async function POST(request: NextRequest) {
     .select(
       `
       id,
+      archived_at,
+      monitoring_status,
+      companies ( archived_at ),
       alvaras ( id, is_active, prazo_inicio_dias )
     `
     );
@@ -83,12 +86,15 @@ export async function POST(request: NextRequest) {
 
   const rows = (vinculos ?? []) as unknown as {
     id: string;
+    archived_at: string | null;
+    monitoring_status: string | null;
+    companies: { archived_at: string | null } | null;
     alvaras: { id: string; is_active: boolean; prazo_inicio_dias?: number | null } | null;
   }[];
   const { data: pendentes, error: eP } = await supabase
     .from("alvara_tasks")
     .select("company_alvara_id")
-    .eq("status", "pendente");
+    .in("status", ["pendente", "em_andamento", "com_impedimento"]);
 
   if (eP) {
     return NextResponse.json({ error: eP.message }, { status: 500 });
@@ -102,6 +108,8 @@ export async function POST(request: NextRequest) {
   for (const ca of rows) {
     const a = ca.alvaras;
     if (!a?.is_active) continue;
+    // Regra 8.1: só vínculos ativos de empresas ativas recebem tarefa nova.
+    if (ca.archived_at || ca.monitoring_status === "suspenso" || ca.companies?.archived_at) continue;
 
     try {
       await resetCompanyAlvaraIfNoActiveTasks(supabase, ca.id);

@@ -40,7 +40,7 @@ export async function PATCH(
 
   const { data: task, error: e1 } = await supabase
     .from("alvara_tasks")
-    .select("id, company_alvara_id")
+    .select("id, company_alvara_id, status")
     .eq("id", taskId)
     .maybeSingle();
 
@@ -49,6 +49,12 @@ export async function PATCH(
   }
   if (!task) {
     return NextResponse.json({ error: "Tarefa não encontrada" }, { status: 404 });
+  }
+  if (task.status === "concluida" || task.status === "cancelada") {
+    return NextResponse.json(
+      { error: "Esta tarefa já foi encerrada e o checklist não pode ser alterado." },
+      { status: 400 }
+    );
   }
 
   const { data: ca, error: e2 } = await supabase

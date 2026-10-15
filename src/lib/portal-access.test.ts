@@ -34,14 +34,14 @@ describe("effectivePortalAccess", () => {
     ).toBe("none");
   });
 
-  it("user com mapa null legado recebe edit", () => {
+  it("user com mapa null (conta nova) recebe none", () => {
     expect(
       effectivePortalAccess({
         role: "user",
         portal_permissions: null,
         screenKey: "empresas",
       })
-    ).toBe("edit");
+    ).toBe("none");
   });
 });
 

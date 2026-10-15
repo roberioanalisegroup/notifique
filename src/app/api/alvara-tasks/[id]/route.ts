@@ -176,12 +176,21 @@ export async function PATCH(
   // Fetch the link details
   const { data: linkRow, error: caErr } = await supabase
     .from("company_alvaras")
-    .select("id, status, monitoring_status, archived_at")
+    .select("id, status, monitoring_status, archived_at, companies ( archived_at )")
     .eq("id", taskRow.company_alvara_id)
     .single();
 
   if (caErr || !linkRow) {
     return NextResponse.json({ error: "Vínculo não encontrado" }, { status: 404 });
+  }
+
+  // Regra 2.5 (6): vínculo arquivado/suspenso ou empresa arquivada congela as tarefas.
+  const empresaArquivada = (linkRow.companies as unknown as { archived_at: string | null } | null)?.archived_at;
+  if (!auth.isServiceRole && (linkRow.archived_at || linkRow.monitoring_status === "suspenso" || empresaArquivada)) {
+    return NextResponse.json(
+      { error: "Vínculo arquivado ou suspenso, ou empresa arquivada: a tarefa não pode ser alterada." },
+      { status: 400 }
+    );
   }
 
   // ==========================================

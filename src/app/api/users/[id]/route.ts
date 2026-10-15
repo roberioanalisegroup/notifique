@@ -5,6 +5,7 @@ import { countActiveAdmins } from "@/lib/portal-user-admin-guards";
 import { requirePortalAdmin } from "@/lib/require-portal-admin";
 import {
   parsePortalPermissionsFromDb,
+  fullPortalEditMap,
   sanitizePortalPermissions,
 } from "@/lib/sanitize-portal-permissions";
 import type { PortalPermissionsMap } from "@/types";
@@ -163,7 +164,7 @@ export async function PATCH(
   } else if (body.portal_permissions !== undefined) {
     nextPortalPerms =
       body.portal_permissions === null
-        ? null
+        ? fullPortalEditMap() // NULL passou a significar "nenhum acesso"; "sem restrição" vira mapa explícito
         : (() => {
             const cleaned = sanitizePortalPermissions(body.portal_permissions);
             return Object.keys(cleaned).length === 0 ? {} : cleaned;
@@ -200,6 +201,14 @@ export async function PATCH(
       /* best effort revert */
     }
     return NextResponse.json({ error: upErr.message }, { status: 500 });
+  }
+
+  // Troca de senha/e-mail ou desativação: derruba as sessões abertas (quem tinha o cookie perde o acesso).
+  const trocouCredencial =
+    (email && email !== u.email) || (body.password != null && body.password.length > 0);
+  if (trocouCredencial || (currActive && !nextActive)) {
+    const { error: rErr } = await admin.rpc("revoke_user_sessions", { p_user_id: id });
+    if (rErr) console.error("[users] revoke_user_sessions falhou:", rErr.message);
   }
 
   if (display_name !== undefined) {

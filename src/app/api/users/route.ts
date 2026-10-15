@@ -3,7 +3,7 @@ import { getSupabaseForRequest } from "@/lib/api-auth";
 import { insertAuditLog } from "@/lib/audit-log";
 import { countActiveAdmins } from "@/lib/portal-user-admin-guards";
 import { requirePortalAdmin } from "@/lib/require-portal-admin";
-import { sanitizePortalPermissions } from "@/lib/sanitize-portal-permissions";
+import { fullPortalEditMap, sanitizePortalPermissions } from "@/lib/sanitize-portal-permissions";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { syncAuthBanWithActiveFlag } from "@/lib/user-auth-ban";
 import type { PortalPermissionsMap, PortalUser } from "@/types";
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
     wantedRole === "admin"
       ? null
       : body.portal_permissions === undefined || body.portal_permissions === null
-        ? null
+        ? fullPortalEditMap() // NULL passou a significar "nenhum acesso"; "sem restrição" vira mapa explícito
         : (() => {
             const cleaned = sanitizePortalPermissions(body.portal_permissions);
             return Object.keys(cleaned).length === 0 ? {} : cleaned;

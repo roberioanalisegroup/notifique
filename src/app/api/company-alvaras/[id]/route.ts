@@ -9,6 +9,15 @@ import {
 import { NextRequest, NextResponse } from "next/server";
 import { validarCombinacaoStatus, type AlvaraStatus, type TarefaStatus } from "@/lib/validations/alvara-status";
 
+const CAMPOS_EDITAVEIS = [
+  "observacoes",
+  "data_emissao",
+  "data_vencimento",
+  "is_indefinite",
+  "frequencia_override",
+  "dias_frequencia_personalizada",
+] as const;
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -18,11 +27,35 @@ export async function PATCH(
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
 
-  let body: Record<string, unknown>;
+  let raw: Record<string, unknown>;
   try {
-    body = await request.json();
+    raw = await request.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+
+  // Só os campos que a interface edita por aqui. Suspender/arquivar têm rotas próprias (admin)
+  // e o arquivo oficial só entra pela conclusão da tarefa.
+  const body: Record<string, unknown> = {};
+  for (const k of CAMPOS_EDITAVEIS) {
+    if (Object.prototype.hasOwnProperty.call(raw, k)) body[k] = raw[k];
+  }
+  if (Object.keys(body).length === 0) {
+    return NextResponse.json({ error: "Nenhum campo editável informado." }, { status: 400 });
+  }
+  if (
+    !body.is_indefinite &&
+    typeof body.data_emissao === "string" &&
+    typeof body.data_vencimento === "string" &&
+    body.data_vencimento.slice(0, 10) < body.data_emissao.slice(0, 10)
+  ) {
+    return NextResponse.json(
+      { error: "A data de vencimento não pode ser anterior à data de emissão." },
+      { status: 400 }
+    );
   }
 
   if (body.status !== undefined) {
@@ -149,7 +182,6 @@ export async function PATCH(
   if (
     Object.prototype.hasOwnProperty.call(patch, "data_emissao") ||
     Object.prototype.hasOwnProperty.call(patch, "data_vencimento") ||
-    Object.prototype.hasOwnProperty.call(patch, "arquivo_url") ||
     Object.prototype.hasOwnProperty.call(patch, "is_indefinite")
   ) {
     const { data: currentDoc } = await supabase
@@ -165,9 +197,6 @@ export async function PATCH(
     }
     if (Object.prototype.hasOwnProperty.call(patch, "data_vencimento")) {
       docUpdate.expiration_date = patch.is_indefinite ? null : patch.data_vencimento;
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, "arquivo_url")) {
-      docUpdate.file_path = patch.arquivo_url;
     }
     if (Object.prototype.hasOwnProperty.call(patch, "is_indefinite")) {
       docUpdate.is_indefinite = patch.is_indefinite;
@@ -185,7 +214,7 @@ export async function PATCH(
           company_alvara_id: id,
           issue_date: patch.data_emissao || null,
           expiration_date: patch.is_indefinite ? null : (patch.data_vencimento || null),
-          file_path: patch.arquivo_url || null,
+          file_path: null,
           is_indefinite: patch.is_indefinite ?? false,
           is_current: true,
         });

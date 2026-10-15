@@ -11,9 +11,10 @@ export function portalScreenRequiredForMutation(pathname: string): string | null
   if (p.startsWith("/api/companies/sync-all")) return "config_sync";
   if (p.startsWith("/api/companies")) return "empresas";
   if (p.startsWith("/api/company-alvaras")) return "acompanhamento";
+  // O prefixo mais específico precisa vir antes de "/api/alvara-tasks".
+  if (p.startsWith("/api/alvara-tasks/admin")) return "geracao_manutencao";
   if (p.startsWith("/api/alvara-tasks")) return "acompanhamento";
   if (p.startsWith("/api/alvara-groups")) return "alvaras_grupos";
-  if (p.startsWith("/api/alvara-tasks/admin")) return "geracao_manutencao";
   if (p.startsWith("/api/alvaras/import")) return "alvaras_importar";
   if (p.startsWith("/api/alvaras")) return "alvaras";
   if (p.startsWith("/api/sync-config") || p.startsWith("/api/sync-logs")) return "config_sync";

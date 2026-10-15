@@ -37,7 +37,8 @@ function selectionsFromStored(
 }
 
 function shouldRestrictStored(p: PortalPermissionsMap | null | undefined, role: PortalUser["role"]): boolean {
-  return role === "user" && p != null;
+  // NULL deixou de ser "acesso total": perfil de usuário sem mapa aparece restrito, sem telas.
+  return role === "user";
 }
 
 /** Converte níveis UI → mapa gravado (`none` omitido); passa sanitize. */

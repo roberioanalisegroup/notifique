@@ -10,6 +10,13 @@ export function parsePortalPermissionsFromDb(raw: unknown): PortalPermissionsMap
   return raw as PortalPermissionsMap;
 }
 
+/** "Sem restrição" para não-admin: edição explícita em todas as telas não exclusivas de admin. */
+export function fullPortalEditMap(): PortalPermissionsMap {
+  const out: PortalPermissionsMap = {};
+  for (const k of KEYS) out[k] = "edit";
+  return out;
+}
+
 export function sanitizePortalPermissions(input: unknown): PortalPermissionsMap {
   const out: PortalPermissionsMap = {};
   if (input == null || typeof input !== "object") return {};
