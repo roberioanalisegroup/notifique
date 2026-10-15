@@ -1,16 +1,25 @@
 import { resetCompanyAlvaraIfNoActiveTasks } from "@/lib/alvara-task-vinculo-reset";
 import { getSupabaseForRequest } from "@/lib/api-auth";
+import { createClient } from "@/lib/supabase/server";
+import { verifyUserPasswordMatchesSession } from "@/lib/verify-user-password";
 import { NextRequest, NextResponse } from "next/server";
 
-type Body = { taskIds?: string[] };
+type Body = { taskIds?: string[]; password?: string };
 
 /**
  * Elimina tarefas em estado pendente que nunca foram alteradas:
- * histórico contém apenas o evento "created".
+ * histórico contém apenas o evento "created". Exclusão física: exige a palavra-passe
+ * do utilizador, como a exclusão por período (decisão de 15/10/2026).
  */
 export async function POST(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
   if ("error" in auth) return auth.error;
+  if (auth.isServiceRole) {
+    return NextResponse.json(
+      { error: "Esta operação exige sessão de utilizador e confirmação por palavra-passe." },
+      { status: 403 }
+    );
+  }
   const { supabase, userId } = auth;
 
   let body: Body;
@@ -23,6 +32,22 @@ export async function POST(request: NextRequest) {
   const ids = Array.isArray(body.taskIds) ? body.taskIds.map((x) => String(x).trim()).filter(Boolean) : [];
   if (ids.length === 0) {
     return NextResponse.json({ error: "Indique taskIds" }, { status: 400 });
+  }
+
+  const password = body.password ?? "";
+  if (!password) {
+    return NextResponse.json({ error: "Palavra-passe obrigatória." }, { status: 400 });
+  }
+  const {
+    data: { user },
+    error: uErr,
+  } = await (await createClient()).auth.getUser();
+  if (uErr || !user?.email) {
+    return NextResponse.json({ error: "Não foi possível validar o utilizador." }, { status: 401 });
+  }
+  const v = await verifyUserPasswordMatchesSession(user.email, password, userId);
+  if (!v.ok) {
+    return NextResponse.json({ error: v.message }, { status: 401 });
   }
 
   const { data: tasks, error: tErr } = await supabase

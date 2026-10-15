@@ -34,6 +34,7 @@ export default function GeracaoTarefasPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkPassword, setBulkPassword] = useState("");
   const [generating, setGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -126,6 +127,10 @@ export default function GeracaoTarefasPage() {
       toast.message("Selecione pelo menos uma tarefa.");
       return;
     }
+    if (!bulkPassword.trim()) {
+      toast.error("Digite a sua palavra-passe para eliminar.");
+      return;
+    }
     if (
       !confirm(
         "Eliminar apenas as selecionadas que estejam pendentes e sem alterações desde a criação? (As que não forem elegíveis serão ignoradas.)"
@@ -141,8 +146,9 @@ export default function GeracaoTarefasPage() {
         message?: string;
       }>("/api/alvara-tasks/admin/delete-pending-clean", {
         method: "POST",
-        body: JSON.stringify({ taskIds: ids }),
+        body: JSON.stringify({ taskIds: ids, password: bulkPassword }),
       });
+      setBulkPassword("");
       toast.success(
         r.message ??
           `Removidas ${r.deleted} tarefa(s). Ignoradas: ${r.skipped ?? Math.max(0, ids.length - r.deleted)}.`
@@ -244,10 +250,20 @@ export default function GeracaoTarefasPage() {
               <button type="button" className="btn-secondary text-sm" onClick={toggleAll} disabled={loading || filteredTasks.length === 0}>
                 {selected.size === filteredTasks.length && filteredTasks.length > 0 ? "Desmarcar todas" : "Selecionar visíveis"}
               </button>
+              <input
+                id="bulk-pw"
+                type="password"
+                autoComplete="current-password"
+                aria-label="Palavra-passe para eliminar"
+                className="input-field h-9 w-44 text-xs"
+                value={bulkPassword}
+                onChange={(e) => setBulkPassword(e.target.value)}
+                placeholder="Sua palavra-passe"
+              />
               <button
                 type="button"
                 className="btn-secondary inline-flex items-center gap-1 border-red-200 text-sm text-red-800 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
-                disabled={bulkBusy || selected.size === 0}
+                disabled={bulkBusy || selected.size === 0 || !bulkPassword.trim()}
                 onClick={() => void eliminarPendentesIntactas()}
               >
                 <Trash2 className="h-4 w-4" />
