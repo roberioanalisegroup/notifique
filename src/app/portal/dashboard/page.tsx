@@ -1,6 +1,7 @@
 "use client";
 
 import { apiJson } from "@/lib/api-client";
+import { csvCell } from "@/lib/csv-cell";
 import { formatDate, getTaskStatusMeta, cn, formatCNPJ } from "@/lib/utils";
 import {
   Building2,
@@ -157,13 +158,7 @@ type CompanySummaryRow = {
 function downloadCSV(filename: string, headers: string[], rows: (string | number)[][]) {
   const csvContent = [
     headers.join(";"),
-    ...rows.map(row => row.map(val => {
-      const cell = val === null || val === undefined ? "" : String(val);
-      if (cell.includes(";") || cell.includes('"') || cell.includes("\n")) {
-        return `"${cell.replace(/"/g, '""')}"`;
-      }
-      return cell;
-    }).join(";"))
+    ...rows.map(row => row.map(csvCell).join(";"))
   ].join("\n");
 
   const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });

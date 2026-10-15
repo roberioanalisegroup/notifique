@@ -126,15 +126,23 @@ export async function middleware(request: NextRequest) {
         NextResponse.json({ error: "Não autenticado" }, { status: 401 })
       );
     }
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("role, portal_permissions, is_active")
+      .eq("id", user.id)
+      .maybeSingle();
+    // Conta desativada perde o acesso já na próxima requisição, mesmo com a sessão ainda válida.
+    if (prof?.is_active === false) {
+      return secure(
+        request,
+        nonce,
+        NextResponse.json({ error: "Conta desativada." }, { status: 403 })
+      );
+    }
     if (["POST", "PATCH", "PUT", "DELETE"].includes(method)) {
       const screenKey = portalScreenRequiredForMutation(pathname);
       if (screenKey) {
         const def = PORTAL_SCREEN_DEFS.find((d) => d.key === screenKey);
-        const { data: prof } = await supabase
-          .from("profiles")
-          .select("role, portal_permissions")
-          .eq("id", user.id)
-          .maybeSingle();
         const access = effectivePortalAccess({
           role: typeof prof?.role === "string" ? prof.role : "user",
           portal_permissions: parsePortalPermissionsFromDb(prof?.portal_permissions),
@@ -171,9 +179,16 @@ export async function middleware(request: NextRequest) {
     if (!pathname.startsWith("/portal/sem-acesso")) {
       const { data: prof } = await supabase
         .from("profiles")
-        .select("role, portal_permissions")
+        .select("role, portal_permissions, is_active")
         .eq("id", user.id)
         .maybeSingle();
+      if (prof?.is_active === false) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/portal/sem-acesso";
+        url.search = "";
+        url.searchParams.set("motivo", "conta-desativada");
+        return secure(request, nonce, NextResponse.redirect(url));
+      }
       const profile = {
         role: typeof prof?.role === "string" ? prof.role : "user",
         portal_permissions: parsePortalPermissionsFromDb(prof?.portal_permissions),

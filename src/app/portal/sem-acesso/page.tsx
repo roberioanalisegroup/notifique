@@ -1,13 +1,25 @@
 import Link from "next/link";
 
 type Props = {
-  searchParams: Promise<{ area?: string; from?: string }>;
+  searchParams: Promise<{ area?: string; from?: string; motivo?: string }>;
 };
 
 export default async function SemAcessoPage({ searchParams }: Props) {
   const sp = await searchParams;
   const area = sp.area?.trim();
   const from = sp.from?.trim();
+  const contaDesativada = sp.motivo === "conta-desativada";
+
+  if (contaDesativada) {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl border border-amber-200 bg-amber-50/90 px-6 py-10 text-center text-slate-800 shadow-sm dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-50">
+        <h1 className="text-xl font-bold text-amber-950 dark:text-amber-100">Conta desativada</h1>
+        <p className="mt-3 text-sm text-amber-950/90 dark:text-amber-100/85">
+          A sua conta foi desativada por um administrador. Se acha que é um engano, fale com o administrador do portal.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-lg rounded-2xl border border-amber-200 bg-amber-50/90 px-6 py-10 text-center text-slate-800 shadow-sm dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-50">

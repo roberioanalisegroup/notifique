@@ -11,11 +11,12 @@ export async function requirePortalAdmin(
 ): Promise<NextResponse | null> {
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, is_active")
     .eq("id", userId)
     .single();
 
-  if (error || profile?.role !== "admin") {
+  // Admin desativado não usa as operações com service role (nem para se reativar).
+  if (error || profile?.role !== "admin" || profile?.is_active === false) {
     return NextResponse.json(
       { error: "Acesso negado. Apenas administradores podem utilizar esta operação." },
       { status: 403 }

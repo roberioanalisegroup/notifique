@@ -1,5 +1,6 @@
 "use client";
 
+import { safeAuthCallbackNextPath } from "@/lib/safe-auth-redirect";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -9,7 +10,8 @@ import { toast } from "sonner";
 export function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
-  const next = search.get("next") || "/portal/dashboard";
+  // Só caminhos internos: um ?next= externo levaria o usuário para fora do portal após o login.
+  const next = safeAuthCallbackNextPath(search.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);

@@ -8,6 +8,7 @@
 
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { MAX_FILE_SIZE_BYTES } from "@/lib/r2";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import {
   buildAlvaraAttachmentStorageKey,
   createPresignedPutUrl,
@@ -89,12 +90,6 @@ async function loadOpenTask(
 
 function storageErrorResponse(err: unknown): NextResponse {
   console.error("[R2 UPLOAD ERROR]", err);
-  try {
-    require("fs").appendFileSync(
-      "r2_error.log",
-      new Date().toISOString() + " - " + (err instanceof Error ? err.stack : String(err)) + "\n"
-    );
-  } catch (e) {}
   const message = err instanceof Error ? err.message : String(err);
   const isDev = process.env.NODE_ENV !== "production";
 
@@ -111,8 +106,9 @@ function storageErrorResponse(err: unknown): NextResponse {
   return NextResponse.json(
     {
       error: "Falha ao enviar o ficheiro para o armazenamento. Tente novamente.",
-      detail: message,
-      errorName: err instanceof Error ? err.name : "UnknownError",
+      ...(isDev
+        ? { detail: message, errorName: err instanceof Error ? err.name : "UnknownError" }
+        : {}),
     },
     { status: 502 }
   );
@@ -141,12 +137,26 @@ export async function POST(
 ) {
   const { id: taskId } = await params;
 
-  // const auth = await getSupabaseForRequest(request);
-  // if ("error" in auth) return auth.error;
-  // const { supabase } = auth;
-  const { createClient } = require("@supabase/supabase-js");
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const auth = await getSupabaseForRequest(request);
+  if ("error" in auth) return auth.error;
 
+  // A autorização é a RLS do próprio usuário: só segue quem enxerga a tarefa.
+  const { data: visivel } = await auth.supabase
+    .from("alvara_tasks")
+    .select("id")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (!visivel) {
+    return NextResponse.json({ error: "Tarefa não encontrada." }, { status: 404 });
+  }
+
+  // Com o acesso confirmado, a service role só lê o contexto (CNPJ e nome do alvará) para montar a chave no R2.
+  let supabase: SupabaseClient;
+  try {
+    supabase = createServiceRoleClient();
+  } catch {
+    return NextResponse.json({ error: "Configuração do servidor Supabase inválida." }, { status: 500 });
+  }
 
   if (!isR2Configured()) {
     return NextResponse.json(
