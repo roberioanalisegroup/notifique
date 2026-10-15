@@ -1,6 +1,7 @@
 "use client";
 
 import { apiJson } from "@/lib/api-client";
+import { fetchChecklistByTask } from "@/lib/checklist-batch";
 import { FREQUENCIA_LABELS } from "@/lib/alvara-frequency";
 import { prazoInicioPrimeiroCiclo } from "@/lib/alvara-task-generation";
 import { cn, formatDate, getTaskStatusMeta, isTaskHiddenByOperationalWindow } from "@/lib/utils";
@@ -472,11 +473,8 @@ export default function AcompanhamentoPage() {
     let cancelled = false;
     void (async () => {
       try {
-        const d = await apiJson<{ by_task: Record<string, AlvaraTaskChecklistRow[]> }>(
-          "/api/alvara-tasks/checklist-batch",
-          { method: "POST", body: JSON.stringify({ task_ids: ids }) }
-        );
-        if (!cancelled) setChecklistByTaskId(d.by_task ?? {});
+        const byTask = await fetchChecklistByTask(ids);
+        if (!cancelled) setChecklistByTaskId(byTask);
       } catch {
         if (!cancelled) setChecklistByTaskId({});
       }

@@ -2,6 +2,7 @@
 
 import { EmpresasMassaVincularModal } from "@/components/empresas/empresas-massa-vincular-modal";
 import { NovaEmpresaModal } from "@/components/empresas/nova-empresa-modal";
+import { usePortalProfile } from "@/components/portal/portal-access-context";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ResponsiveTableShell } from "@/components/ui/responsive-table-shell";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -95,6 +96,7 @@ function EmpresasTableLoading() {
 
 export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }) {
   const arquivadas = variant === "arquivadas";
+  const isAdmin = usePortalProfile().role === "admin"; // sync-all é só de admin na rota
   const [rows, setRows] = useState<Row[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -618,14 +620,16 @@ export function EmpresasListClient({ variant }: { variant: EmpresasListVariant }
               <Link href="/portal/empresas/importar" className="btn-secondary shrink-0 no-underline">
                 Importar CSV
               </Link>
-              <button
-                type="button"
-                onClick={syncAll}
-                disabled={syncingAll}
-                className="inline-flex shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:opacity-50"
-              >
-                {syncingAll ? "Sincronizando…" : "Sincronizar todas"}
-              </button>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={syncAll}
+                  disabled={syncingAll}
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {syncingAll ? "Sincronizando…" : "Sincronizar todas"}
+                </button>
+              ) : null}
             </>
           ) : null}
         </div>

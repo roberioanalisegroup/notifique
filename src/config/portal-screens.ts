@@ -55,6 +55,8 @@ export const PORTAL_SCREEN_DEFS: PortalScreenDef[] = [
   {
     key: "config_sync",
     pathPrefix: "/portal/configuracoes/sincronizacao",
+    // As rotas sync-config, sync-logs e sync-all só aceitam admin; aberta a outros a tela mostrava valores falsos.
+    adminOnly: true,
     label: "Configurações — Sincronização",
   },
   {

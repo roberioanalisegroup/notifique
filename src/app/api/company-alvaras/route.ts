@@ -121,6 +121,10 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       );
     }
+    if (error.code === "42501") {
+      // RLS recusou: empresa fora da carteira do usuário ou sem edição em Empresas.
+      return NextResponse.json({ error: "Sem permissão para vincular alvarás a esta empresa." }, { status: 403 });
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

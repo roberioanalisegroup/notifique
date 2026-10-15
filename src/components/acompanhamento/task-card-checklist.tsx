@@ -181,10 +181,7 @@ export function TaskCardChecklist({
   readOnly: boolean;
   onToggle: (itemId: string, completed: boolean, comment?: string, attachmentUrl?: string) => void;
 }) {
-  if (!items.length) return null;
-
-  const done = items.filter((i) => i.completed).length;
-  const pct = Math.round((done / items.length) * 100);
+  // Hooks antes de qualquer return: a lista chega vazia e depois preenchida, e o React exige a mesma ordem.
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
 
   const handleCheck = useCallback(
@@ -207,6 +204,11 @@ export function TaskCardChecklist({
     },
     [onToggle]
   );
+
+  if (!items.length) return null;
+
+  const done = items.filter((i) => i.completed).length;
+  const pct = Math.round((done / items.length) * 100);
 
   return (
     <div

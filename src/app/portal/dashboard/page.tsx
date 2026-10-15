@@ -1,6 +1,8 @@
 "use client";
 
 import { apiJson } from "@/lib/api-client";
+import { fetchChecklistByTask } from "@/lib/checklist-batch";
+import { usePortalProfile } from "@/components/portal/portal-access-context";
 import { csvCell } from "@/lib/csv-cell";
 import { formatDate, getTaskStatusMeta, cn, formatCNPJ } from "@/lib/utils";
 import {
@@ -197,6 +199,7 @@ function downloadSVG(svgId: string, filename: string) {
 }
 
 export default function DashboardPage() {
+  const isAdmin = usePortalProfile().role === "admin";
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [logs, setLogs] = useState<SyncLog[]>([]);
@@ -296,12 +299,7 @@ export default function DashboardPage() {
     if (tasksList.length === 0) return;
     setLoadingChecklist(true);
     try {
-      const taskIds = tasksList.map(t => t.id);
-      const d = await apiJson<{ by_task: Record<string, AlvaraTaskChecklistRow[]> }>(
-        "/api/alvara-tasks/checklist-batch",
-        { method: "POST", body: JSON.stringify({ task_ids: taskIds }) }
-      );
-      setChecklistByTaskId(d.by_task ?? {});
+      setChecklistByTaskId(await fetchChecklistByTask(tasksList.map(t => t.id)));
     } catch (e) {
       console.error("Erro ao carregar checklists do modal:", e);
     } finally {
@@ -333,7 +331,10 @@ export default function DashboardPage() {
             vencendoProx30Dias: VencendoAlvara[];
             companiesSummary: CompanySummaryRow[];
           }>("/api/stats"),
-          apiJson<{ logs: SyncLog[] }>("/api/sync-logs?limit=5"),
+          // Histórico de sincronização é só de admin: para os demais a falha não pode derrubar o painel.
+          isAdmin
+            ? apiJson<{ logs: SyncLog[] }>("/api/sync-logs?limit=5").catch(() => ({ logs: [] as SyncLog[] }))
+            : Promise.resolve({ logs: [] as SyncLog[] }),
         ]);
         if (!active) return;
         setKpis(statsData.kpis);
@@ -419,7 +420,7 @@ export default function DashboardPage() {
       active = false;
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [activeMenu]);
+  }, [activeMenu, isAdmin]);
 
   // --- COMPLIANCE DETAILS MODAL LOGIC (Hooks called unconditionally before early return) ---
   const filteredCompanies = useMemo(() => {
