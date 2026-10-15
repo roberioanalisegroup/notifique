@@ -6,7 +6,7 @@ import type { AlvaraTask } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { validateChecklistObrigatoriaForTask } from "@/lib/alvara-checklist-completion";
-import { validarCombinacaoStatus } from "@/lib/validations/alvara-status";
+import { motivoObrigatorioFaltando, validarCombinacaoStatus } from "@/lib/validations/alvara-status";
 
 const TASK_SELECT = `
   *,
@@ -322,6 +322,16 @@ export async function PATCH(
     if (!validation.valido) {
       return NextResponse.json({ error: validation.mensagem }, { status: 400 });
     }
+  }
+
+  const motivoFaltando = motivoObrigatorioFaltando({
+    novoStatus: newStatus,
+    statusAtual: taskRow.status,
+    cancellationReason: sanitizeText(body.cancellation_reason),
+    impedimentReason: sanitizeText(body.impediment_reason),
+  });
+  if (motivoFaltando) {
+    return NextResponse.json({ error: motivoFaltando }, { status: 400 });
   }
 
   const patch: Record<string, any> = {

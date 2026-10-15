@@ -160,3 +160,20 @@ export function computeTaskStatus(
 
   return "pendente";
 }
+
+export type CompanyComplianceSituation = "regular" | "critica" | "sem_documento" | "nao_monitorada";
+
+/**
+ * Regra 7.3.1: regular só quando todos os vínculos monitorados estão vigentes, indeterminados ou
+ * dispensados. `alvaras_pendentes` soma vencidos e sem documento (ver /api/stats).
+ */
+export function classifyCompanyCompliance(c: {
+  total_alvaras: number;
+  alvaras_vencidos: number;
+  alvaras_pendentes: number;
+}): CompanyComplianceSituation {
+  if (c.total_alvaras === 0) return "nao_monitorada";
+  if (c.alvaras_vencidos > 0) return "critica";
+  if (c.alvaras_pendentes > 0) return "sem_documento";
+  return "regular";
+}

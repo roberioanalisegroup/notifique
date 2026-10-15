@@ -1,7 +1,7 @@
 import { getSupabaseForRequest } from "@/lib/api-auth";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
-import { computeDocumentStatus } from "@/lib/alvara-status";
+import { classifyCompanyCompliance, computeDocumentStatus } from "@/lib/alvara-status";
 
 export async function GET(request: NextRequest) {
   const auth = await getSupabaseForRequest(request);
@@ -267,7 +267,7 @@ export async function GET(request: NextRequest) {
     };
   });
   const totalEmpresas = summaryData.length;
-  const ativas = summaryData.filter(c => c.total_alvaras > 0 && c.alvaras_vencidos === 0).length;
+  const ativas = summaryData.filter(c => classifyCompanyCompliance(c) === "regular").length;
   
   // 1. General Compliance Rate
   const complianceRate = totalEmpresas > 0 ? (ativas / totalEmpresas) * 100 : 0;
@@ -438,9 +438,10 @@ export async function GET(request: NextRequest) {
   // 10. Indefinite validity count
   const indefiniteValidityCount = rIndefiniteValidityCount.count || 0;
 
+  // Sem vínculos monitorados não há o que medir: null (a tela mostra "—"), não 100%.
   const scoreRegularidade = totalAlvarasCount > 0
     ? ((totalAlvarasCount - alvarasVencidos) / totalAlvarasCount) * 100
-    : 100;
+    : null;
 
   // Adapt the bottom list output
   const vencendoProx30Dias = (rVencendoList.data || []).map((item: any) => {

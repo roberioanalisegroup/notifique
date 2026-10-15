@@ -62,3 +62,24 @@ export function validarCombinacaoStatus(
     tipo: "ok"
   };
 }
+
+/**
+ * Regra 6.7/6.8: cancelar exige `cancellation_reason` e ir para impedimento exige `impediment_reason`.
+ * Só vale na transição (status novo diferente do atual). Devolve a mensagem de erro ou null.
+ */
+export function motivoObrigatorioFaltando(params: {
+  novoStatus: string | null | undefined;
+  statusAtual: string;
+  cancellationReason?: string | null;
+  impedimentReason?: string | null;
+}): string | null {
+  const { novoStatus, statusAtual } = params;
+  if (!novoStatus || novoStatus === statusAtual) return null;
+  if (novoStatus === "cancelada" && !(params.cancellationReason ?? "").trim()) {
+    return "Informe o motivo do cancelamento.";
+  }
+  if (novoStatus === "com_impedimento" && !(params.impedimentReason ?? "").trim()) {
+    return "Informe o motivo do impedimento.";
+  }
+  return null;
+}

@@ -766,10 +766,14 @@ export default function AcompanhamentoPage() {
   async function cancelarTarefa(t: TaskRow) {
     const reason = prompt("Motivo do cancelamento da tarefa:");
     if (reason === null) return;
+    if (!reason.trim()) {
+      toast.error("Informe o motivo do cancelamento.");
+      return;
+    }
     try {
       await apiJson("/api/alvara-tasks/" + t.id, {
         method: "PATCH",
-        body: JSON.stringify({ status: "cancelada", cancellation_reason: reason || null }),
+        body: JSON.stringify({ status: "cancelada", cancellation_reason: reason.trim() }),
       });
       toast.success("Tarefa cancelada");
       void load({ silent: true });
@@ -833,7 +837,11 @@ export default function AcompanhamentoPage() {
       status = "com_impedimento";
       const reason = prompt("Motivo do impedimento:");
       if (reason === null) return;
-      impediment_reason = reason;
+      if (!reason.trim()) {
+        toast.error("Informe o motivo do impedimento.");
+        return;
+      }
+      impediment_reason = reason.trim();
     }
 
     try {

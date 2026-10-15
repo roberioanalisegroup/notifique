@@ -2,6 +2,7 @@
 
 import { apiJson } from "@/lib/api-client";
 import { fetchChecklistByTask } from "@/lib/checklist-batch";
+import { classifyCompanyCompliance } from "@/lib/alvara-status";
 import { usePortalProfile } from "@/components/portal/portal-access-context";
 import { csvCell } from "@/lib/csv-cell";
 import { formatDate, getTaskStatusMeta, cn, formatCNPJ } from "@/lib/utils";
@@ -64,7 +65,8 @@ type Kpis = {
   alvarasVencidos: number;
   indefiniteValidityCount: number;
   documentCoverageRate: number;
-  scoreRegularidade: number;
+  /** null quando não há vínculos monitorados. */
+  scoreRegularidade: number | null;
   throughput: Throughput;
   taskStatusCounts: TaskStatusCounts;
   expirations: Expirations;
@@ -437,13 +439,11 @@ export default function DashboardPage() {
 
       // Status filter
       if (complianceStatusFilter !== "all") {
-        const isRegular = c.total_alvaras > 0 && c.alvaras_vencidos === 0;
-        const isCritical = c.alvaras_vencidos > 0;
-        const isUnmonitored = c.total_alvaras === 0;
-
-        if (complianceStatusFilter === "regular" && !isRegular) return false;
-        if (complianceStatusFilter === "critical" && !isCritical) return false;
-        if (complianceStatusFilter === "unmonitored" && !isUnmonitored) return false;
+        const situacao = classifyCompanyCompliance(c);
+        if (complianceStatusFilter === "regular" && situacao !== "regular") return false;
+        if (complianceStatusFilter === "critical" && situacao !== "critica") return false;
+        if (complianceStatusFilter === "sem_documento" && situacao !== "sem_documento") return false;
+        if (complianceStatusFilter === "unmonitored" && situacao !== "nao_monitorada") return false;
       }
 
       // UF filter
@@ -858,10 +858,12 @@ export default function DashboardPage() {
       "Situação"
     ];
     const rows = filteredCompanies.map((c: CompanySummaryRow) => {
-      let situacao = "Sem Alvarás (Não Monitorada)";
-      if (c.total_alvaras > 0) {
-        situacao = c.alvaras_vencidos === 0 ? "Em Conformidade (Regular)" : "Crítica (Com Pendência)";
-      }
+      const situacao = {
+        regular: "Em Conformidade (Regular)",
+        critica: "Crítica (Com Vencido)",
+        sem_documento: "Irregular (Sem Documento)",
+        nao_monitorada: "Sem Alvarás (Não Monitorada)",
+      }[classifyCompanyCompliance(c)];
       return [
         c.cnpj ? formatCNPJ(c.cnpj) : c.id,
         c.razao_social || "—",
@@ -880,17 +882,21 @@ export default function DashboardPage() {
     toast.success("Dados de conformidade exportados!");
   };
 
-  const score = kpis?.scoreRegularidade ?? 100;
-  const isHigh = score >= 90;
-  const isMedium = score >= 70;
+  const score = kpis?.scoreRegularidade ?? null;
+  const isHigh = score !== null && score >= 90;
+  const isMedium = score !== null && score >= 70;
 
-  const scoreColor = isHigh
+  const scoreColor = score === null
+    ? "from-slate-500/10 to-slate-500/0 border-slate-500/10"
+    : isHigh
     ? "from-emerald-500/10 to-emerald-500/0 border-emerald-500/10"
     : isMedium
       ? "from-amber-500/10 to-amber-500/0 border-amber-500/10"
       : "from-rose-500/10 to-rose-500/0 border-rose-500/10";
 
-  const scoreIconColor = isHigh
+  const scoreIconColor = score === null
+    ? "text-slate-400"
+    : isHigh
     ? "text-emerald-500"
     : isMedium
       ? "text-amber-500"
@@ -906,7 +912,7 @@ export default function DashboardPage() {
     },
     {
       label: "Score de Regularidade",
-      value: `${kpis?.scoreRegularidade !== undefined ? kpis.scoreRegularidade.toFixed(1) : "100.0"}%`,
+      value: score === null ? "—" : `${score.toFixed(1)}%`,
       icon: <Award className={`h-5 w-5 ${scoreIconColor}`} />,
       color: scoreColor
     },
@@ -1153,7 +1159,7 @@ export default function DashboardPage() {
               </div>
 
               <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">
-                {kpis?.regularCompaniesCount ?? 0} de {kpis?.totalEmpresas ?? 0} empresas operam com todos os alvarás ativos e sem pendências vencidas.
+                {kpis?.regularCompaniesCount ?? 0} de {kpis?.totalEmpresas ?? 0} empresas têm todos os alvarás com documento vigente, indeterminado ou dispensado.
               </p>
             </div>
           </div>
@@ -2749,7 +2755,8 @@ export default function DashboardPage() {
               >
                 <option value="all">Todas as Situações</option>
                 <option value="regular">🟢 Em Conformidade (Regular)</option>
-                <option value="critical">🔴 Crítica (Com Pendência)</option>
+                <option value="critical">🔴 Crítica (Com Vencido)</option>
+                <option value="sem_documento">🟠 Irregular (Sem Documento)</option>
                 <option value="unmonitored">⚪ Não Monitorada (Sem Alvarás)</option>
               </select>
             </div>
@@ -2815,20 +2822,22 @@ export default function DashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                   {filteredCompanies.map((c: CompanySummaryRow) => {
-                    const isRegular = c.total_alvaras > 0 && c.alvaras_vencidos === 0;
-                    const isCritical = c.alvaras_vencidos > 0;
-                    const isUnmonitored = c.total_alvaras === 0;
+                    const situacao = classifyCompanyCompliance(c);
+                    const semDocumento = c.alvaras_pendentes - c.alvaras_vencidos;
 
                     let statusBadgeClass = "bg-slate-100 text-slate-700 dark:bg-white/5 dark:text-slate-300 border border-slate-200 dark:border-slate-800";
                     let statusLabel = "Sem Alvarás";
 
-                    if (isRegular) {
+                    if (situacao === "regular") {
                       statusBadgeClass = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
                       statusLabel = "Em Conformidade";
-                    } else if (isCritical) {
+                    } else if (situacao === "critica") {
                       statusBadgeClass = "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20";
                       statusLabel = `Crítica (${c.alvaras_vencidos} vencido${c.alvaras_vencidos > 1 ? "s" : ""})`;
-                    } else if (isUnmonitored) {
+                    } else if (situacao === "sem_documento") {
+                      statusBadgeClass = "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20";
+                      statusLabel = `Sem documento (${semDocumento})`;
+                    } else if (situacao === "nao_monitorada") {
                       statusBadgeClass = "bg-slate-500/10 text-slate-500 border border-slate-500/20";
                       statusLabel = "Não Monitorada";
                     }

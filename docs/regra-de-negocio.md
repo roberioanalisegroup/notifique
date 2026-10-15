@@ -697,10 +697,12 @@ Estados expandidos/recolhidos são persistidos em `localStorage`:
 | `com_impedimento` → `em_andamento` | Retomada do processo |
 | `com_impedimento` → `concluida` | **Fluxo especial** — ver §8.3 |
 | `com_impedimento` → `cancelada` | Exige `cancellation_reason` |
-| `concluida` → qualquer | **BLOQUEADO** (irreversível) |
-| `cancelada` → qualquer | **BLOQUEADO** (irreversível) |
+| `concluida` → qualquer | **BLOQUEADO** para não-admin; admin reabre como exceção, com justificativa |
+| `cancelada` → qualquer | **BLOQUEADO** para não-admin; admin reabre como exceção, com justificativa |
 
-> **Regra:** Qualquer tentativa de alterar uma tarefa já `concluida` ou `cancelada` retorna HTTP 400 com mensagem `"Esta tarefa já foi encerrada e não pode sofrer novas alterações."`.
+> **Regra:** Não-admin que tenta alterar uma tarefa `concluida` ou `cancelada` recebe HTTP 403 (*"A reabertura de tarefas concluídas ou canceladas é restrita a administradores e deve ser tratada como exceção."*). O admin pode reabrir informando uma justificativa administrativa de pelo menos 10 caracteres, registrada no histórico.
+>
+> **Motivo obrigatório:** ir para `cancelada` exige `cancellation_reason` e ir para `com_impedimento` exige `impediment_reason` (texto não vazio); sem ele o servidor responde 400. Kanban e modal pedem o motivo antes de enviar.
 
 **Validação de combinação de status (backend):** `src/lib/validations/alvara-status.ts → validarCombinacaoStatus()` — valida se a combinação de status da tarefa e do vínculo é permitida antes de persistir.
 
@@ -797,6 +799,7 @@ $$\text{Score} = \left( \frac{\text{Total de Vínculos Monitorados} - \text{Vín
 * **Definições de Filtro de Regularidade:**
   - **Total de Vínculos Monitorados:** Considera apenas vínculos ativos no sistema (sem `archived_at` e excluindo estritamente vínculos marcados com `monitoring_status = 'suspenso'`).
   - **Vínculos Vencidos:** Quantidade de vínculos ativos que possuem status documental de `'vencido'`. Vínculos em status `'dispensado'` ou com validade indeterminada `'indeterminado'` **não** são contados como vencidos, integrando a contagem de regularidade.
+  - **Sem vínculos monitorados:** o score não é calculado (`null`) e o painel mostra **"—"**, não 100%.
 
 #### 7.3.12 Alvarás por Categoria (Grupo)
 - Distribuição dos documentos vigentes por `alvara_groups.name`
@@ -845,7 +848,7 @@ Tanto a rotina automática em lote (`POST /api/alvara-tasks`) quanto os fluxos d
 Acionar `PATCH /api/alvara-tasks/[id]` com `status: "concluida"` dispara o seguinte fluxo:
 
 **Validações de backend (antes da transação):**
-1. `notes` não pode estar vazio — obrigatório para concluir
+1. `notes` não pode estar vazio — obrigatório para concluir. Se o usuário não escrever nada, o modal envia o texto padrão *"Documento cadastrado e ciclo operacional concluído pelo portal."* (decisão de 15/10/2026)
 2. `issue_date` é obrigatório
 3. `expiration_date` é obrigatório (salvo `is_indefinite = true`)
 4. `expiration_date >= issue_date` (não pode vencer antes de emitir)
@@ -1682,7 +1685,8 @@ Página administrativa para geração em lote e manutenção de tarefas pendente
 
 ### E.3 Eliminação de Tarefas Intactas (em lote)
 
-`POST /api/alvara-tasks/admin/delete-pending-clean` com `{ taskIds: string[] }`:
+`POST /api/alvara-tasks/admin/delete-pending-clean` com `{ taskIds: string[], password }`:
+- Exige a **senha do usuário autenticado** (conferida no Supabase Auth); recusa chamadas por service role
 - Apaga **somente** as tarefas selecionadas que:
   1. Estejam com `status = 'pendente'`
   2. Não tenham eventos de histórico além do `created` inicial (ou sem histórico — legado)
@@ -1693,15 +1697,10 @@ Página administrativa para geração em lote e manutenção de tarefas pendente
 `POST /api/alvara-tasks/admin/delete-by-period` com `{ from, to, password }`:
 
 > [!CAUTION]
-> **Operação Excepcional, Perigosa e Não-Operacional:**
-> - **Bloqueio de Produção:** Esta operação **deve ser estritamente bloqueada em ambiente de produção** por verificação de variável de ambiente (ex: `NODE_ENV === 'production'`).
-> - **Restrição de Ambiente:** Permitida exclusivamente em ambientes de homologação, staging ou desenvolvimento para fins de sanitização estrutural e correção de cargas de teste em lote.
-> - **Protocolo de Execução:** Em caso de necessidade em outros ambientes de suporte e homologação avançada, a execução exige:
->   1. Perfil autenticado com privilégios de **`role = 'admin'`**.
->   2. Confirmação explícita digitando a senha administrativa do usuário autenticado (`password`).
->   3. Validação textual de confirmação na interface para evitar cliques acidentais.
->   4. Registro obrigatório com severidade alta em `audit_logs` e stdout.
->   5. Execução de backup físico anterior da base de dados.
+> **Operação destrutiva** (decisão de 15/10/2026: a trava é a senha, não o papel):
+> - Disponível para quem tem **edição** na tela "Geração e manutenção", também em produção.
+> - Exige a **senha do usuário autenticado** (`password`), conferida no Supabase Auth, e confirmação na interface. Recusa chamadas por service role.
+> - Alcança só as tarefas que a RLS deixa o usuário ver (a carteira dele; admin vê tudo). Tarefas `concluida`/`cancelada` são protegidas pelo gatilho `guard_alvara_task_lifecycle` para não-admin.
 > - **Efeito Destrutivo:** Remove **todas** as tarefas do período selecionado de forma física e irreversível (eliminando cascata de históricos operacionais, check-lists e arquivos associados).
 
 ### E.5 Lista de Tarefas Pendentes (Visão)

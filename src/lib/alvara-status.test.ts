@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyCompanyCompliance,
   computeDocumentStatus,
   computeTaskStatus,
 } from "./alvara-status";
@@ -141,5 +142,18 @@ describe("Dossiê Alvará Status - Testes Unitários Puros", () => {
       );
       expect(resVencido).toBe("pendente_vencida");
     });
+  });
+});
+
+describe("classifyCompanyCompliance", () => {
+  it("vinculo sem documento torna a empresa irregular (regra 7.3.1)", () => {
+    expect(classifyCompanyCompliance({ total_alvaras: 4, alvaras_vencidos: 0, alvaras_pendentes: 2 })).toBe("sem_documento");
+  });
+  it("vencido prevalece sobre sem documento", () => {
+    expect(classifyCompanyCompliance({ total_alvaras: 4, alvaras_vencidos: 1, alvaras_pendentes: 3 })).toBe("critica");
+  });
+  it("tudo vigente e regular; sem vinculos nao e monitorada", () => {
+    expect(classifyCompanyCompliance({ total_alvaras: 2, alvaras_vencidos: 0, alvaras_pendentes: 0 })).toBe("regular");
+    expect(classifyCompanyCompliance({ total_alvaras: 0, alvaras_vencidos: 0, alvaras_pendentes: 0 })).toBe("nao_monitorada");
   });
 });

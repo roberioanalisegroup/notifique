@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validarCombinacaoStatus } from "./alvara-status";
+import { motivoObrigatorioFaltando, validarCombinacaoStatus } from "./alvara-status";
 
 describe("validarCombinacaoStatus", () => {
   it("permite combinações perfeitas e válidas", () => {
@@ -56,5 +56,24 @@ describe("validarCombinacaoStatus", () => {
     expect(res3.valido).toBe(false);
     expect(res3.tipo).toBe("invalido");
     expect(res3.mensagem).toContain("Transação inválida");
+  });
+});
+
+describe("motivoObrigatorioFaltando", () => {
+  it("exige motivo para cancelar", () => {
+    expect(motivoObrigatorioFaltando({ novoStatus: "cancelada", statusAtual: "pendente" })).toMatch(/cancelamento/);
+    expect(motivoObrigatorioFaltando({ novoStatus: "cancelada", statusAtual: "pendente", cancellationReason: "   " })).toMatch(/cancelamento/);
+    expect(motivoObrigatorioFaltando({ novoStatus: "cancelada", statusAtual: "pendente", cancellationReason: "Empresa encerrou" })).toBeNull();
+  });
+
+  it("exige motivo para impedimento", () => {
+    expect(motivoObrigatorioFaltando({ novoStatus: "com_impedimento", statusAtual: "em_andamento" })).toMatch(/impedimento/);
+    expect(motivoObrigatorioFaltando({ novoStatus: "com_impedimento", statusAtual: "em_andamento", impedimentReason: "Vistoria" })).toBeNull();
+  });
+
+  it("nao exige nada sem transicao ou para outros estados", () => {
+    expect(motivoObrigatorioFaltando({ novoStatus: "com_impedimento", statusAtual: "com_impedimento" })).toBeNull();
+    expect(motivoObrigatorioFaltando({ novoStatus: "em_andamento", statusAtual: "pendente" })).toBeNull();
+    expect(motivoObrigatorioFaltando({ novoStatus: null, statusAtual: "pendente" })).toBeNull();
   });
 });

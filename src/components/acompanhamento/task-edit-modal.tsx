@@ -1094,8 +1094,13 @@ export function TaskEditModal({
                     className="text-sm font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                     disabled={saving}
                     onClick={() => {
-                      if (!confirm("Cancelar esta tarefa?")) return;
-                      void patchStatus({ status: "cancelada" });
+                      const motivo = prompt("Motivo do cancelamento da tarefa:");
+                      if (motivo === null) return;
+                      if (!motivo.trim()) {
+                        toast.error("Informe o motivo do cancelamento.");
+                        return;
+                      }
+                      void patchStatus({ status: "cancelada", cancellation_reason: motivo.trim() });
                       onClose();
                     }}
                   >
